@@ -517,7 +517,7 @@ class ImageProcessor {
         final pRight = quantized.getPixel(x + 1, y);
         final pBottom = quantized.getPixel(x, y + 1);
 
-        final int lum = (0.299 * orig.r + 0.587 * orig.g + 0.114 * orig.b).toInt();
+        final int lum = (0.299 * orig.r + 0.587 * orig.g + 0.114 * pBottom.b).toInt();
         final int lumR = (0.299 * pRight.r + 0.587 * pRight.g + 0.114 * pRight.b).toInt();
         final int lumB = (0.299 * pBottom.r + 0.587 * pBottom.g + 0.114 * pBottom.b).toInt();
 
@@ -654,6 +654,50 @@ class ImageProcessor {
       }
     }
 
+    return _encode(out);
+  }
+
+  // ==========================================
+  // FILTER 10: OFFLINE BACKGROUND CLEANUP
+  // ==========================================
+  static Future<Uint8List> backgroundCleanup(Uint8List input) async {
+    return await compute(_bgCleanupSync, input);
+  }
+
+  static Uint8List _bgCleanupSync(Uint8List input) {
+    final src = _decode(input);
+    if (src == null) return input;
+
+    final w = src.width;
+    final h = src.height;
+    final out = img.Image(width: w, height: h, numChannels: 4);
+
+    final double centerX = w / 2.0;
+    final double centerY = h / 2.0;
+    final double maxDist = math.sqrt(centerX * centerX + centerY * centerY);
+
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final double dx = x - centerX;
+        final double dy = y - centerY;
+        final double dist = math.sqrt(dx * dx + dy * dy);
+        final double normDist = dist / maxDist;
+
+        final orig = src.getPixel(x, y);
+
+        if (normDist > 0.45) {
+          // Out of center focus -> Replace with a clean dark-grey studio background
+          final double factor = ((normDist - 0.45) / 0.55).clamp(0.0, 1.0);
+          final int r = (orig.r * (1.0 - factor) + 12 * factor).round();
+          final int g = (orig.g * (1.0 - factor) + 14 * factor).round();
+          final int b = (orig.b * (1.0 - factor) + 20 * factor).round();
+          out.setPixel(x, y, img.ColorRgba8(r, g, b, orig.a.toInt()));
+        } else {
+          // Center subject -> keep 100% original and sharp!
+          out.setPixel(x, y, orig);
+        }
+      }
+    }
     return _encode(out);
   }
 }

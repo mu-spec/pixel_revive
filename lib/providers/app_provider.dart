@@ -216,6 +216,13 @@ class AppProvider extends ChangeNotifier {
             modelName: 'fal-ai/image-editing/photo-restoration',
             apiToken: falToken,
           );
+        } else if (featureId == 'bg_cleanup') {
+          // Cloud Background Cleanup (Removes background with high-end AI segmentation!)
+          cloudResult = await AiApiService.runFalPrediction(
+            imageBytes: originalBytes!,
+            modelName: 'fal-ai/imageutils/rembg',
+            apiToken: falToken,
+          );
         }
 
         if (cloudResult != null) {
@@ -262,6 +269,9 @@ class AppProvider extends ChangeNotifier {
           break;
         case 'bg':
           result = await ImageProcessor.backgroundBlur(originalBytes!, radius: bokehBlur);
+          break;
+        case 'bg_cleanup':
+          result = await ImageProcessor.backgroundCleanup(originalBytes!);
           break;
         default:
           result = await ImageProcessor.autoEnhance(originalBytes!, strength: enhanceStrength);
@@ -349,5 +359,148 @@ class AppProvider extends ChangeNotifier {
 
     // PART 2 OPTIMIZATION 1: Pre-warming the exact millisecond the photo is updated (cropped/rotated)!
     _preWarmAllCloudModels();
+  }
+
+  // =========================================================================
+  // 🏭 BATCH PROCESSING ENGINE (PRD Page 4 - Real Implementation)
+  // =========================================================================
+  List<File> batchImages = [];
+  List<Uint8List> batchOriginalBytes = [];
+  List<Uint8List> batchProcessedBytes = [];
+  bool isBatchProcessing = false;
+  int batchCurrentIndex = 0;
+  String? batchStatusMessage;
+
+  Future<void> pickBatchImages() async {
+    try {
+      final List<XFile> pickedList = await _picker.pickMultiImage(
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 90,
+      );
+      if (pickedList.isEmpty) return;
+
+      batchImages = pickedList.map((x) => File(x.path)).toList();
+      batchOriginalBytes.clear();
+      batchProcessedBytes.clear();
+
+      for (var file in batchImages) {
+        final bytes = await file.readAsBytes();
+        batchOriginalBytes.add(bytes);
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint('pickBatchImages error: $e');
+    }
+  }
+
+  Future<void> processBatch(String featureId) async {
+    if (batchOriginalBytes.isEmpty) return;
+
+    isBatchProcessing = true;
+    batchCurrentIndex = 0;
+    batchProcessedBytes.clear();
+    batchStatusMessage = "Starting batch queue...";
+    notifyListeners();
+
+    try {
+      for (int i = 0; i < batchOriginalBytes.length; i++) {
+        batchCurrentIndex = i;
+        batchStatusMessage = "Processing image ${i + 1} of ${batchOriginalBytes.length}...";
+        notifyListeners();
+
+        final Uint8List input = batchOriginalBytes[i];
+        Uint8List result;
+
+        if (useCloudAi && falToken.isNotEmpty) {
+          Uint8List? cloudResult;
+          if (featureId == 'face' || featureId == 'restore' || featureId == 'auto') {
+            cloudResult = await AiApiService.runMultiStagePipeline(
+              imageBytes: input,
+              apiToken: falToken,
+              blendFactor: 0.25,
+            );
+          } else if (featureId == 'upscale') {
+            cloudResult = await AiApiService.runFalPrediction(
+              imageBytes: input,
+              modelName: 'fal-ai/esrgan',
+              apiToken: falToken,
+              additionalInput: {'upscaling': 2},
+            );
+          } else if (featureId == 'colorize') {
+            cloudResult = await AiApiService.runFalPrediction(
+              imageBytes: input,
+              modelName: 'fal-ai/image-editing/photo-restoration',
+              apiToken: falToken,
+            );
+          } else if (featureId == 'bg_cleanup') {
+            cloudResult = await AiApiService.runFalPrediction(
+              imageBytes: input,
+              modelName: 'fal-ai/imageutils/rembg',
+              apiToken: falToken,
+            );
+          }
+
+          result = cloudResult ?? await _processLocalFeatureSync(input, featureId);
+        } else {
+          result = await _processLocalFeatureSync(input, featureId);
+        }
+
+        final Uint8List finalBytes = isPremium ? result : await ImageProcessor.applyWatermark(result);
+        batchProcessedBytes.add(finalBytes);
+      }
+
+      batchStatusMessage = "Batch processing complete! 🎉";
+    } catch (e) {
+      batchStatusMessage = "Batch process failed: $e";
+      debugPrint("processBatch error: $e");
+    } finally {
+      isBatchProcessing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Uint8List> _processLocalFeatureSync(Uint8List input, String featureId) async {
+    switch (featureId) {
+      case 'auto':
+        return await ImageProcessor.autoEnhance(input, strength: enhanceStrength);
+      case 'upscale':
+        return await ImageProcessor.upscale(input, scale: 2);
+      case 'face':
+        return await ImageProcessor.faceEnhance(input, smoothness: skinSmoothness, strength: enhanceStrength);
+      case 'denoise':
+        return await ImageProcessor.denoise(input);
+      case 'unblur':
+        return await ImageProcessor.unblur(input);
+      case 'colorize':
+        return await ImageProcessor.colorize(input);
+      case 'restore':
+        return await ImageProcessor.restoreOldPhoto(input);
+      case 'cartoon':
+        return await ImageProcessor.cartoonEffect(input);
+      case 'bg':
+        return await ImageProcessor.backgroundBlur(input, radius: bokehBlur);
+      case 'bg_cleanup':
+        return await ImageProcessor.backgroundCleanup(input);
+      default:
+        return await ImageProcessor.autoEnhance(input, strength: enhanceStrength);
+    }
+  }
+
+  Future<bool> saveBatchToGallery() async {
+    if (batchProcessedBytes.isEmpty) return false;
+    try {
+      for (var bytes in batchProcessedBytes) {
+        final path = await StorageService.saveToGallery(bytes);
+        if (path != null) {
+          await addToHistory(path);
+        }
+      }
+      return true;
+    } catch (e) {
+      debugPrint("saveBatchToGallery error: $e");
+      return false;
+    }
   }
 }

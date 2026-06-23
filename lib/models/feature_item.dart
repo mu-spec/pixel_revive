@@ -92,4 +92,12 @@ final List<FeatureItem> allFeatures = [
     color: AppColors.text,
     imagePath: 'assets/images/thumb_bg.png',
   ),
+  FeatureItem(
+    id: 'bg_cleanup',
+    title: 'BG Cleanup',
+    subtitle: 'Remove background distractions',
+    icon: Icons.cleaning_services,
+    color: AppColors.success,
+    imagePath: 'assets/images/thumb_bg.png',
+  ),
 ];

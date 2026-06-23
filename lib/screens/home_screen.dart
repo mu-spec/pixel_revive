@@ -10,6 +10,7 @@ import 'package:pixel_revive/screens/editor_screen.dart';
 import 'package:pixel_revive/screens/premium_screen.dart';
 import 'package:pixel_revive/screens/language_screen.dart';
 import 'package:pixel_revive/screens/demo_comparison_screen.dart';
+import 'package:pixel_revive/screens/batch_process_screen.dart';
 import 'package:pixel_revive/widgets/feature_card.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -31,7 +32,9 @@ class HomeScreen extends StatelessWidget {
               _buildHeader(context, provider),
               const SizedBox(height: 24),
               _buildHeroPromoCard(context, provider),
-              const SizedBox(height: 28),
+              const SizedBox(height: 16),
+              _buildBatchModeButton(context, provider),
+              const SizedBox(height: 24),
               _buildShowcaseGallery(context, provider),
               const SizedBox(height: 28),
               _buildPhotoSection(context, provider),
@@ -854,5 +857,90 @@ class HomeScreen extends StatelessWidget {
         ),
       );
     }
+  }
+
+  Widget _buildBatchModeButton(BuildContext context, AppProvider provider) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.gold.withOpacity(0.35),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.gold.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BatchProcessScreen()),
+          );
+        },
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.photo_library_outlined,
+                  color: AppColors.gold,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Batch AI Enhance',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.workspace_premium, color: AppColors.gold, size: 14),
+                      ],
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Process multiple images in parallel instantly',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: AppColors.gold,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
