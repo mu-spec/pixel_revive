@@ -4,8 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
-import 'package:pixel_revive/screens/model_download_screen.dart';
-import 'package:pixel_revive/screens/benchmark_screen.dart';
 
 class PremiumScreen extends StatefulWidget {
   const PremiumScreen({super.key});
@@ -145,26 +143,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                  
-                  // AI Model Downloader Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ModelDownloadScreen()),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 20),
-                      label: const Text('Download AI Models (Offline)'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.accent,
-                        side: BorderSide(color: AppColors.accent.withOpacity(0.6)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
                       Text(
                         AppStrings.getText('subTagline', provider.languageCode),
                         style: const TextStyle(
@@ -190,26 +168,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
               ),
             ),
             const SizedBox(height: 16),
-                  
-                  // AI Model Downloader Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ModelDownloadScreen()),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 20),
-                      label: const Text('Download AI Models (Offline)'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.accent,
-                        side: BorderSide(color: AppColors.accent.withOpacity(0.6)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
             _benefit(Icons.hd, AppStrings.getText('benefit1', provider.languageCode)),
             _benefit(Icons.water_drop_outlined, AppStrings.getText('benefit2', provider.languageCode)),
             _benefit(Icons.all_inclusive, AppStrings.getText('benefit3', provider.languageCode)),
@@ -219,23 +177,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
             const SizedBox(height: 28),
             Text(
               AppStrings.getText('devSettings', provider.languageCode),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const BenchmarkScreen()),
-                  );
-                },
-                icon: const Icon(Icons.speed),
-                label: const Text("Performance Benchmark"),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ),
               style: const TextStyle(
                 color: AppColors.text,
                 fontSize: 18,
@@ -294,26 +235,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     style: const TextStyle(color: AppColors.textMuted, fontSize: 11.5, height: 1.4),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // AI Model Downloader Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ModelDownloadScreen()),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 20),
-                      label: const Text('Download AI Models (Offline)'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.accent,
-                        side: BorderSide(color: AppColors.accent.withOpacity(0.6)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
                   TextField(
                     controller: _tokenController,
                     decoration: InputDecoration(
@@ -459,26 +380,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
             }),
 
             const SizedBox(height: 16),
-                  
-                  // AI Model Downloader Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ModelDownloadScreen()),
-                        );
-                      },
-                      icon: const Icon(Icons.download, size: 20),
-                      label: const Text('Download AI Models (Offline)'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.accent,
-                        side: BorderSide(color: AppColors.accent.withOpacity(0.6)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
             SizedBox(
               width: double.infinity,
               height: 52,
