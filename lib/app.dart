@@ -15,9 +15,9 @@ class PixelReviveApp extends StatelessWidget {
       child: MaterialApp(
         title: AppStrings.appName,
         debugShowCheckedModeBanner: false,
-        theme: ThemeData.dark().copyWith(
+        theme: ThemeData.light().copyWith(
           scaffoldBackgroundColor: AppColors.primary,
-          colorScheme: const ColorScheme.dark(
+          colorScheme: const ColorScheme.light(
             primary: AppColors.accent,
             secondary: AppColors.success,
             surface: AppColors.surface,
@@ -25,19 +25,20 @@ class PixelReviveApp extends StatelessWidget {
             onBackground: AppColors.text,
           ),
           appBarTheme: const AppBarTheme(
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.surface,
             elevation: 0,
             centerTitle: true,
             iconTheme: IconThemeData(color: AppColors.text),
             titleTextStyle: TextStyle(
               color: AppColors.text,
               fontSize: 20,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w900,
             ),
           ),
           cardTheme: CardThemeData(
-            color: AppColors.surface,
-            elevation: 4,
+            color: AppColors.card,
+            elevation: 3,
+            shadowColor: Colors.black.withOpacity(0.04),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
@@ -45,12 +46,12 @@ class PixelReviveApp extends StatelessWidget {
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.text,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              textStyle: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           outlinedButtonTheme: OutlinedButtonThemeData(

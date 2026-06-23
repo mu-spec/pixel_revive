@@ -29,19 +29,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
     super.dispose();
   }
 
-  Future<void> _launchURL(String urlString) async {
-    final Uri url = Uri.parse(urlString);
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        debugPrint('Could not launch $urlString');
-      }
-    } catch (e) {
-      debugPrint('Error launching URL: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
@@ -241,14 +228,14 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       hintText: AppStrings.getText('apiHint', provider.languageCode),
                       hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                       filled: true,
-                      fillColor: AppColors.card,
+                      fillColor: AppColors.primary,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'monospace'),
+                    style: const TextStyle(color: AppColors.text, fontSize: 13, fontFamily: 'monospace'),
                     obscureText: true,
                     onChanged: (val) {
                       provider.setFalToken(val.trim());
@@ -290,7 +277,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       border: Border.all(
                         color: isSelected
                             ? AppColors.gold
-                            : Colors.white.withOpacity(0.06),
+                            : Colors.black.withOpacity(0.06),
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -313,7 +300,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                                   Text(
                                     plan['title'],
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: AppColors.text,
                                       fontSize: 15,
                                       fontWeight: isSelected
                                           ? FontWeight.w800
@@ -358,7 +345,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                             Text(
                               plan['price'],
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: AppColors.text,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -389,8 +376,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     : () => _unlockPremium(provider),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.gold,
-                  foregroundColor: Colors.black,
-                  disabledBackgroundColor: AppColors.card,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppColors.primary,
                   disabledForegroundColor: AppColors.textMuted,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -418,7 +405,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   onPressed: () => provider.setPremium(false),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textMuted,
-                    side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                    side: BorderSide(color: Colors.black.withOpacity(0.1)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -436,39 +423,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   style: const TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.4),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            
-            // 🌐 Clickable Play Store-compliant Terms and Privacy Links
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => _launchURL('https://clinquant-bombolone-e37a29.netlify.app/'),
-                  child: const Text(
-                    'Terms of Service',
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Text('|', style: TextStyle(color: AppColors.card, fontSize: 11)),
-                const SizedBox(width: 16),
-                GestureDetector(
-                  onTap: () => _launchURL('https://earnest-liger-072f0b.netlify.app/'),
-                  child: const Text(
-                    'Privacy Policy',
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ],
             ),
             const SizedBox(height: 32),
           ],

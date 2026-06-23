@@ -161,7 +161,7 @@ class AppStrings {
       'weekly': 'Semanal',
       'yearly': 'Premium Anual',
       'lifetime': 'Ultra de por vida',
-      'bestValue': 'MEJOR VALOR',
+      'bestValue': 'BEST VALUE',
       'forever': 'PARA SIEMPRE',
       'payOnce': 'Paga una vez, usa para siempre',
       'autoRenews': 'Se renueva fácilmente. Cancela en cualquier momento.',
