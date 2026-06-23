@@ -2,7 +2,9 @@ import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
-import 'package:flutter/material.dart' show Size;
+import 'package:flutter/material.dart' show Size, Rect, Offset;
+import 'package:pixel_revive/services/native_ffi_service.dart';
+import 'package:pixel_revive/services/on_device_ml_service.dart';
 
 class ImageProcessor {
   static const int _jpgQuality = 90;
@@ -116,7 +118,9 @@ class ImageProcessor {
   // FILTER 3: FACE ENHANCE (PORTRAIT RETOUCH)
   // ==========================================
   static Future<Uint8List> faceEnhance(Uint8List input, {double smoothness = 0.5, double strength = 0.8}) async {
-    return await compute(_faceEnhanceSync, _FaceEnhanceArgs(input, smoothness, strength));
+    // 🧠 PART 1 STEP 3: Detect faces completely offline using local ML Kit models!
+    final faceRects = await OnDeviceMlService.detectFaces(input);
+    return await compute(_faceEnhanceSync, _FaceEnhanceArgs(input, smoothness, strength, faceRects));
   }
 
   static Uint8List _faceEnhanceSync(_FaceEnhanceArgs args) {
@@ -141,24 +145,45 @@ class ImageProcessor {
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final orig = src.getPixel(x, y);
-        final blur = blurred.getPixel(x, y);
 
-        final int rDiff = (orig.r - blur.r).abs().toInt();
-        final int gDiff = (orig.g - blur.g).abs().toInt();
-        final int bDiff = (orig.b - blur.b).abs().toInt();
-        final double diff = (rDiff + gDiff + bDiff) / 3.0;
+        // 🧠 Check if current pixel lies within any ML-detected face bounding box
+        bool isInsideFace = false;
+        if (args.faceRects.isNotEmpty) {
+          final pOffset = Offset(x.toDouble(), y.toDouble());
+          for (final rect in args.faceRects) {
+            if (rect.contains(pOffset)) {
+              isInsideFace = true;
+              break;
+            }
+          }
+        } else {
+          // If no face was detected, apply global skin smoothing as a fallback
+          isInsideFace = true;
+        }
 
-        // If difference is low, it is flat skin -> blend with blurred layer
-        // If high, it is eyes/lips/hair -> keep 100% sharp
-        double smoothWeight = (1.0 - (diff / threshold)).clamp(0.0, 1.0);
-        // Exponential falloff for professional feathering
-        smoothWeight = math.pow(smoothWeight, 2).toDouble();
+        if (isInsideFace) {
+          final blur = blurred.getPixel(x, y);
 
-        final int r = (orig.r * (1.0 - smoothWeight) + blur.r * smoothWeight).toInt();
-        final int g = (orig.g * (1.0 - smoothWeight) + blur.g * smoothWeight).toInt();
-        final int b = (orig.b * (1.0 - smoothWeight) + blur.b * smoothWeight).toInt();
+          final int rDiff = (orig.r - blur.r).abs().toInt();
+          final int gDiff = (orig.g - blur.g).abs().toInt();
+          final int bDiff = (orig.b - blur.b).abs().toInt();
+          final double diff = (rDiff + gDiff + bDiff) / 3.0;
 
-        smoothed.setPixel(x, y, img.ColorRgba8(r, g, b, orig.a.toInt()));
+          // If difference is low, it is flat skin -> blend with blurred layer
+          // If high, it is eyes/lips/hair -> keep 100% sharp
+          double smoothWeight = (1.0 - (diff / threshold)).clamp(0.0, 1.0);
+          // Exponential falloff for professional feathering
+          smoothWeight = math.pow(smoothWeight, 2).toDouble();
+
+          final int r = (orig.r * (1.0 - smoothWeight) + blur.r * smoothWeight).toInt();
+          final int g = (orig.g * (1.0 - smoothWeight) + blur.g * smoothWeight).toInt();
+          final int b = (orig.b * (1.0 - smoothWeight) + blur.b * smoothWeight).toInt();
+
+          smoothed.setPixel(x, y, img.ColorRgba8(r, g, b, orig.a.toInt()));
+        } else {
+          // Keep raw pixel perfectly intact (Preserves background, clothes, and hair sharp!)
+          smoothed.setPixel(x, y, orig);
+        }
       }
     }
 
@@ -245,6 +270,24 @@ class ImageProcessor {
 
     final w = src.width;
     final h = src.height;
+
+    // 🚀 PART 1 STEP 2: Real-time native C++ bilateral denoise via Dart FFI!
+    if (NativeFfiService.isAvailable) {
+      try {
+        final rawRgba = src.toUint8List();
+        final processedRgba = NativeFfiService.denoise(rawRgba, w, h, 25.0);
+        final processedImage = img.Image.fromBytes(
+          width: w,
+          height: h,
+          bytes: processedRgba.buffer,
+          numChannels: 4,
+        );
+        return _encode(processedImage);
+      } catch (e) {
+        debugPrint("⚠️ FFI Denoise failed, falling back to pure Dart: $e");
+      }
+    }
+
     final out = img.Image(width: w, height: h, numChannels: 4);
 
     // Bilateral-like Edge Preserving Smoothing
@@ -311,6 +354,27 @@ class ImageProcessor {
   static Uint8List _unblurSync(Uint8List input) {
     final src = _decode(input);
     if (src == null) return input;
+
+    final w = src.width;
+    final h = src.height;
+
+    // 🚀 PART 1 STEP 2: Real-time native C++ Laplacian sharpen via Dart FFI!
+    if (NativeFfiService.isAvailable) {
+      try {
+        final rawRgba = src.toUint8List();
+        final processedRgba = NativeFfiService.sharpen(rawRgba, w, h, 2.2);
+        var processedImage = img.Image.fromBytes(
+          width: w,
+          height: h,
+          bytes: processedRgba.buffer,
+          numChannels: 4,
+        );
+        processedImage = img.adjustColor(processedImage, contrast: 1.18);
+        return _encode(processedImage);
+      } catch (e) {
+        debugPrint("⚠️ FFI Sharpen failed, falling back to pure Dart: $e");
+      }
+    }
 
     final clone = _clone(src);
     final blurred = img.gaussianBlur(clone, radius: 3);
@@ -541,6 +605,57 @@ class ImageProcessor {
       ),
     );
   }
+
+  // ==========================================
+  // STAGE 3: TEXTURE & DETAIL BLENDING FILTER
+  // ==========================================
+  static Future<Uint8List> blendTextures({
+    required Uint8List original,
+    required Uint8List enhanced,
+    double blendFactor = 0.25,
+  }) async {
+    return await compute(
+      _blendTexturesSync,
+      _BlendTexturesArgs(original, enhanced, blendFactor),
+    );
+  }
+
+  static Uint8List _blendTexturesSync(_BlendTexturesArgs args) {
+    final origSrc = _decode(args.original);
+    final enhSrc = _decode(args.enhanced);
+
+    if (origSrc == null || enhSrc == null) return args.enhanced;
+
+    // Resize original image to perfectly match the upscaled enhanced dimensions
+    final resizedOrig = img.copyResize(
+      origSrc,
+      width: enhSrc.width,
+      height: enhSrc.height,
+      interpolation: img.Interpolation.cubic,
+    );
+
+    final w = enhSrc.width;
+    final h = enhSrc.height;
+    final out = img.Image(width: w, height: h, numChannels: 4);
+
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final oPixel = resizedOrig.getPixel(x, y);
+        final ePixel = enhSrc.getPixel(x, y);
+
+        // Blend raw original grain & frequency details back in
+        // to prevent the artificial "plastic face" look
+        final double factor = args.blendFactor;
+        final int r = (oPixel.r * factor + ePixel.r * (1.0 - factor)).round().clamp(0, 255);
+        final int g = (oPixel.g * factor + ePixel.g * (1.0 - factor)).round().clamp(0, 255);
+        final int b = (oPixel.b * factor + ePixel.b * (1.0 - factor)).round().clamp(0, 255);
+
+        out.setPixel(x, y, img.ColorRgba8(r, g, b, ePixel.a.toInt()));
+      }
+    }
+
+    return _encode(out);
+  }
 }
 
 class _AutoEnhanceArgs {
@@ -553,7 +668,8 @@ class _FaceEnhanceArgs {
   final Uint8List input;
   final double smoothness;
   final double strength;
-  _FaceEnhanceArgs(this.input, this.smoothness, this.strength);
+  final List<Rect> faceRects;
+  _FaceEnhanceArgs(this.input, this.smoothness, this.strength, this.faceRects);
 }
 
 class _BgBlurArgs {
@@ -621,4 +737,11 @@ class _UpscaleArgs {
   final Uint8List input;
   final int scale;
   _UpscaleArgs(this.input, this.scale);
+}
+
+class _BlendTexturesArgs {
+  final Uint8List original;
+  final Uint8List enhanced;
+  final double blendFactor;
+  _BlendTexturesArgs(this.original, this.enhanced, this.blendFactor);
 }

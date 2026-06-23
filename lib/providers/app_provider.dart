@@ -6,6 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pixel_revive/services/image_processor.dart';
 import 'package:pixel_revive/services/storage_service.dart';
 import 'package:pixel_revive/services/ai_api_service.dart';
+import 'package:pixel_revive/services/gpu_shader_service.dart';
+import 'package:pixel_revive/services/native_ffi_service.dart';
+import 'package:pixel_revive/services/on_device_ml_service.dart';
 
 class AppProvider extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
@@ -39,6 +42,9 @@ class AppProvider extends ChangeNotifier {
 
   AppProvider() {
     _loadPrefs();
+    GpuShaderService.initialize(); // Compile GLSL shader program into VRAM on app launch
+    NativeFfiService.initialize(); // Link C++ FFI library into Dart runtime on launch
+    OnDeviceMlService.initialize(); // Initialize local ML Kit Face Detector on app launch
   }
 
   Future<void> _loadPrefs() async {
@@ -135,6 +141,15 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  void _preWarmAllCloudModels() {
+    if (useCloudAi && falToken.isNotEmpty) {
+      debugPrint('⚡ Instant background pre-warming triggered!');
+      AiApiService.preWarmModel(modelName: 'fal-ai/codeformer', apiToken: falToken);
+      AiApiService.preWarmModel(modelName: 'fal-ai/esrgan', apiToken: falToken);
+      AiApiService.preWarmModel(modelName: 'fal-ai/image-editing/photo-restoration', apiToken: falToken);
+    }
+  }
+
   Future<void> pickImage(ImageSource source) async {
     try {
       final picked = await _picker.pickImage(
@@ -150,6 +165,9 @@ class AppProvider extends ChangeNotifier {
       processedBytes = null;
       displayBytes = null;
       notifyListeners();
+
+      // PART 2 OPTIMIZATION 1: Pre-warming the exact millisecond the photo is selected!
+      _preWarmAllCloudModels();
     } catch (e) {
       debugPrint('pickImage error: $e');
     }
@@ -173,17 +191,13 @@ class AppProvider extends ChangeNotifier {
     if (useCloudAi && falToken.isNotEmpty) {
       try {
         Uint8List? cloudResult;
-        if (featureId == 'auto' || featureId == 'face') {
-          // Runs CodeFormer face restoration with high-fidelity for portraits
-          cloudResult = await AiApiService.runFalPrediction(
+        if (featureId == 'face' || featureId == 'restore' || featureId == 'auto') {
+          // PART 2 OPTIMIZATION 3: Multi-Stage Cloud Pipeline (Remini Studio Mode)
+          // Runs Stage 1 (CodeFormer) + Stage 2 (Real-ESRGAN) + Stage 3 (Local detail-preserving blending filter)
+          cloudResult = await AiApiService.runMultiStagePipeline(
             imageBytes: originalBytes!,
-            modelName: 'fal-ai/codeformer',
             apiToken: falToken,
-            additionalInput: {
-              'fidelity': 0.6,
-              'upscaling': 2,
-              'face_upscale': true,
-            },
+            blendFactor: 0.25, // Blend 25% of original high-frequency details for natural skin grain
           );
         } else if (featureId == 'upscale') {
           // Runs ultra-fast 2x Real-ESRGAN scaling
@@ -195,7 +209,7 @@ class AppProvider extends ChangeNotifier {
               'upscaling': 2,
             },
           );
-        } else if (featureId == 'colorize' || featureId == 'restore') {
+        } else if (featureId == 'colorize') {
           // Runs complete Photo Restoration & Colorization in one unified pass!
           cloudResult = await AiApiService.runFalPrediction(
             imageBytes: originalBytes!,
@@ -332,5 +346,8 @@ class AppProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
+
+    // PART 2 OPTIMIZATION 1: Pre-warming the exact millisecond the photo is updated (cropped/rotated)!
+    _preWarmAllCloudModels();
   }
 }

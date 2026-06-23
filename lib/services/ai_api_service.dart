@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
+import 'package:pixel_revive/services/image_processor.dart';
 
 class AiApiService {
   /// Sends a silent background GET ping to wake up the Fal.ai GPU
@@ -107,6 +108,68 @@ class AiApiService {
       return null;
     } finally {
       client.close();
+    }
+  }
+
+  /// Runs a Multi-Stage Cloud Pipeline (Remini Studio Mode):
+  /// 1. [Machine 1 - CodeFormer]: Restores, sharpens, and reconstructs blurry facial details.
+  /// 2. [Machine 2 - Real-ESRGAN]: Upscales the restored image to high-definition (2x/4x) so the background and clothes are crystal clear.
+  /// 3. [Machine 3 - Blending Filter]: Blends the natural original texture and skin grain back into the upscaled result to make it look 100% realistic and prevent artificial "plastic" skin.
+  static Future<Uint8List?> runMultiStagePipeline({
+    required Uint8List imageBytes,
+    required String apiToken,
+    double blendFactor = 0.25,
+  }) async {
+    debugPrint("🚀 Starting Multi-Stage Cloud Pipeline (Stage 1)...");
+    
+    // Stage 1: CodeFormer Face Restoration
+    final faceRestoredBytes = await runFalPrediction(
+      imageBytes: imageBytes,
+      modelName: 'fal-ai/codeformer',
+      apiToken: apiToken,
+      additionalInput: {
+        'fidelity': 0.7,
+        'upscaling': 1, // Do not upscale yet, keep it light for Stage 2
+        'face_upscale': true,
+      },
+    );
+
+    if (faceRestoredBytes == null) {
+      debugPrint("❌ Stage 1 (CodeFormer) failed, aborting pipeline.");
+      return null;
+    }
+
+    debugPrint("🚀 Multi-Stage Cloud Pipeline - Stage 1 Complete. Starting Stage 2...");
+
+    // Stage 2: Real-ESRGAN Super-Resolution Upscaling (2x)
+    final upscaledBytes = await runFalPrediction(
+      imageBytes: faceRestoredBytes,
+      modelName: 'fal-ai/esrgan',
+      apiToken: apiToken,
+      additionalInput: {
+        'upscaling': 2,
+      },
+    );
+
+    if (upscaledBytes == null) {
+      debugPrint("⚠️ Stage 2 (Real-ESRGAN) failed. Falling back to Stage 1 output.");
+      return faceRestoredBytes;
+    }
+
+    debugPrint("🚀 Multi-Stage Cloud Pipeline - Stage 2 Complete. Starting Stage 3 (Local Texture Blending)...");
+
+    // Stage 3: On-Device Texture Blending (re-introducing original natural grain)
+    try {
+      final blendedBytes = await ImageProcessor.blendTextures(
+        original: imageBytes,
+        enhanced: upscaledBytes,
+        blendFactor: blendFactor,
+      );
+      debugPrint("🎉 Multi-Stage Cloud Pipeline Complete!");
+      return blendedBytes;
+    } catch (e) {
+      debugPrint("⚠️ Stage 3 (Texture Blending) failed: $e. Returning Stage 2 output directly.");
+      return upscaledBytes;
     }
   }
 }

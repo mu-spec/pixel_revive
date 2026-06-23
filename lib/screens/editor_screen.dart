@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -508,22 +509,50 @@ class _EditorScreenState extends State<EditorScreen> {
 
   // ==================== REAL-TIME GPU PREVIEW ====================
   void _applyRealTimePreview(double value) {
-    if (!GpuShaderService.isAvailable) return;
-
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 80), () async {
+    _debounceTimer = Timer(const Duration(milliseconds: 16), () async {
       final provider = context.read<AppProvider>();
       if (provider.originalBytes == null) return;
 
       try {
-        // Use GPU shader for instant preview
-        final result = await ImageProcessor.autoEnhance(
-          provider.originalBytes!,
-          strength: value,
-        );
+        Uint8List result;
+        
+        if (GpuShaderService.isAvailable) {
+          // 🚀 RUNNING 100% REAL SHADER ON GPU (Impeller/Skia)
+          double brightness = 0.0;
+          double contrast = 1.0;
+          double saturation = 1.0;
+          double sharpen = 0.0;
+
+          if (selectedFeatureId == 'auto') {
+            contrast = 1.0 + value * 0.40;
+            saturation = 1.0 + value * 0.45;
+            sharpen = value * 1.80;
+          } else if (selectedFeatureId == 'face') {
+            contrast = 1.05 + value * 0.15;
+            saturation = 1.0 + value * 0.16;
+            sharpen = value * 1.35;
+          }
+
+          result = await GpuShaderService.processOnGpu(
+            inputBytes: provider.originalBytes!,
+            brightness: brightness,
+            contrast: contrast,
+            saturation: saturation,
+            sharpen: sharpen,
+          );
+        } else {
+          // Fallback to CPU Isolate processing if Shader compilation isn't supported
+          result = await ImageProcessor.autoEnhance(
+            provider.originalBytes!,
+            strength: value,
+          );
+        }
         
         if (mounted) {
-          provider.displayBytes = result;
+          setState(() {
+            provider.displayBytes = result;
+          });
         }
       } catch (_) {}
     });
