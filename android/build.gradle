@@ -1,0 +1,8 @@
+// Modern Flutter projects keep this file empty.
+// All build logic is in app/build.gradle and settings.gradle.
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

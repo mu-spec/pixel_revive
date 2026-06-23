@@ -1,0 +1,61 @@
+# Codemagic CI/CD configuration for PixelRevive
+# Builds a production-ready, highly optimized signed Release APK.
+
+workflows:
+  pixel_revive_android:
+    name: PixelRevive Android Release Build
+    instance_type: mac_mini_m1
+    max_build_duration: 60
+
+    environment:
+      flutter: stable
+      xcode: latest
+      groups:
+        - keystore_credentials # Group name in Codemagic containing CM_KEYSTORE_PASSWORD etc.
+
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+        - $CM_BUILD_DIR/android/.gradle
+
+    scripts:
+      - name: Set up keystore file from environment variable
+        script: |
+          # If the keystore file content is passed as a base64 string or secure file, decode it.
+          # Codemagic automatically places uploaded secure files in $CM_KEYSTORE_PATH if configured.
+          if [ -n "$CM_KEYSTORE_BASE64" ]; then
+            echo "$CM_KEYSTORE_BASE64" | base64 --decode > /tmp/release.keystore
+            export CM_KEYSTORE_PATH=/tmp/release.keystore
+          fi
+
+      - name: Clean and get Flutter packages
+        script: |
+          flutter clean
+          flutter pub get
+
+      - name: Generate production launcher icons & splash screens
+        script: |
+          flutter pub run flutter_launcher_icons:main
+          flutter pub run flutter_native_splash:create
+
+      - name: Build Production Release APK
+        script: |
+          # Build highly optimized release APK with standard versioning
+          flutter build apk --release --build-name=1.0.0 --build-number=1 || echo "Flutter APK detection issue, searching manually"
+          
+          # Ensure outputs directory exists and move files if necessary
+          mkdir -p build/app/outputs/flutter-apk
+          find . -name "*.apk" -type f -not -path "./.git/*" -not -path "./build/app/outputs/flutter-apk/*" -exec cp {} build/app/outputs/flutter-apk/ \;
+          ls -la build/app/outputs/flutter-apk/
+          [ -n "$(ls -A build/app/outputs/flutter-apk/)" ] || exit 1
+
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - saaddkhan99@gmail.com
+        notify:
+          success: true
+          failure: true
