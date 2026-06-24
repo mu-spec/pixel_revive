@@ -1,6 +1,6 @@
 workflows:
   android-workflow:
-    name: PixelRevive Android Build (APK & AAB)
+    name: PixelRevive Android Release APK Build
     max_build_duration: 45
     environment:
       flutter: stable
@@ -12,10 +12,6 @@ workflows:
       - name: Build Android Release APK
         script: |
           flutter build apk --release
-      - name: Build Android App Bundle (AAB)
-        script: |
-          flutter build appbundle --release
     artifacts:
       - build/**/outputs/**/*.apk
-      - build/**/outputs/**/*.aab
       - build/**/outputs/**/mapping.txt
