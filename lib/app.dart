@@ -15,17 +15,15 @@ class PixelReviveApp extends StatelessWidget {
       child: MaterialApp(
         title: AppStrings.appName,
         debugShowCheckedModeBanner: false,
-        theme: ThemeData.light().copyWith(
+        theme: ThemeData.dark().copyWith(
           scaffoldBackgroundColor: AppColors.primary,
-          colorScheme: const ColorScheme.light(
+          colorScheme: const ColorScheme.dark(
             primary: AppColors.accent,
             secondary: AppColors.success,
             surface: AppColors.surface,
-            background: AppColors.primary,
-            onBackground: AppColors.text,
           ),
           appBarTheme: const AppBarTheme(
-            backgroundColor: AppColors.surface,
+            backgroundColor: AppColors.primary,
             elevation: 0,
             centerTitle: true,
             iconTheme: IconThemeData(color: AppColors.text),
@@ -33,14 +31,15 @@ class PixelReviveApp extends StatelessWidget {
               color: AppColors.text,
               fontSize: 20,
               fontWeight: FontWeight.w900,
+              letterSpacing: -0.3,
             ),
           ),
           cardTheme: CardThemeData(
             color: AppColors.card,
-            elevation: 3,
-            shadowColor: Colors.black.withOpacity(0.04),
+            elevation: 8,
+            shadowColor: Colors.black54,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(22),
             ),
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
@@ -49,7 +48,7 @@ class PixelReviveApp extends StatelessWidget {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
               textStyle: const TextStyle(fontWeight: FontWeight.w700),
             ),
@@ -57,9 +56,9 @@ class PixelReviveApp extends StatelessWidget {
           outlinedButtonTheme: OutlinedButtonThemeData(
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.text,
-              side: const BorderSide(color: AppColors.accent),
+              side: BorderSide(color: Colors.white.withOpacity(0.15)),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
           ),
