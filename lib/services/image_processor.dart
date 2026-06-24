@@ -18,12 +18,14 @@ class ImageProcessor {
   static img.Image _clone(img.Image src) =>
       img.copyResize(src, width: src.width, height: src.height);
 
+  /// Stronger unsharp mask sharpening filter (Fixed: Clone before blur to prevent in-place mutation!)
   static img.Image _sharpen(img.Image src, {double amount = 1.5}) {
-    final clone = _clone(src);
-    final blurred = img.gaussianBlur(clone, radius: 3);
+    final clone = _clone(src); // CRITICAL FIX: Clone the image first!
+    final blurred = img.gaussianBlur(clone, radius: 3); // Blurring clone keeps src perfectly sharp
     return _unsharpMask(src, blurred, amount: amount);
   }
 
+  /// Adaptive unsharp masking with higher contrast detailing
   static img.Image _unsharpMask(img.Image original, img.Image blurred,
       {double amount = 1.5, double noiseThreshold = 2.0}) {
     final w = original.width;
@@ -69,9 +71,10 @@ class ImageProcessor {
     final src = _decode(args.input);
     if (src == null) return args.input;
 
-    final double contrastVal = 1.0 + args.strength * 0.40;
-    final double satVal = 1.0 + args.strength * 0.45;
-    final double brightVal = 1.0 + args.strength * 0.12;
+    // Boost contrast, saturation and brightness for a vivid popping comparison difference
+    final double contrastVal = 1.0 + args.strength * 0.40; // 0.8 strength -> 1.32 contrast! (Vivid details!)
+    final double satVal = 1.0 + args.strength * 0.45;      // 0.8 strength -> 1.36 saturation!
+    final double brightVal = 1.0 + args.strength * 0.12;   // 0.8 strength -> 1.10 brightness
 
     var out = img.adjustColor(
       src,
@@ -79,7 +82,8 @@ class ImageProcessor {
       saturation: satVal,
       brightness: brightVal,
     );
-    out = _sharpen(out, amount: args.strength * 1.8);
+    // Apply heavy-detail unsharp mask
+    out = _sharpen(out, amount: args.strength * 1.8); 
     return _encode(out);
   }
 
@@ -97,12 +101,14 @@ class ImageProcessor {
     final newW = (src.width * args.scale).clamp(1, 2400).toInt();
     final newH = (src.height * args.scale).clamp(1, 2400).toInt();
 
+    // Use high-end bicubic interpolation
     final out = img.copyResize(
       src,
       width: newW,
       height: newH,
       interpolation: img.Interpolation.cubic,
     );
+    // Heavy edge sharpening to make the upscaled resolution strikingly obvious!
     final sharpened = _sharpen(out, amount: 1.5);
     return _encode(sharpened);
   }
@@ -111,6 +117,7 @@ class ImageProcessor {
   // FILTER 3: FACE ENHANCE (PORTRAIT RETOUCH)
   // ==========================================
   static Future<Uint8List> faceEnhance(Uint8List input, {double smoothness = 0.5, double strength = 0.8}) async {
+    // 🧠 PART 1 STEP 3: Detect faces completely offline using local ML Kit models!
     final faceRects = await OnDeviceMlService.detectFaces(input);
     return await compute(_faceEnhanceSync, _FaceEnhanceArgs(input, smoothness, strength, faceRects));
   }
@@ -122,17 +129,23 @@ class ImageProcessor {
     final w = src.width;
     final h = src.height;
 
+    // 1. Create a skin smoothing layer (Smart Edge-Preserving Blur)
+    // Blur radius depends on smoothness slider (1 to 8)
     final int rRadius = (args.smoothness * 8).round().clamp(1, 8);
+    
+    // CRITICAL FIX: Clone before blur to prevent in-place source corruption!
     final clone = _clone(src);
     final blurred = img.gaussianBlur(clone, radius: rRadius);
     final smoothed = img.Image(width: w, height: h, numChannels: 4);
 
+    // Threshold depends on smoothness strength (10 to 34)
     final int threshold = (10 + args.smoothness * 24).round();
 
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final orig = src.getPixel(x, y);
 
+        // 🧠 Check if current pixel lies within any ML-detected face bounding box
         bool isInsideFace = false;
         if (args.faceRects.isNotEmpty) {
           final pOffset = Offset(x.toDouble(), y.toDouble());
@@ -143,6 +156,7 @@ class ImageProcessor {
             }
           }
         } else {
+          // If no face was detected, apply global skin smoothing as a fallback
           isInsideFace = true;
         }
 
@@ -154,7 +168,10 @@ class ImageProcessor {
           final int bDiff = (orig.b - blur.b).abs().toInt();
           final double diff = (rDiff + gDiff + bDiff) / 3.0;
 
+          // If difference is low, it is flat skin -> blend with blurred layer
+          // If high, it is eyes/lips/hair -> keep 100% sharp
           double smoothWeight = (1.0 - (diff / threshold)).clamp(0.0, 1.0);
+          // Exponential falloff for professional feathering
           smoothWeight = math.pow(smoothWeight, 2).toDouble();
 
           final int r = (orig.r * (1.0 - smoothWeight) + blur.r * smoothWeight).toInt();
@@ -163,19 +180,22 @@ class ImageProcessor {
 
           smoothed.setPixel(x, y, img.ColorRgba8(r, g, b, orig.a.toInt()));
         } else {
+          // Keep raw pixel perfectly intact (Preserves background, clothes, and hair sharp!)
           smoothed.setPixel(x, y, orig);
         }
       }
     }
 
+    // 2. Boost color contrast and brightness for portrait aesthetic based on strength
     var out = img.adjustColor(
       smoothed,
-      contrast: 1.05 + args.strength * 0.15,
-      brightness: 1.0 + args.strength * 0.06,
-      saturation: 1.0 + args.strength * 0.16,
+      contrast: 1.05 + args.strength * 0.15, // stronger! (1.17)
+      brightness: 1.0 + args.strength * 0.06, // stronger! (1.05)
+      saturation: 1.0 + args.strength * 0.16, // stronger! (1.13)
     );
 
-    out = _sharpen(out, amount: args.strength * 1.35);
+    // 3. Sharpen facial details (eyes, hair) back up
+    out = _sharpen(out, amount: args.strength * 1.35); // stronger!
 
     return _encode(out);
   }
@@ -195,7 +215,11 @@ class ImageProcessor {
     final h = src.height;
     final out = img.Image(width: w, height: h, numChannels: 4);
 
+    // Generate fully blurred background layer
+    // Blur radius depends on slider (4 to 28)
     final int bRadius = (args.radius * 28).round().clamp(4, 28);
+    
+    // CRITICAL FIX: Clone the image before blurring to prevent in-place source corruption!
     final clone = _clone(src);
     final bgBlur = img.gaussianBlur(clone, radius: bRadius);
 
@@ -210,7 +234,12 @@ class ImageProcessor {
         final double dist = math.sqrt(dx * dx + dy * dy);
         final double normDist = dist / maxDist;
 
+        // Bokeh depth mask:
+        // Inside central circle (30% radius) -> 100% sharp focus
+        // Outside 75% boundary -> 100% fully blurred background
+        // In-between -> Smooth feathering
         double blurWeight = ((normDist - 0.30) / 0.45).clamp(0.0, 1.0);
+        // S-curve for professional smooth lens falloff
         blurWeight = 3 * blurWeight * blurWeight - 2 * blurWeight * blurWeight * blurWeight;
 
         final orig = src.getPixel(x, y);
@@ -228,7 +257,7 @@ class ImageProcessor {
   }
 
   // ==========================================
-  // FILTER 5: BILATERAL-LIKE DENOISE
+  // FILTER 5: BILATERAL-LIKE DENOISE (GRAIN DISMISSAL)
   // ==========================================
   static Future<Uint8List> denoise(Uint8List input) async {
     return await compute(_denoiseSync, input);
@@ -243,7 +272,9 @@ class ImageProcessor {
 
     final out = img.Image(width: w, height: h, numChannels: 4);
 
-    const double sigmaR = 25.0;
+    // Bilateral-like Edge Preserving Smoothing
+    // We average 3x3 neighbors, but heavily down-weight neighbors that are far in color distance
+    const double sigmaR = 25.0; // Color distance tolerance
 
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
@@ -260,14 +291,19 @@ class ImageProcessor {
           for (int kx = -1; kx <= 1; kx++) {
             final neighbor = src.getPixel(x + kx, y + ky);
 
+            // Compute Euclidean color distance
             final double colorDist = math.sqrt(
               math.pow(center.r - neighbor.r, 2) +
               math.pow(center.g - neighbor.g, 2) +
               math.pow(center.b - neighbor.b, 2)
             );
 
+            // Gaussian spatial weight (simplified 3x3)
             final double spaceWeight = (kx == 0 && ky == 0) ? 1.0 : 0.6;
+
+            // Range (color) weight
             final double rangeWeight = math.exp(- (colorDist * colorDist) / (2 * sigmaR * sigmaR));
+
             final double weight = spaceWeight * rangeWeight;
 
             sumR += neighbor.r * weight;
@@ -285,12 +321,13 @@ class ImageProcessor {
       }
     }
 
+    // Slightly boost the contrast of the denoised photo to make it pop
     final contrastAdjusted = img.adjustColor(out, contrast: 1.10);
     return _encode(contrastAdjusted);
   }
 
   // ==========================================
-  // FILTER 6: UNBLUR
+  // FILTER 6: UNBLUR (MOTION & FOCUS REMEDIATION)
   // ==========================================
   static Future<Uint8List> unblur(Uint8List input) async {
     return await compute(_unblurSync, input);
@@ -325,18 +362,22 @@ class ImageProcessor {
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final p = src.getPixel(x, y);
+        // Standard Grayscale Luminosity
         final lum = (0.299 * p.r + 0.587 * p.g + 0.114 * p.b).toInt();
 
         int r, g, b;
         if (lum < 60) {
+          // Shadows: Rich cinematic cool blue/teal
           r = (lum * 0.65).round();
           g = (lum * 0.78).round();
           b = (lum * 1.12).round().clamp(0, 255);
         } else if (lum < 185) {
+          // Midtones: Warm, lifelike copper/skin tones
           r = (lum * 1.24).round().clamp(0, 255);
           g = (lum * 0.96).round().clamp(0, 255);
           b = (lum * 0.80).round().clamp(0, 255);
         } else {
+          // Highlights: Clean soft golden white
           r = (lum * 1.04).round().clamp(0, 255);
           g = (lum * 1.01).round().clamp(0, 255);
           b = (lum * 0.94).round().clamp(0, 255);
@@ -345,6 +386,7 @@ class ImageProcessor {
         out.setPixel(x, y, img.ColorRgba8(r, g, b, p.a.toInt()));
       }
     }
+    // Boost saturation and contrasts slightly for an organic color look
     out = img.adjustColor(out, saturation: 1.45, contrast: 1.18);
     return _encode(out);
   }
@@ -360,11 +402,12 @@ class ImageProcessor {
     final src = _decode(input);
     if (src == null) return input;
 
+    // 1. Dynamic range expansion (Auto-Contrast Stretching)
     final w = src.width;
     final h = src.height;
     int minLum = 255, maxLum = 0;
 
-    for (int y = 0; y < h; y += 4) {
+    for (int y = 0; y < h; y += 4) { // sample pixels for speed
       for (int x = 0; x < w; x += 4) {
         final p = src.getPixel(x, y);
         final int lum = (0.299 * p.r + 0.587 * p.g + 0.114 * p.b).toInt();
@@ -373,6 +416,7 @@ class ImageProcessor {
       }
     }
 
+    // Dynamic contrast stretch range
     final stretched = img.Image(width: w, height: h, numChannels: 4);
     final double range = (maxLum - minLum).clamp(1, 255).toDouble();
 
@@ -390,14 +434,18 @@ class ImageProcessor {
       }
     }
 
+    // 2. White balance / Sepia color shift neutralizing
+    // Faded old photos are yellow/red, we neutralize by pulling down red/green and elevating blue
     var colorShifted = img.colorOffset(stretched, red: -18, green: -6, blue: 22);
-    colorShifted = _sharpen(colorShifted, amount: 1.4);
+
+    // 3. Adaptive unsharp mask to rescue details
+    colorShifted = _sharpen(colorShifted, amount: 1.4); // stronger sharpening
 
     return _encode(colorShifted);
   }
 
   // ==========================================
-  // FILTER 9: CARTOON EFFECT
+  // FILTER 9: ARTISTIC CARTOON EFFECT (SKETCH & POP)
   // ==========================================
   static Future<Uint8List> cartoonEffect(Uint8List input) async {
     return await compute(_cartoonSync, input);
@@ -410,11 +458,13 @@ class ImageProcessor {
     final w = src.width;
     final h = src.height;
 
+    // 1. Posterization / Color quantization to create solid flat color cells (16 colors)
     var quantized = img.quantize(src, numberOfColors: 18);
     quantized = img.adjustColor(quantized, contrast: 1.20, saturation: 1.35);
 
     final out = img.Image(width: w, height: h, numChannels: 4);
 
+    // 2. Sobel Edge Filter overlay (draw thick beautiful sketch borders)
     const int threshold = 28;
 
     for (int y = 0; y < h; y++) {
@@ -432,6 +482,7 @@ class ImageProcessor {
         final int lumR = (0.299 * pRight.r + 0.587 * pRight.g + 0.114 * pRight.b).toInt();
         final int lumB = (0.299 * pBottom.r + 0.587 * pBottom.g + 0.114 * pBottom.b).toInt();
 
+        // If high change in brightness, draw a black ink comic boundary
         if ((lum - lumR).abs() > threshold || (lum - lumB).abs() > threshold) {
           out.setPixel(x, y, img.ColorRgba8(12, 12, 22, orig.a.toInt()));
         } else {
@@ -444,7 +495,7 @@ class ImageProcessor {
   }
 
   // ==========================================
-  // WATERMARK
+  // WATERMARK APPLICATOR
   // ==========================================
   static Future<Uint8List> applyWatermark(Uint8List input) async {
     return await compute(_applyWatermarkSync, input);
@@ -517,7 +568,7 @@ class ImageProcessor {
   }
 
   // ==========================================
-  // TEXTURE BLENDING
+  // STAGE 3: TEXTURE & DETAIL BLENDING FILTER
   // ==========================================
   static Future<Uint8List> blendTextures({
     required Uint8List original,
@@ -536,6 +587,7 @@ class ImageProcessor {
 
     if (origSrc == null || enhSrc == null) return args.enhanced;
 
+    // Resize original image to perfectly match the upscaled enhanced dimensions
     final resizedOrig = img.copyResize(
       origSrc,
       width: enhSrc.width,
@@ -552,6 +604,8 @@ class ImageProcessor {
         final oPixel = resizedOrig.getPixel(x, y);
         final ePixel = enhSrc.getPixel(x, y);
 
+        // Blend raw original grain & frequency details back in
+        // to prevent the artificial "plastic face" look
         final double factor = args.blendFactor;
         final int r = (oPixel.r * factor + ePixel.r * (1.0 - factor)).round().clamp(0, 255);
         final int g = (oPixel.g * factor + ePixel.g * (1.0 - factor)).round().clamp(0, 255);
@@ -565,7 +619,7 @@ class ImageProcessor {
   }
 
   // ==========================================
-  // FILTER 10: BACKGROUND CLEANUP
+  // FILTER 10: OFFLINE BACKGROUND CLEANUP
   // ==========================================
   static Future<Uint8List> backgroundCleanup(Uint8List input) async {
     return await compute(_bgCleanupSync, input);
@@ -593,12 +647,14 @@ class ImageProcessor {
         final orig = src.getPixel(x, y);
 
         if (normDist > 0.45) {
+          // Out of center focus -> Replace with a clean dark-grey studio background
           final double factor = ((normDist - 0.45) / 0.55).clamp(0.0, 1.0);
           final int r = (orig.r * (1.0 - factor) + 12 * factor).round();
           final int g = (orig.g * (1.0 - factor) + 14 * factor).round();
           final int b = (orig.b * (1.0 - factor) + 20 * factor).round();
           out.setPixel(x, y, img.ColorRgba8(r, g, b, orig.a.toInt()));
         } else {
+          // Center subject -> keep 100% original and sharp!
           out.setPixel(x, y, orig);
         }
       }
@@ -653,10 +709,12 @@ Uint8List _editImageSync(_EditImageArgs args) {
   var src = img.decodeImage(args.input);
   if (src == null) return args.input;
 
+  // 1. Rotate if needed (angle in degrees, e.g. 90, 180, 270)
   if (args.rotateDegrees != 0) {
     src = img.copyRotate(src, angle: args.rotateDegrees);
   }
 
+  // 2. Flip if needed
   if (args.flipHorizontal) {
     src = img.flipHorizontal(src);
   }
@@ -664,6 +722,7 @@ Uint8List _editImageSync(_EditImageArgs args) {
     src = img.flipVertical(src);
   }
 
+  // 3. Crop if needed (check if bounds are smaller than full image)
   if (args.cropWidth < 0.999 ||
       args.cropHeight < 0.999 ||
       args.cropLeft > 0.001 ||

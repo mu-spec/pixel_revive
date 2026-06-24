@@ -6,6 +6,7 @@ import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/models/feature_item.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
+import 'package:pixel_revive/screens/premium_screen.dart';
 import 'package:pixel_revive/screens/result_screen.dart';
 import 'package:pixel_revive/screens/crop_rotate_screen.dart';
 import 'package:pixel_revive/widgets/processing_dialog.dart';
@@ -113,12 +114,12 @@ class _EditorScreenState extends State<EditorScreen> {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: Colors.black.withOpacity(0.06),
+          color: Colors.white.withOpacity(0.06),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -226,7 +227,7 @@ class _EditorScreenState extends State<EditorScreen> {
             value: provider.skinSmoothness,
             onChanged: (v) => provider.setSkinSmoothness(v),
             icon: Icons.spa,
-            activeColor: AppColors.accent,
+            activeColor: AppColors.accentLight,
           ),
         ],
       );
@@ -260,7 +261,7 @@ class _EditorScreenState extends State<EditorScreen> {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.black.withOpacity(0.04),
+          color: Colors.white.withOpacity(0.04),
           width: 1,
         ),
       ),
@@ -274,7 +275,7 @@ class _EditorScreenState extends State<EditorScreen> {
               Text(
                 title,
                 style: const TextStyle(
-                  color: AppColors.text,
+                  color: Colors.white,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
@@ -295,7 +296,7 @@ class _EditorScreenState extends State<EditorScreen> {
             data: SliderThemeData(
               trackHeight: 3,
               activeTrackColor: activeColor,
-              inactiveTrackColor: AppColors.primary,
+              inactiveTrackColor: AppColors.card,
               thumbColor: Colors.white,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
@@ -344,7 +345,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       border: Border.all(
                         color: isSelected
                             ? Colors.white.withOpacity(0.2)
-                            : Colors.black.withOpacity(0.05),
+                            : Colors.white.withOpacity(0.05),
                         width: 1.5,
                       ),
                     ),
@@ -390,7 +391,7 @@ class _EditorScreenState extends State<EditorScreen> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(0.35),
             blurRadius: 16,
             offset: const Offset(0, -6),
           ),
@@ -433,7 +434,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.accent.withOpacity(0.2),
+                          color: AppColors.accent.withOpacity(0.35),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -488,7 +489,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.success,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: AppColors.primary,
+                        disabledBackgroundColor: AppColors.card,
                         disabledForegroundColor: AppColors.textMuted,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -517,7 +518,6 @@ class _EditorScreenState extends State<EditorScreen> {
         Uint8List result;
         
         if (GpuShaderService.isAvailable) {
-          // 🚀 RUNNING 100% REAL SHADER ON GPU (Impeller/Skia)
           double brightness = 0.0;
           double contrast = 1.0;
           double saturation = 1.0;
@@ -541,7 +541,6 @@ class _EditorScreenState extends State<EditorScreen> {
             sharpen: sharpen,
           );
         } else {
-          // Fallback to CPU Isolate processing if Shader compilation isn't supported
           result = await ImageProcessor.autoEnhance(
             provider.originalBytes!,
             strength: value,
@@ -549,9 +548,7 @@ class _EditorScreenState extends State<EditorScreen> {
         }
         
         if (mounted) {
-          setState(() {
-            provider.displayBytes = result;
-          });
+          provider.setDisplayBytes(result);
         }
       } catch (_) {}
     });
@@ -588,7 +585,7 @@ class _GridBackdropPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black.withOpacity(0.02)
+      ..color = Colors.white.withOpacity(0.5)
       ..style = PaintingStyle.fill;
 
     const double cellSize = 12.0;

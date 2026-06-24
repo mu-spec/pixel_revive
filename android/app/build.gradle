@@ -27,6 +27,8 @@ android {
 
     signingConfigs {
         release {
+            // Codemagic injects these environment variables at build time.
+            // For local release, create key.properties or use debug signing.
             storeFile file(System.getenv("CM_KEYSTORE_PATH") ?: "release.keystore")
             storePassword System.getenv("CM_KEYSTORE_PASSWORD") ?: ""
             keyAlias System.getenv("CM_KEY_ALIAS") ?: ""
@@ -36,6 +38,7 @@ android {
 
     buildTypes {
         release {
+            // If keystore variables are missing, fallback to debug key for seamless testing/showing senior
             if (System.getenv("CM_KEYSTORE_PATH") != null) {
                 signingConfig = signingConfigs.release
             } else {

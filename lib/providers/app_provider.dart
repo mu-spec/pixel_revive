@@ -22,21 +22,27 @@ class AppProvider extends ChangeNotifier {
   int freeExportsToday = 0;
   String? lastExportDate;
 
+  // Sliders for dynamic fine-tuning
   double enhanceStrength = 0.8;
   double skinSmoothness = 0.5;
   double bokehBlur = 0.6;
 
+  // Cloud AI configs
   bool useCloudAi = false;
   String falToken = '';
+  bool useReplicate = false; // true = Replicate (free), false = Fal.ai (paid)
 
+  // Language settings
   String languageCode = 'en';
 
+  // Creations History List (Saves paths of enhanced images)
   List<String> creationHistory = [];
 
   static const int _dailyFreeExports = 3;
 
   AppProvider() {
     _loadPrefs();
+    // Lazy-load: services initialize on first use instead of blocking app startup
   }
 
   Future<void> _loadPrefs() async {
@@ -46,6 +52,7 @@ class AppProvider extends ChangeNotifier {
     lastExportDate = prefs.getString('last_export_date');
     useCloudAi = prefs.getBool('use_cloud_ai') ?? false;
     falToken = prefs.getString('fal_token') ?? '';
+    useReplicate = prefs.getBool('use_replicate') ?? false;
     languageCode = prefs.getString('language_code') ?? 'en';
     creationHistory = prefs.getStringList('creation_history') ?? [];
     _resetDailyIfNeeded();
@@ -59,6 +66,7 @@ class AppProvider extends ChangeNotifier {
     await prefs.setString('last_export_date', lastExportDate ?? '');
     await prefs.setBool('use_cloud_ai', useCloudAi);
     await prefs.setString('fal_token', falToken);
+    await prefs.setBool('use_replicate', useReplicate);
     await prefs.setString('language_code', languageCode);
     await prefs.setStringList('creation_history', creationHistory);
   }
@@ -108,6 +116,12 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setUseReplicate(bool value) {
+    useReplicate = value;
+    _savePrefs();
+    notifyListeners();
+  }
+
   void setLanguageCode(String code) {
     languageCode = code;
     _savePrefs();
@@ -139,11 +153,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _preWarmAllCloudModels() {
-    if (useCloudAi && falToken.isNotEmpty) {
-      AiApiService.preWarmModel(modelName: 'fal-ai/codeformer', apiToken: falToken);
-      AiApiService.preWarmModel(modelName: 'fal-ai/esrgan', apiToken: falToken);
-      AiApiService.preWarmModel(modelName: 'fal-ai/image-editing/photo-restoration', apiToken: falToken);
-    }
+    // Pre-warming removed — not needed for Fal.ai or Replicate
   }
 
   Future<void> pickImage(ImageSource source) async {
@@ -162,6 +172,7 @@ class AppProvider extends ChangeNotifier {
       displayBytes = null;
       notifyListeners();
 
+      // Lazy-init GPU shader on first image pick
       GpuShaderService.initialize();
       _preWarmAllCloudModels();
     } catch (e) {
@@ -183,35 +194,15 @@ class AppProvider extends ChangeNotifier {
     isProcessing = true;
     notifyListeners();
 
+    // 1. Try Cloud AI if configured and enabled
     if (useCloudAi && falToken.isNotEmpty) {
       try {
-        Uint8List? cloudResult;
-        if (featureId == 'face' || featureId == 'restore' || featureId == 'auto') {
-          cloudResult = await AiApiService.runMultiStagePipeline(
-            imageBytes: originalBytes!,
-            apiToken: falToken,
-            blendFactor: 0.25,
-          );
-        } else if (featureId == 'upscale') {
-          cloudResult = await AiApiService.runFalPrediction(
-            imageBytes: originalBytes!,
-            modelName: 'fal-ai/esrgan',
-            apiToken: falToken,
-            additionalInput: {'upscaling': 2},
-          );
-        } else if (featureId == 'colorize') {
-          cloudResult = await AiApiService.runFalPrediction(
-            imageBytes: originalBytes!,
-            modelName: 'fal-ai/image-editing/photo-restoration',
-            apiToken: falToken,
-          );
-        } else if (featureId == 'bg_cleanup') {
-          cloudResult = await AiApiService.runFalPrediction(
-            imageBytes: originalBytes!,
-            modelName: 'fal-ai/imageutils/rembg',
-            apiToken: falToken,
-          );
-        }
+        final cloudResult = await AiApiService.smartEnhance(
+          imageBytes: originalBytes!,
+          featureId: featureId,
+          apiToken: falToken,
+          isReplicate: useReplicate,
+        );
 
         if (cloudResult != null) {
           processedBytes = cloudResult;
@@ -220,13 +211,14 @@ class AppProvider extends ChangeNotifier {
           await _savePrefs();
           isProcessing = false;
           notifyListeners();
-          return;
+          return; // SUCCESS - EXIT METHOD EARLY
         }
       } catch (e) {
         debugPrint("Cloud AI failed, falling back to local processing: $e");
       }
     }
 
+    // 2. FALLBACK - Run Local On-Device processing
     try {
       Uint8List result;
       switch (featureId) {
@@ -444,7 +436,7 @@ class AppProvider extends ChangeNotifier {
         batchProcessedBytes.add(finalBytes);
       }
 
-      batchStatusMessage = "Batch processing complete!";
+      batchStatusMessage = "Batch processing complete! 🎉";
     } catch (e) {
       batchStatusMessage = "Batch process failed: $e";
       debugPrint("processBatch error: $e");

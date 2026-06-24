@@ -32,7 +32,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
 
-    // Plans list with localized translations
     final List<Map<String, dynamic>> plans = [
       {
         'title': AppStrings.getText('weekly', provider.languageCode),
@@ -177,7 +176,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.white.withOpacity(0.06),
                   width: 1,
                 ),
               ),
@@ -188,15 +187,16 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     children: [
                       const Icon(Icons.cloud_queue, color: AppColors.success, size: 20),
                       const SizedBox(width: 10),
-                      Text(
-                        AppStrings.getText('enableCloud', provider.languageCode),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                      const Expanded(
+                        child: Text(
+                          'Enable Cloud AI',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      const Spacer(),
                       Switch.adaptive(
                         value: provider.useCloudAi,
                         activeColor: AppColors.success,
@@ -204,7 +204,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                           if (v && provider.falToken.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Please enter your Fal.ai API Token first!'),
+                                content: Text('Please enter your API Token first!'),
                                 backgroundColor: Colors.redAccent,
                               ),
                             );
@@ -216,15 +216,62 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  // Provider selector
+                  Row(
+                    children: [
+                      const Icon(Icons.swap_horiz, color: AppColors.accent, size: 20),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Use Replicate (FREE)',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: provider.useReplicate,
+                        activeColor: AppColors.success,
+                        onChanged: (v) {
+                          provider.setUseReplicate(v);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      provider.useReplicate
+                          ? '✅ Replicate.com — Free, no credit card needed. Models: CodeFormer, GFPGAN, Real-ESRGAN'
+                          : '⚡ Fal.ai — Fast but requires credits. Models: CodeFormer, ESRGAN, Photo Restoration',
+                      style: TextStyle(
+                        color: provider.useReplicate ? AppColors.success : AppColors.gold,
+                        fontSize: 11,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
-                    AppStrings.getText('apiDesc', provider.languageCode),
+                    provider.useReplicate
+                        ? 'Get your free API token from replicate.com/account/api-tokens'
+                        : AppStrings.getText('apiDesc', provider.languageCode),
                     style: const TextStyle(color: AppColors.textMuted, fontSize: 11.5, height: 1.4),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _tokenController,
                     decoration: InputDecoration(
-                      hintText: AppStrings.getText('apiHint', provider.languageCode),
+                      hintText: provider.useReplicate
+                          ? 'Paste Replicate API Token (r8_...)'
+                          : AppStrings.getText('apiHint', provider.languageCode),
                       hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                       filled: true,
                       fillColor: AppColors.primary,
@@ -256,7 +303,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Plan list
             ...List.generate(plans.length, (index) {
               final plan = plans[index];
               final isSelected = _selectedPlanIndex == index;
