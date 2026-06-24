@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pixel_revive/services/image_processor.dart';
 import 'package:pixel_revive/services/storage_service.dart';
 import 'package:pixel_revive/services/ai_api_service.dart';
+import 'package:pixel_revive/services/cloud_api_config.dart';
 import 'package:pixel_revive/services/gpu_shader_service.dart';
 import 'package:pixel_revive/services/on_device_ml_service.dart';
 
@@ -21,16 +22,17 @@ class AppProvider extends ChangeNotifier {
   bool isProcessing = false;
   int freeExportsToday = 0;
   String? lastExportDate;
+  int cloudAiUsedToday = 0;
 
   // Sliders for dynamic fine-tuning
   double enhanceStrength = 0.8;
   double skinSmoothness = 0.5;
   double bokehBlur = 0.6;
 
-  // Cloud AI configs
+  // Cloud AI configs — now driven by CloudApiConfig
   bool useCloudAi = false;
-  String falToken = '';
-  bool useReplicate = false; // true = Replicate (free), false = Fal.ai (paid)
+  // Developer override token (for testing only — hidden behind 5 taps)
+  String devOverrideToken = '';
 
   // Language settings
   String languageCode = 'en';
@@ -42,7 +44,6 @@ class AppProvider extends ChangeNotifier {
 
   AppProvider() {
     _loadPrefs();
-    // Lazy-load: services initialize on first use instead of blocking app startup
   }
 
   Future<void> _loadPrefs() async {
@@ -51,8 +52,8 @@ class AppProvider extends ChangeNotifier {
     freeExportsToday = prefs.getInt('free_exports_today') ?? 0;
     lastExportDate = prefs.getString('last_export_date');
     useCloudAi = prefs.getBool('use_cloud_ai') ?? false;
-    falToken = prefs.getString('fal_token') ?? '';
-    useReplicate = prefs.getBool('use_replicate') ?? false;
+    devOverrideToken = prefs.getString('dev_override_token') ?? '';
+    cloudAiUsedToday = prefs.getInt('cloud_ai_used_today') ?? 0;
     languageCode = prefs.getString('language_code') ?? 'en';
     creationHistory = prefs.getStringList('creation_history') ?? [];
     _resetDailyIfNeeded();
@@ -65,8 +66,8 @@ class AppProvider extends ChangeNotifier {
     await prefs.setInt('free_exports_today', freeExportsToday);
     await prefs.setString('last_export_date', lastExportDate ?? '');
     await prefs.setBool('use_cloud_ai', useCloudAi);
-    await prefs.setString('fal_token', falToken);
-    await prefs.setBool('use_replicate', useReplicate);
+    await prefs.setString('dev_override_token', devOverrideToken);
+    await prefs.setInt('cloud_ai_used_today', cloudAiUsedToday);
     await prefs.setString('language_code', languageCode);
     await prefs.setStringList('creation_history', creationHistory);
   }
@@ -75,6 +76,7 @@ class AppProvider extends ChangeNotifier {
     final today = _todayString();
     if (lastExportDate != today) {
       freeExportsToday = 0;
+      cloudAiUsedToday = 0;
       lastExportDate = today;
     }
   }
@@ -82,6 +84,29 @@ class AppProvider extends ChangeNotifier {
   String _todayString() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Returns the API token to use:
+  /// 1. Developer override token (if set via hidden settings)
+  /// 2. Embedded token from CloudApiConfig
+  String get _activeApiToken {
+    if (devOverrideToken.isNotEmpty) return devOverrideToken;
+    return CloudApiConfig.activeToken;
+  }
+
+  /// Whether Cloud AI is available (has a valid token)
+  bool get isCloudAiAvailable {
+    return _activeApiToken.isNotEmpty;
+  }
+
+  /// Can this user use Cloud AI right now?
+  /// Premium = unlimited. Free = limited daily quota.
+  bool get canUseCloudAi {
+    if (!isCloudAiAvailable) return false;
+    if (!useCloudAi) return false;
+    if (isPremium) return true;
+    // Free user: check daily limit
+    return cloudAiUsedToday < CloudApiConfig.freeDailyCloudLimit;
   }
 
   void setEnhanceStrength(double value) {
@@ -110,14 +135,8 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setFalToken(String value) {
-    falToken = value;
-    _savePrefs();
-    notifyListeners();
-  }
-
-  void setUseReplicate(bool value) {
-    useReplicate = value;
+  void setDevOverrideToken(String value) {
+    devOverrideToken = value;
     _savePrefs();
     notifyListeners();
   }
@@ -152,10 +171,6 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  void _preWarmAllCloudModels() {
-    // Pre-warming removed — not needed for Fal.ai or Replicate
-  }
-
   Future<void> pickImage(ImageSource source) async {
     try {
       final picked = await _picker.pickImage(
@@ -172,9 +187,7 @@ class AppProvider extends ChangeNotifier {
       displayBytes = null;
       notifyListeners();
 
-      // Lazy-init GPU shader on first image pick
       GpuShaderService.initialize();
-      _preWarmAllCloudModels();
     } catch (e) {
       debugPrint('pickImage error: $e');
     }
@@ -194,24 +207,27 @@ class AppProvider extends ChangeNotifier {
     isProcessing = true;
     notifyListeners();
 
-    // 1. Try Cloud AI if configured and enabled
-    if (useCloudAi && falToken.isNotEmpty) {
+    // 1. Try Cloud AI if configured, enabled, and user has quota
+    if (useCloudAi && canUseCloudAi) {
       try {
         final cloudResult = await AiApiService.smartEnhance(
           imageBytes: originalBytes!,
           featureId: featureId,
-          apiToken: falToken,
-          isReplicate: useReplicate,
+          apiToken: _activeApiToken,
+          isReplicate: CloudApiConfig.useReplicate,
         );
 
         if (cloudResult != null) {
           processedBytes = cloudResult;
           displayBytes = isPremium ? cloudResult : await ImageProcessor.applyWatermark(cloudResult);
+          if (!isPremium) {
+            cloudAiUsedToday++;
+          }
           _resetDailyIfNeeded();
           await _savePrefs();
           isProcessing = false;
           notifyListeners();
-          return; // SUCCESS - EXIT METHOD EARLY
+          return; // SUCCESS
         }
       } catch (e) {
         debugPrint("Cloud AI failed, falling back to local processing: $e");
@@ -335,8 +351,6 @@ class AppProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
-
-    _preWarmAllCloudModels();
   }
 
   // =========================================================================
@@ -398,35 +412,14 @@ class AppProvider extends ChangeNotifier {
         final Uint8List input = batchOriginalBytes[i];
         Uint8List result;
 
-        if (useCloudAi && falToken.isNotEmpty) {
-          Uint8List? cloudResult;
-          if (featureId == 'face' || featureId == 'restore' || featureId == 'auto') {
-            cloudResult = await AiApiService.runMultiStagePipeline(
-              imageBytes: input,
-              apiToken: falToken,
-              blendFactor: 0.25,
-            );
-          } else if (featureId == 'upscale') {
-            cloudResult = await AiApiService.runFalPrediction(
-              imageBytes: input,
-              modelName: 'fal-ai/esrgan',
-              apiToken: falToken,
-              additionalInput: {'upscaling': 2},
-            );
-          } else if (featureId == 'colorize') {
-            cloudResult = await AiApiService.runFalPrediction(
-              imageBytes: input,
-              modelName: 'fal-ai/image-editing/photo-restoration',
-              apiToken: falToken,
-            );
-          } else if (featureId == 'bg_cleanup') {
-            cloudResult = await AiApiService.runFalPrediction(
-              imageBytes: input,
-              modelName: 'fal-ai/imageutils/rembg',
-              apiToken: falToken,
-            );
-          }
-
+        // Try Cloud AI for batch (Premium only, to save your costs)
+        if (useCloudAi && isPremium && _activeApiToken.isNotEmpty) {
+          Uint8List? cloudResult = await AiApiService.smartEnhance(
+            imageBytes: input,
+            featureId: featureId,
+            apiToken: _activeApiToken,
+            isReplicate: CloudApiConfig.useReplicate,
+          );
           result = cloudResult ?? await _processLocalFeatureSync(input, featureId);
         } else {
           result = await _processLocalFeatureSync(input, featureId);

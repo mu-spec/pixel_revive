@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -41,7 +42,7 @@ class AiLabTab extends StatelessWidget {
   }
 
   Widget _buildHeroPromoCard(BuildContext context, AppProvider provider) {
-    final bool isCloudActive = provider.useCloudAi && provider.falToken.isNotEmpty;
+    final bool isCloudActive = provider.useCloudAi && provider.isCloudAiAvailable;
 
     return Container(
       width: double.infinity,

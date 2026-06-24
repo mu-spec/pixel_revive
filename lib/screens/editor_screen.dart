@@ -33,13 +33,7 @@ class _EditorScreenState extends State<EditorScreen> {
     selectedFeatureId = widget.initialFeatureId ?? 'auto';
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<AppProvider>();
-      if (provider.useCloudAi && provider.falToken.isNotEmpty) {
-        AiApiService.preWarmModel(
-          modelName: 'fal-ai/codeformer',
-          apiToken: provider.falToken,
-        );
-      }
+      // Cloud AI pre-warming removed — not needed
     });
 
     if (widget.initialFeatureId != null) {
