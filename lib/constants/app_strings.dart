@@ -36,7 +36,7 @@ class AppStrings {
       
       // Feature Descriptions
       'desc_auto': 'One-Tap Auto Enhance automatically optimizes brightness, balances contrast, restores saturation, and sharpens soft details for a balanced photo.',
-      'desc_upscale': 'HD Upscale uses a bicubic interpolation scaling algorithm to double (2x) the resolution of your photo while sharpening edges to reduce blur.',
+      'desc_upscale': 'HD Upscale uses bicubic interpolation scaling to double (2x) or quadruple (4x) the resolution of your photo while sharpening edges to reduce blur.',
       'desc_face': 'Face Enhance optimizes portraits. It applies a smart local smoothing pass to reduce skin blemishes, followed by a local high-contrast details pass.',
       'desc_denoise': 'Denoise utilizes a bilateral noise-reduction filter. It sweeps away sensor grain and low-light artifacts while preserving structural edges.',
       'desc_unblur': 'Unblur deploys a high-pass unsharp masking algorithm, pulling back details in out-of-focus or motion-blurred shots.',
@@ -44,7 +44,7 @@ class AppStrings {
       'desc_restore': 'Old Photo Restore targets antique sepia or yellowed paper. It neutralizes aging shifts, optimizes faded dynamic range, and clarifies old pixels.',
       'desc_cartoon': 'Cartoon Effect processes the image with color quantization and edge tracing, turning normal photos into hand-drawn digital cel-shaded pop art.',
       'desc_bg': 'Background Blur simulates premium lens bokeh. It centers focus around the central photographic subject and gently softens the background.',
-      'desc_bg_cleanup': 'Background Cleanup erases background clutter or replaces the background entirely with a clean solid color using advanced AI segmentation.',
+      'desc_bg_cleanup': 'Background Cleanup replaces background distractions with a clean studio background using smart center-focus masking. Optimized for portrait photos.',
 
       // Result Screen
       'resultTitle': 'Before & After Swipe',
@@ -130,7 +130,7 @@ class AppStrings {
       
       // Feature Descriptions
       'desc_auto': 'Auto Enhance optimiza automáticamente el brillo, equilibra el contraste, restaura la saturación y enfoca los detalles suaves.',
-      'desc_upscale': 'HD Upscale duplica (2x) la resolución de su foto usando un algoritmo de escala interpolación bicúbica.',
+      'desc_upscale': 'HD Upscale escala su foto usando interpolación bicúbica para duplicar (2x) o cuadruplicar (4x) la resolución.',
       'desc_face': 'Face Enhance suaviza la piel reduciendo imperfecciones y resalta los rasgos clave de la cara como ojos y labios.',
       'desc_denoise': 'Denoise elimina el grano digital y el ruido de las fotos oscuras o con poca luz mientras mantiene los bordes nítidos.',
       'desc_unblur': 'Unblur reduce el movimiento de la cámara y el desenfoque suave recuperando detalles finos en la imagen.',
@@ -138,6 +138,7 @@ class AppStrings {
       'desc_restore': 'Old Photo Restore elimina el tono amarillento y sepia del envejecimiento y recupera el contraste original.',
       'desc_cartoon': 'Cartoon Effect transforma tus fotos en un estilo artístico de dibujo animado con bordes oscuros y colores planos.',
       'desc_bg': 'Background Blur desenfoca el fondo de tus retratos imitando el efecto bokeh de lentes fotográficos profesionales.',
+      'desc_bg_cleanup': 'BG Cleanup reemplaza los distracciones del fondo con un fondo de estudio limpio usando enmascaramiento inteligente centrado.',
 
       // Result Screen
       'resultTitle': 'Deslizar Antes y Después',
@@ -229,6 +230,7 @@ class AppStrings {
       'desc_restore': 'Old Photo Restore corrige la décoloration sepia du papier et restaure la clarté d\'origine des détails.',
       'desc_cartoon': 'Cartoon Effect applique un filtre de dessin animé stylisé avec des contours marqués et des aplats colorés.',
       'desc_bg': 'Background Blur floute l\'arrière-plan de vos portraits en simulant le flou artistique (bokeh) des objectifs DSLR.',
+      'desc_bg_cleanup': 'Background Cleanup remplace les distractions de fond par un fond de studio propre en utilisant un masquage intelligent centré.',
 
       // Result Screen
       'resultTitle': 'Glisser Avant et Après',
@@ -287,7 +289,7 @@ class AppStrings {
       'onboardingSub3': 'پس منظر کو دھندلا کر کے چہرے کو نمایاں کریں۔',
 
       'desc_auto': 'موبائل پر روشنی اور رنگوں کو آٹو ایڈجسٹ کریں۔',
-      'desc_upscale': 'تصویر کی ریزولیوشن کو ڈبل کریں۔',
+      'desc_upscale': 'تصویر کی ریزولیوشن کو 2x یا 4x تک بڑھائیں۔',
       'desc_face': 'چہرے کی جھریاں دور کر کے ملامح کو واضح کریں۔',
       'desc_denoise': 'اندھیرے والی تصاویر کا دانہ دار پن دور کریں۔',
       'desc_unblur': 'تصویر کا دھندلا پن دور کریں۔',
@@ -295,6 +297,7 @@ class AppStrings {
       'desc_restore': 'پرانی تصویروں کو بحال کریں۔',
       'desc_cartoon': 'تصویر کو کارٹون آرٹ بنائیں۔',
       'desc_bg': 'بیک گراؤنڈ بلر کریں۔',
+      'desc_bg_cleanup': 'بیک گراؤنڈ کلین اپ پس منظر کو اسٹوڈیو بیک گراؤنڈ سے تبدیل کرتی ہے۔',
 
       // Result Screen
       'resultTitle': 'موازنہ سوائپ کریں',
@@ -352,7 +355,7 @@ class AppStrings {
 
       // Feature Descriptions
       'desc_auto': 'تقوم ميزة Auto Enhance بضبط السطوع والتباين تلقائيًا وإبراز الألوان الباهتة.',
-      'desc_upscale': 'تضاعف ميزة HD Upscale دقة الصورة مرتين (2x) باستخدام خوارزمية تكبير ذكية.',
+      'desc_upscale': 'تضاعف ميزة HD Upscale دقة الصورة مرتين (2x) أو أربعة أضعاف (4x) باستخدام خوارزمية تكبير ذكية.',
       'desc_face': 'Face Enhance تنعم البشرة وإزالة الشوائب وتوضح تفاصيل العينين والشفتين بدقة.',
       'desc_denoise': 'تزيل ميزة Denoise الحبيبات الرقمية والتشويش من الصور الليلية مع الحفاظ على وضوح التفاصيل.',
       'desc_unblur': 'تعالج ميزة Unblur ضبابية الحركة والاهتزاز لاستعادة وضوح الصور الملتشطة.',
@@ -360,6 +363,7 @@ class AppStrings {
       'desc_restore': 'تزيل ميزة Old Photo Restore اصفرار الورق ودرجات السيبيا القديمة وتعيد التباين الغني.',
       'desc_cartoon': 'تحول ميزة Cartoon Effect صورك الشخصية إلى لوحة كرتونية فنية بخطوط واضحة وألوان زاهية.',
       'desc_bg': 'تقوم ميزة Background Blur بتمويه خلفية صورك الشخصية لتبدو وكأنها ملتقطة بعدسة كاميرا احترافية.',
+      'desc_bg_cleanup': 'Background Cleanup تستبدل مشتتات الخلفية بخلفية استوديو نظيفة باستخدام قناع ذكي مركزي.',
 
       // Result Screen
       'resultTitle': 'مقارنة بالسحب قبل وبعد',
@@ -418,7 +422,7 @@ class AppStrings {
 
       // Feature Descriptions
       'desc_auto': 'Auto Enhance optimiert Helligkeit, Kontrast und Sättigung für ein perfekt ausgewogenes Foto.',
-      'desc_upscale': 'HD Upscale verdoppelt (2x) die Auflösung Ihres Fotos mithilfe einer bikubischen Skalierung.',
+      'desc_upscale': 'HD Upscale verdoppelt (2x) oder vervierfacht (4x) die Auflösung Ihres Fotos mithilfe einer intelligenten Skalierungsalgorithmen.',
       'desc_face': 'Face Enhance glättet Hautunreinheiten sanft und hebt Gesichtskonturen (Augen, Lippen) scharf hervor.',
       'desc_denoise': 'Denoise entfernt Bildrauschen und Körnung bei schlechten Lichtverhältnissen für ein klares Bild.',
       'desc_unblur': 'Unblur reduziert Bewegungsunschärfe und Schärfungsfehler für gestochen scharfe Kanten.',
@@ -426,6 +430,7 @@ class AppStrings {
       'desc_restore': 'Old Photo Restore entfernt den gelblichen Alterungsschleier und bringt Kontraste zurück.',
       'desc_cartoon': 'Cartoon Effect verwandelt Fotos in einen gezeichneten Comic-Stil mit kräftigen Linien.',
       'desc_bg': 'Background Blur zeichnet den Hintergrund weich, um Ihre Motive wie bei einer DSLR-Kamera freizustellen.',
+      'desc_bg_cleanup': 'Background Cleanup ersetzt Hintergrund-Ablenkungen durch einen sauberen Studio-Hintergrund mit intelligentem Zentrumsmaskierung.',
 
       // Result Screen
       'resultTitle': 'Vorher & Nachher wischen',
