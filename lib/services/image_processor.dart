@@ -32,24 +32,20 @@ class ImageProcessor {
 
   static int _clamp(int v) => v < 0 ? 0 : (v > 255 ? 255 : v);
 
-  static img.Image _clone(img.Image src) => img.Image(
-    width: src.width, 
-    height: src.height, 
-    numChannels: src.numChannels
-  )..setPixels(src.getBytes());
+  static img.Image _clone(img.Image src) => src.clone();
 
   static img.Image _sharpen(img.Image src, {double amount = 1.5}) {
     final clone = _clone(src);
     final blurred = img.gaussianBlur(clone, radius: 2);
     final result = _unsharpMask(src, blurred, amount: amount);
-    clone.dispose();
-    blurred.dispose();
     return result;
   }
 
-  static img.Image _unsharpMask(img.Image original, img.Image blurred, {
-    double amount = 1.5, 
-    double noiseThreshold = 2.0
+  static img.Image _unsharpMask(
+    img.Image original,
+    img.Image blurred, {
+    double amount = 1.5,
+    double noiseThreshold = 2.0,
   }) {
     final w = original.width;
     final h = original.height;
@@ -66,18 +62,21 @@ class ImageProcessor {
           return _clamp((o + diff * amount).toInt());
         }
 
-        out.setPixel(x, y, img.ColorRgba8(
-          comp(orig.r.toInt(), blur.r.toInt()),
-          comp(orig.g.toInt(), blur.g.toInt()),
-          comp(orig.b.toInt(), blur.b.toInt()),
-          orig.a.toInt(),
-        ));
+        out.setPixel(
+          x,
+          y,
+          img.ColorRgba8(
+            comp(orig.r.toInt(), blur.r.toInt()),
+            comp(orig.g.toInt(), blur.g.toInt()),
+            comp(orig.b.toInt(), blur.b.toInt()),
+            orig.a.toInt(),
+          ),
+        );
       }
     }
     return out;
   }
 
-  // ADVANCED EDGE-PRESERVING LUMINANCE BILATERAL DENOISE
   static img.Image _advancedDenoise(img.Image src, {double sigmaR = 32.0}) {
     final w = src.width;
     final h = src.height;
@@ -101,7 +100,8 @@ class ImageProcessor {
         }
 
         final center = src.getPixel(x, y);
-        final double cLum = 0.299 * center.r + 0.587 * center.g + 0.114 * center.b;
+        final double cLum =
+            0.299 * center.r + 0.587 * center.g + 0.114 * center.b;
 
         double sumR = 0, sumG = 0, sumB = 0;
         double totalWeight = 0;
@@ -109,10 +109,12 @@ class ImageProcessor {
         for (int ky = -2; ky <= 2; ky++) {
           for (int kx = -2; kx <= 2; kx++) {
             final neighbor = src.getPixel(x + kx, y + ky);
-            final double nLum = 0.299 * neighbor.r + 0.587 * neighbor.g + 0.114 * neighbor.b;
-            
+            final double nLum =
+                0.299 * neighbor.r + 0.587 * neighbor.g + 0.114 * neighbor.b;
+
             final double lumDist = (cLum - nLum).abs();
-            final double rangeWeight = math.exp(-(lumDist * lumDist) / (2 * sigmaR * sigmaR));
+            final double rangeWeight =
+                math.exp(-(lumDist * lumDist) / (2 * sigmaR * sigmaR));
             final double weight = getSpaceWeight(kx, ky) * rangeWeight;
 
             sumR += neighbor.r * weight;
@@ -122,12 +124,16 @@ class ImageProcessor {
           }
         }
 
-        out.setPixel(x, y, img.ColorRgba8(
-          (sumR / totalWeight).round().clamp(0, 255),
-          (sumG / totalWeight).round().clamp(0, 255),
-          (sumB / totalWeight).round().clamp(0, 255),
-          center.a.toInt(),
-        ));
+        out.setPixel(
+          x,
+          y,
+          img.ColorRgba8(
+            (sumR / totalWeight).round().clamp(0, 255),
+            (sumG / totalWeight).round().clamp(0, 255),
+            (sumB / totalWeight).round().clamp(0, 255),
+            center.a.toInt(),
+          ),
+        );
       }
     }
 
@@ -138,8 +144,10 @@ class ImageProcessor {
     return _advancedDenoise(src, sigmaR: 28.0);
   }
 
-  // FILTER 1: AUTO ENHANCE
-  static Future<Uint8List> autoEnhance(Uint8List input, {double strength = 0.8}) async {
+  static Future<Uint8List> autoEnhance(
+    Uint8List input, {
+    double strength = 0.8,
+  }) async {
     return await compute(_autoEnhanceSync, _AutoEnhanceArgs(input, strength));
   }
 
@@ -151,21 +159,22 @@ class ImageProcessor {
     final satVal = 1.0 + args.strength * 0.50;
     final brightVal = 1.0 + args.strength * 0.15;
 
-    var out = img.adjustColor(src, contrast: contrastVal, saturation: satVal, brightness: brightVal);
-    
+    var out = img.adjustColor(
+      src,
+      contrast: contrastVal,
+      saturation: satVal,
+      brightness: brightVal,
+    );
+
     out = _sharpen(out, amount: args.strength * 2.0);
-    
+
     if (args.strength > 0.5) {
       out = _lightDenoise(out);
     }
-    
-    src.dispose();
-    final result = _encode(out);
-    out.dispose();
-    return result;
+
+    return _encode(out);
   }
 
-  // FILTER 2: HD UPSCALE (2X AND 4X)
   static Future<Uint8List> upscale(Uint8List input, {int scale = 2}) async {
     return await compute(_upscaleSync, _UpscaleArgs(input, scale.clamp(2, 4)));
   }
@@ -178,28 +187,32 @@ class ImageProcessor {
     final newW = (src.width * args.scale).clamp(1, maxDim).toInt();
     final newH = (src.height * args.scale).clamp(1, maxDim).toInt();
 
-    final interpolation = args.scale >= 4 ? img.Interpolation.lanczos : img.Interpolation.cubic;
-    
-    var out = img.copyResize(src, width: newW, height: newH, interpolation: interpolation);
-    
+    var out = img.copyResize(
+      src,
+      width: newW,
+      height: newH,
+      interpolation: img.Interpolation.cubic,
+    );
+
     out = _sharpen(out, amount: 1.2);
-    
+
     if (args.scale >= 4) {
-      final temp = _sharpen(out, amount: 0.8);
-      out.dispose();
-      out = temp;
+      out = _sharpen(out, amount: 0.8);
     }
-    
-    src.dispose();
-    final result = _encode(out);
-    out.dispose();
-    return result;
+
+    return _encode(out);
   }
 
-  // FILTER 3: FACE ENHANCE (UPGRADED WITH EYES/SKIN SEPARATION)
-  static Future<Uint8List> faceEnhance(Uint8List input, {double smoothness = 0.5, double strength = 0.8}) async {
+  static Future<Uint8List> faceEnhance(
+    Uint8List input, {
+    double smoothness = 0.5,
+    double strength = 0.8,
+  }) async {
     final faceRegions = await OnDeviceMlService.detectFaceRegions(input);
-    return await compute(_faceEnhanceSync, _FaceEnhanceArgs(input, smoothness, strength, faceRegions));
+    return await compute(
+      _faceEnhanceSync,
+      _FaceEnhanceArgs(input, smoothness, strength, faceRegions),
+    );
   }
 
   static Uint8List _faceEnhanceSync(_FaceEnhanceArgs args) {
@@ -210,11 +223,8 @@ class ImageProcessor {
     final h = src.height;
 
     final int rRadius = (args.smoothness * 6 + 1).round().clamp(1, 6);
-    
-    final clone = _clone(src);
-    final blurred = img.gaussianBlur(clone, radius: rRadius);
-    clone.dispose();
 
+    final blurred = img.gaussianBlur(_clone(src), radius: rRadius);
     final out = img.Image(width: w, height: h, numChannels: 4);
     final int threshold = (12 + args.smoothness * 28).round();
 
@@ -239,60 +249,65 @@ class ImageProcessor {
         }
 
         if (inEyeMouth) {
-          // Eye & Lip detail region: high-clarity sharpness boost
           final blur = blurred.getPixel(x, y);
+
           int detail(int o, int b) {
             final diff = o - b;
             return _clamp((o + diff * (1.5 + args.strength * 1.5)).toInt());
           }
-          out.setPixel(x, y, img.ColorRgba8(
-            detail(orig.r.toInt(), blur.r.toInt()),
-            detail(orig.g.toInt(), blur.g.toInt()),
-            detail(orig.b.toInt(), blur.b.toInt()),
-            orig.a.toInt(),
-          ));
+
+          out.setPixel(
+            x,
+            y,
+            img.ColorRgba8(
+              detail(orig.r.toInt(), blur.r.toInt()),
+              detail(orig.g.toInt(), blur.g.toInt()),
+              detail(orig.b.toInt(), blur.b.toInt()),
+              orig.a.toInt(),
+            ),
+          );
         } else if (inFaceSkin) {
-          // Skin region: Edge-preserving smoothing
           final blur = blurred.getPixel(x, y);
           final int rDiff = (orig.r - blur.r).abs().toInt();
           final int gDiff = (orig.g - blur.g).abs().toInt();
           final int bDiff = (orig.b - blur.b).abs().toInt();
           final double diff = (rDiff + gDiff + bDiff) / 3.0;
 
-          double smoothWeight = (1.0 - (diff / threshold)).clamp(0.0, 1.0);
+          double smoothWeight =
+              (1.0 - (diff / threshold)).clamp(0.0, 1.0).toDouble();
           smoothWeight = smoothWeight * smoothWeight;
 
-          out.setPixel(x, y, img.ColorRgba8(
-            (orig.r * (1.0 - smoothWeight) + blur.r * smoothWeight).toInt(),
-            (orig.g * (1.0 - smoothWeight) + blur.g * smoothWeight).toInt(),
-            (orig.b * (1.0 - smoothWeight) + blur.b * smoothWeight).toInt(),
-            orig.a.toInt(),
-          ));
+          out.setPixel(
+            x,
+            y,
+            img.ColorRgba8(
+              (orig.r * (1.0 - smoothWeight) + blur.r * smoothWeight).toInt(),
+              (orig.g * (1.0 - smoothWeight) + blur.g * smoothWeight).toInt(),
+              (orig.b * (1.0 - smoothWeight) + blur.b * smoothWeight).toInt(),
+              orig.a.toInt(),
+            ),
+          );
         } else {
           out.setPixel(x, y, orig);
         }
       }
     }
 
-    blurred.dispose();
-
-    var adjusted = img.adjustColor(out,
+    var adjusted = img.adjustColor(
+      out,
       contrast: 1.08 + args.strength * 0.18,
       brightness: 1.0 + args.strength * 0.08,
       saturation: 1.05 + args.strength * 0.20,
     );
-    out.dispose();
 
     adjusted = _sharpen(adjusted, amount: args.strength * 1.4);
-    
-    src.dispose();
-    final result = _encode(adjusted);
-    adjusted.dispose();
-    return result;
+    return _encode(adjusted);
   }
 
-  // FILTER 4: BACKGROUND BLUR (BOKEH)
-  static Future<Uint8List> backgroundBlur(Uint8List input, {double radius = 0.6}) async {
+  static Future<Uint8List> backgroundBlur(
+    Uint8List input, {
+    double radius = 0.6,
+  }) async {
     return await compute(_bgBlurSync, _BgBlurArgs(input, radius));
   }
 
@@ -305,10 +320,7 @@ class ImageProcessor {
     final out = img.Image(width: w, height: h, numChannels: 4);
 
     final int bRadius = (args.radius * 16 + 4).round().clamp(4, 20);
-    
-    final clone = _clone(src);
-    final bgBlur = img.gaussianBlur(clone, radius: bRadius);
-    clone.dispose();
+    final bgBlur = img.gaussianBlur(_clone(src), radius: bRadius);
 
     final double centerX = w / 2.0;
     final double centerY = h / 2.0;
@@ -321,29 +333,30 @@ class ImageProcessor {
         final double dist = math.sqrt(dx * dx + dy * dy);
         final double normDist = dist / maxDist;
 
-        double blurWeight = ((normDist - 0.25) / 0.50).clamp(0.0, 1.0);
-        blurWeight = 3 * blurWeight * blurWeight - 2 * blurWeight * blurWeight * blurWeight;
+        double blurWeight =
+            ((normDist - 0.25) / 0.50).clamp(0.0, 1.0).toDouble();
+        blurWeight =
+            3 * blurWeight * blurWeight - 2 * blurWeight * blurWeight * blurWeight;
 
         final orig = src.getPixel(x, y);
         final bg = bgBlur.getPixel(x, y);
 
-        out.setPixel(x, y, img.ColorRgba8(
-          (orig.r * (1.0 - blurWeight) + bg.r * blurWeight).toInt(),
-          (orig.g * (1.0 - blurWeight) + bg.g * blurWeight).toInt(),
-          (orig.b * (1.0 - blurWeight) + bg.b * blurWeight).toInt(),
-          orig.a.toInt(),
-        ));
+        out.setPixel(
+          x,
+          y,
+          img.ColorRgba8(
+            (orig.r * (1.0 - blurWeight) + bg.r * blurWeight).toInt(),
+            (orig.g * (1.0 - blurWeight) + bg.g * blurWeight).toInt(),
+            (orig.b * (1.0 - blurWeight) + bg.b * blurWeight).toInt(),
+            orig.a.toInt(),
+          ),
+        );
       }
     }
 
-    bgBlur.dispose();
-    src.dispose();
-    final result = _encode(out);
-    out.dispose();
-    return result;
+    return _encode(out);
   }
 
-  // FILTER 5: DENOISE (UPGRADED WITH 5X5 BILATERAL FILTERING)
   static Future<Uint8List> denoise(Uint8List input) async {
     return await compute(_denoiseSync, input);
   }
@@ -352,22 +365,18 @@ class ImageProcessor {
     final src = _decode(input);
     if (src == null) return input;
 
-    var denoised = _advancedDenoise(src, sigmaR: 35.0);
-    src.dispose();
+    final denoised = _advancedDenoise(src, sigmaR: 35.0);
+    final blurred = img.gaussianBlur(_clone(denoised), radius: 1);
+    final sharpened = _unsharpMask(
+      denoised,
+      blurred,
+      amount: 1.3,
+      noiseThreshold: 3.0,
+    );
 
-    final clone = _clone(denoised);
-    final blurred = img.gaussianBlur(clone, radius: 1);
-    var sharpened = _unsharpMask(denoised, blurred, amount: 1.3, noiseThreshold: 3.0);
-    clone.dispose();
-    blurred.dispose();
-    denoised.dispose();
-
-    final result = _encode(sharpened);
-    sharpened.dispose();
-    return result;
+    return _encode(sharpened);
   }
 
-  // FILTER 6: UNBLUR
   static Future<Uint8List> unblur(Uint8List input) async {
     return await compute(_unblurSync, input);
   }
@@ -376,31 +385,16 @@ class ImageProcessor {
     final src = _decode(input);
     if (src == null) return input;
 
-    final clone = _clone(src);
-    final blurred = img.gaussianBlur(clone, radius: 2);
+    final blurred = img.gaussianBlur(_clone(src), radius: 2);
     var out = _unsharpMask(src, blurred, amount: 2.5);
-    
-    clone.dispose();
-    blurred.dispose();
-    
-    final clone2 = _clone(out);
-    final blurred2 = img.gaussianBlur(clone2, radius: 1);
+
+    final blurred2 = img.gaussianBlur(_clone(out), radius: 1);
     final out2 = _unsharpMask(out, blurred2, amount: 1.5);
-    
-    clone2.dispose();
-    blurred2.dispose();
-    out.dispose();
-    
+
     out = img.adjustColor(out2, contrast: 1.22);
-    out2.dispose();
-    
-    src.dispose();
-    final result = _encode(out);
-    out.dispose();
-    return result;
+    return _encode(out);
   }
 
-  // FILTER 7: COLORIZE
   static Future<Uint8List> colorize(Uint8List input) async {
     return await compute(_colorizeSync, input);
   }
@@ -437,17 +431,11 @@ class ImageProcessor {
       }
     }
 
-    src.dispose();
-    
-    var colorEnhanced = img.adjustColor(out, saturation: 1.55, contrast: 1.22);
-    out.dispose();
-    
-    final result = _encode(colorEnhanced);
-    colorEnhanced.dispose();
-    return result;
+    final colorEnhanced =
+        img.adjustColor(out, saturation: 1.55, contrast: 1.22);
+    return _encode(colorEnhanced);
   }
 
-  // FILTER 8: OLD PHOTO RESTORE (UPGRADED PERCENTILE & GRAY-WORLD)
   static Future<Uint8List> restoreOldPhoto(Uint8List input) async {
     return await compute(_restoreOldPhotoSync, input);
   }
@@ -459,7 +447,6 @@ class ImageProcessor {
     final w = src.width;
     final h = src.height;
 
-    // 1. Robust Percentile Histogram Analysis (ignores dust/scratches)
     final hist = List<int>.filled(256, 0);
     int sampleCount = 0;
     double sumR = 0, sumG = 0, sumB = 0;
@@ -467,7 +454,8 @@ class ImageProcessor {
     for (int y = 0; y < h; y += 2) {
       for (int x = 0; x < w; x += 2) {
         final p = src.getPixel(x, y);
-        final int lum = (0.299 * p.r + 0.587 * p.g + 0.114 * p.b).toInt().clamp(0, 255);
+        final int lum =
+            (0.299 * p.r + 0.587 * p.g + 0.114 * p.b).toInt().clamp(0, 255);
         hist[lum]++;
         sampleCount++;
         sumR += p.r;
@@ -500,49 +488,47 @@ class ImageProcessor {
 
     final double range = (highCut - lowCut).clamp(15, 255).toDouble();
 
-    // 2. Automatic Gray-World White Balance Correction
     final avgR = sumR / sampleCount;
     final avgG = sumG / sampleCount;
     final avgB = sumB / sampleCount;
     final avgAll = (avgR + avgG + avgB) / 3.0;
 
-    final double gainR = (avgAll / avgR.clamp(1.0, 255.0)).clamp(0.85, 1.25);
-    final double gainG = (avgAll / avgG.clamp(1.0, 255.0)).clamp(0.85, 1.25);
-    final double gainB = (avgAll / avgB.clamp(1.0, 255.0)).clamp(0.85, 1.35);
+    final double gainR =
+        (avgAll / avgR.clamp(1.0, 255.0)).clamp(0.85, 1.25).toDouble();
+    final double gainG =
+        (avgAll / avgG.clamp(1.0, 255.0)).clamp(0.85, 1.25).toDouble();
+    final double gainB =
+        (avgAll / avgB.clamp(1.0, 255.0)).clamp(0.85, 1.35).toDouble();
 
     final restored = img.Image(width: w, height: h, numChannels: 4);
 
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final p = src.getPixel(x, y);
+
         int proc(num val, double gain) {
-          double balanced = val * gain;
+          final balanced = val * gain;
           return _clamp((((balanced - lowCut) / range) * 255).round());
         }
-        restored.setPixel(x, y, img.ColorRgba8(
-          proc(p.r, gainR),
-          proc(p.g, gainG),
-          proc(p.b, gainB),
-          p.a.toInt(),
-        ));
+
+        restored.setPixel(
+          x,
+          y,
+          img.ColorRgba8(
+            proc(p.r, gainR),
+            proc(p.g, gainG),
+            proc(p.b, gainB),
+            p.a.toInt(),
+          ),
+        );
       }
     }
 
-    src.dispose();
-
-    // 3. Advanced Denoise & Multi-Scale Sharpening
-    var denoised = _advancedDenoise(restored, sigmaR: 30.0);
-    restored.dispose();
-
-    var enhanced = _sharpen(denoised, amount: 1.8);
-    denoised.dispose();
-
-    final result = _encode(enhanced);
-    enhanced.dispose();
-    return result;
+    final denoised = _advancedDenoise(restored, sigmaR: 30.0);
+    final enhanced = _sharpen(denoised, amount: 1.8);
+    return _encode(enhanced);
   }
 
-  // FILTER 9: CARTOON EFFECT
   static Future<Uint8List> cartoonEffect(Uint8List input) async {
     return await compute(_cartoonSync, input);
   }
@@ -558,7 +544,6 @@ class ImageProcessor {
     quantized = img.adjustColor(quantized, contrast: 1.25, saturation: 1.45);
 
     final out = img.Image(width: w, height: h, numChannels: 4);
-
     const int threshold = 25;
 
     for (int y = 0; y < h - 1; y++) {
@@ -567,18 +552,23 @@ class ImageProcessor {
         final pRight = quantized.getPixel(x + 1, y);
         final pBottom = quantized.getPixel(x, y + 1);
 
-        final int lum = (0.299 * orig.r + 0.587 * orig.g + 0.114 * orig.b).toInt();
-        final int lumR = (0.299 * pRight.r + 0.587 * pRight.g + 0.114 * pRight.b).toInt();
-        final int lumB = (0.299 * pBottom.r + 0.587 * pBottom.g + 0.114 * pBottom.b).toInt();
+        final int lum =
+            (0.299 * orig.r + 0.587 * orig.g + 0.114 * orig.b).toInt();
+        final int lumR =
+            (0.299 * pRight.r + 0.587 * pRight.g + 0.114 * pRight.b).toInt();
+        final int lumB =
+            (0.299 * pBottom.r + 0.587 * pBottom.g + 0.114 * pBottom.b)
+                .toInt();
 
-        if ((lum - lumR).abs() > threshold || (lum - lumB).abs() > threshold) {
+        if ((lum - lumR).abs() > threshold ||
+            (lum - lumB).abs() > threshold) {
           out.setPixel(x, y, img.ColorRgba8(10, 10, 20, orig.a.toInt()));
         } else {
           out.setPixel(x, y, orig);
         }
       }
     }
-    
+
     for (int x = 0; x < w; x++) {
       out.setPixel(x, h - 1, quantized.getPixel(x, h - 1));
     }
@@ -586,14 +576,9 @@ class ImageProcessor {
       out.setPixel(w - 1, y, quantized.getPixel(w - 1, y));
     }
 
-    quantized.dispose();
-    src.dispose();
-    final result = _encode(out);
-    out.dispose();
-    return result;
+    return _encode(out);
   }
 
-  // FILTER 10: BACKGROUND CLEANUP
   static Future<Uint8List> backgroundCleanup(Uint8List input) async {
     return await compute(_bgCleanupSync, input);
   }
@@ -610,8 +595,6 @@ class ImageProcessor {
     final double centerY = h / 2.0;
     final double maxDist = math.sqrt(centerX * centerX + centerY * centerY);
 
-    final blurred = img.gaussianBlur(_clone(src), radius: 8);
-
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final double dx = x - centerX;
@@ -622,12 +605,13 @@ class ImageProcessor {
         final orig = src.getPixel(x, y);
 
         if (normDist > 0.40) {
-          final double factor = ((normDist - 0.40) / 0.60).clamp(0.0, 1.0);
-          
+          final double factor =
+              ((normDist - 0.40) / 0.60).clamp(0.0, 1.0).toDouble();
+
           final int r = (orig.r * (1.0 - factor) + 15 * factor).round();
           final int g = (orig.g * (1.0 - factor) + 17 * factor).round();
           final int b = (orig.b * (1.0 - factor) + 25 * factor).round();
-          
+
           out.setPixel(x, y, img.ColorRgba8(r, g, b, orig.a.toInt()));
         } else {
           out.setPixel(x, y, orig);
@@ -635,14 +619,9 @@ class ImageProcessor {
       }
     }
 
-    blurred.dispose();
-    src.dispose();
-    final result = _encode(out);
-    out.dispose();
-    return result;
+    return _encode(out);
   }
 
-  // WATERMARK
   static Future<Uint8List> applyWatermark(Uint8List input) async {
     return await compute(_applyWatermarkSync, input);
   }
@@ -658,41 +637,204 @@ class ImageProcessor {
     final x = 24;
     final y = out.height - 40;
 
-    img.drawString(out, text, font: font, x: x + 1, y: y + 1, color: img.ColorRgba8(0, 0, 0, 150));
-    img.drawString(out, text, font: font, x: x, y: y, color: img.ColorRgba8(255, 255, 255, 180));
+    img.drawString(
+      out,
+      text,
+      font: font,
+      x: x + 1,
+      y: y + 1,
+      color: img.ColorRgba8(0, 0, 0, 150),
+    );
+    img.drawString(
+      out,
+      text,
+      font: font,
+      x: x,
+      y: y,
+      color: img.ColorRgba8(255, 255, 255, 180),
+    );
 
-    src.dispose();
-    final result = _encode(out);
-    out.dispose();
-    return result;
+    return _encode(out);
   }
 
-  // FAST PREVIEW
-  static Future<Uint8List> fastPreview(Uint8List input, {double contrast = 1.3, double saturation = 1.3, double sharpness = 1.0}) async {
-    return await compute(_fastPreviewSync, _FastPreviewArgs(input, contrast, saturation, sharpness));
+  static Future<Size?> getImageSize(Uint8List input) async {
+    final src = _decode(input);
+    if (src == null) return null;
+    return Size(src.width.toDouble(), src.height.toDouble());
+  }
+
+  static Future<Uint8List> editImage({
+    required Uint8List input,
+    double cropLeft = 0.0,
+    double cropTop = 0.0,
+    double cropWidth = 1.0,
+    double cropHeight = 1.0,
+    int rotateDegrees = 0,
+    bool flipHorizontal = false,
+    bool flipVertical = false,
+  }) async {
+    return await compute(
+      _editImageSync,
+      _EditImageArgs(
+        input: input,
+        cropLeft: cropLeft,
+        cropTop: cropTop,
+        cropWidth: cropWidth,
+        cropHeight: cropHeight,
+        rotateDegrees: rotateDegrees,
+        flipHorizontal: flipHorizontal,
+        flipVertical: flipVertical,
+      ),
+    );
+  }
+
+  static Uint8List _editImageSync(_EditImageArgs args) {
+    final decoded = _decode(args.input);
+    if (decoded == null) return args.input;
+
+    img.Image edited = decoded.clone();
+
+    final int normalizedDegrees =
+        (((args.rotateDegrees % 360) + 360) % 360).toInt();
+
+    if (normalizedDegrees != 0) {
+      edited = img.copyRotate(
+        edited,
+        angle: normalizedDegrees,
+        interpolation: img.Interpolation.cubic,
+      );
+    }
+
+    if (args.flipHorizontal) {
+      edited = img.flipHorizontal(edited);
+    }
+    if (args.flipVertical) {
+      edited = img.flipVertical(edited);
+    }
+
+    final double leftN = args.cropLeft.clamp(0.0, 1.0).toDouble();
+    final double topN = args.cropTop.clamp(0.0, 1.0).toDouble();
+    final double widthN = args.cropWidth.clamp(0.0, 1.0 - leftN).toDouble();
+    final double heightN = args.cropHeight.clamp(0.0, 1.0 - topN).toDouble();
+
+    final int x =
+        (leftN * edited.width).round().clamp(0, edited.width - 1).toInt();
+    final int y =
+        (topN * edited.height).round().clamp(0, edited.height - 1).toInt();
+    final int cropW = math
+        .max(1, (widthN * edited.width).round())
+        .clamp(1, edited.width - x)
+        .toInt();
+    final int cropH = math
+        .max(1, (heightN * edited.height).round())
+        .clamp(1, edited.height - y)
+        .toInt();
+
+    final cropped = img.copyCrop(
+      edited,
+      x: x,
+      y: y,
+      width: cropW,
+      height: cropH,
+    );
+
+    return _encode(cropped);
+  }
+
+  static Future<Uint8List> blendTextures({
+    required Uint8List original,
+    required Uint8List enhanced,
+    double blendFactor = 0.25,
+  }) async {
+    return await compute(
+      _blendTexturesSync,
+      _BlendTexturesArgs(
+        original: original,
+        enhanced: enhanced,
+        blendFactor: blendFactor,
+      ),
+    );
+  }
+
+  static Uint8List _blendTexturesSync(_BlendTexturesArgs args) {
+    final original = _decode(args.original);
+    final enhanced = _decode(args.enhanced);
+
+    if (original == null) return args.enhanced;
+    if (enhanced == null) return args.original;
+
+    final base =
+        original.width == enhanced.width && original.height == enhanced.height
+            ? original.clone()
+            : img.copyResize(
+                original,
+                width: enhanced.width,
+                height: enhanced.height,
+                interpolation: img.Interpolation.cubic,
+              );
+
+    final double originalWeight =
+        args.blendFactor.clamp(0.0, 1.0).toDouble();
+    final double enhancedWeight = 1.0 - originalWeight;
+
+    final out =
+        img.Image(width: enhanced.width, height: enhanced.height, numChannels: 4);
+
+    for (int y = 0; y < enhanced.height; y++) {
+      for (int x = 0; x < enhanced.width; x++) {
+        final o = base.getPixel(x, y);
+        final e = enhanced.getPixel(x, y);
+
+        out.setPixel(
+          x,
+          y,
+          img.ColorRgba8(
+            _clamp((e.r * enhancedWeight + o.r * originalWeight).round()),
+            _clamp((e.g * enhancedWeight + o.g * originalWeight).round()),
+            _clamp((e.b * enhancedWeight + o.b * originalWeight).round()),
+            _clamp((e.a * enhancedWeight + o.a * originalWeight).round()),
+          ),
+        );
+      }
+    }
+
+    return _encode(out);
+  }
+
+  static Future<Uint8List> fastPreview(
+    Uint8List input, {
+    double contrast = 1.3,
+    double saturation = 1.3,
+    double sharpness = 1.0,
+  }) async {
+    return await compute(
+      _fastPreviewSync,
+      _FastPreviewArgs(input, contrast, saturation, sharpness),
+    );
   }
 
   static Uint8List _fastPreviewSync(_FastPreviewArgs args) {
     final src = _decode(args.input);
     if (src == null) return args.input;
 
-    var out = img.adjustColor(src, contrast: args.contrast, saturation: args.saturation);
-    
+    var out = img.adjustColor(
+      src,
+      contrast: args.contrast,
+      saturation: args.saturation,
+    );
+
     if (args.sharpness > 0) {
       out = _sharpen(out, amount: args.sharpness);
     }
-    
-    src.dispose();
-    final result = _encode(out, forPreview: true);
-    out.dispose();
-    return result;
+
+    return _encode(out, forPreview: true);
   }
 }
 
-// ARGUMENT CLASSES
 class _AutoEnhanceArgs {
   final Uint8List input;
   final double strength;
+
   _AutoEnhanceArgs(this.input, this.strength);
 }
 
@@ -701,19 +843,61 @@ class _FaceEnhanceArgs {
   final double smoothness;
   final double strength;
   final List<FaceRegion> faceRegions;
-  _FaceEnhanceArgs(this.input, this.smoothness, this.strength, this.faceRegions);
+
+  _FaceEnhanceArgs(
+    this.input,
+    this.smoothness,
+    this.strength,
+    this.faceRegions,
+  );
 }
 
 class _BgBlurArgs {
   final Uint8List input;
   final double radius;
+
   _BgBlurArgs(this.input, this.radius);
 }
 
 class _UpscaleArgs {
   final Uint8List input;
   final int scale;
+
   _UpscaleArgs(this.input, this.scale);
+}
+
+class _EditImageArgs {
+  final Uint8List input;
+  final double cropLeft;
+  final double cropTop;
+  final double cropWidth;
+  final double cropHeight;
+  final int rotateDegrees;
+  final bool flipHorizontal;
+  final bool flipVertical;
+
+  _EditImageArgs({
+    required this.input,
+    required this.cropLeft,
+    required this.cropTop,
+    required this.cropWidth,
+    required this.cropHeight,
+    required this.rotateDegrees,
+    required this.flipHorizontal,
+    required this.flipVertical,
+  });
+}
+
+class _BlendTexturesArgs {
+  final Uint8List original;
+  final Uint8List enhanced;
+  final double blendFactor;
+
+  _BlendTexturesArgs({
+    required this.original,
+    required this.enhanced,
+    required this.blendFactor,
+  });
 }
 
 class _FastPreviewArgs {
@@ -721,13 +905,11 @@ class _FastPreviewArgs {
   final double contrast;
   final double saturation;
   final double sharpness;
-  _FastPreviewArgs(this.input, this.contrast, this.saturation, this.sharpness);
-}
 
-void debugPrint(String message) {
-  assert(() {
-    // ignore: avoid_print
-    print(message);
-    return true;
-  }());
+  _FastPreviewArgs(
+    this.input,
+    this.contrast,
+    this.saturation,
+    this.sharpness,
+  );
 }

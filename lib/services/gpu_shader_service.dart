@@ -7,15 +7,15 @@ class GpuShaderService {
   static bool _isLoading = false;
   static bool _initFailed = false;
   static String? _lastError;
-  
+
   static int _compilationAttempts = 0;
   static const int _maxRetries = 3;
   static const Duration _retryDelay = Duration(milliseconds: 500);
 
   static bool get isAvailable => _program != null && !_initFailed;
-  
+
   static String? get lastError => _lastError;
-  
+
   static bool get isLoading => _isLoading;
 
   static Future<bool> initialize() async {
@@ -27,14 +27,16 @@ class GpuShaderService {
       }
       return _program != null;
     }
-    
+
     _isLoading = true;
-    
+
     for (int attempt = _compilationAttempts; attempt < _maxRetries; attempt++) {
       _compilationAttempts = attempt + 1;
-      
+
       try {
-        debugPrint("🎨 Loading GLSL GPU Shader (attempt ${attempt + 1}/$_maxRetries)...");
+        debugPrint(
+          "🎨 Loading GLSL GPU Shader (attempt ${attempt + 1}/$_maxRetries)...",
+        );
         _program = await ui.FragmentProgram.fromAsset('assets/shaders/filter.frag');
         _initFailed = false;
         _lastError = null;
@@ -44,16 +46,18 @@ class GpuShaderService {
       } catch (e) {
         _lastError = e.toString();
         debugPrint("⚠️ Shader compilation attempt ${attempt + 1} failed: $e");
-        
+
         if (attempt < _maxRetries - 1) {
           await Future.delayed(_retryDelay * (attempt + 1));
         }
       }
     }
-    
+
     _initFailed = true;
     _isLoading = false;
-    debugPrint("❌ GPU Shader initialization failed after $_maxRetries attempts: $_lastError");
+    debugPrint(
+      "❌ GPU Shader initialization failed after $_maxRetries attempts: $_lastError",
+    );
     return false;
   }
 
@@ -103,21 +107,21 @@ class GpuShaderService {
 
       final ui.PictureRecorder recorder = ui.PictureRecorder();
       final ui.Canvas canvas = ui.Canvas(
-        recorder, 
-        Rect.fromLTWH(0, 0, width, height)
+        recorder,
+        ui.Rect.fromLTWH(0, 0, width, height),
       );
-      
-      final Paint shaderPaint = Paint()..shader = shader;
-      canvas.drawRect(Rect.fromLTWH(0, 0, width, height), shaderPaint);
+
+      final ui.Paint shaderPaint = ui.Paint()..shader = shader;
+      canvas.drawRect(ui.Rect.fromLTWH(0, 0, width, height), shaderPaint);
 
       final ui.Picture picture = recorder.endRecording();
       final ui.Image processedImage = await picture.toImage(
-        width.toInt(), 
-        height.toInt()
+        width.toInt(),
+        height.toInt(),
       );
 
       final ByteData? byteData = await processedImage.toByteData(
-        format: ui.ImageByteFormat.png
+        format: ui.ImageByteFormat.png,
       );
 
       textureImage.dispose();
@@ -127,7 +131,7 @@ class GpuShaderService {
       if (byteData != null) {
         return byteData.buffer.asUint8List();
       }
-      
+
       debugPrint("⚠️ GPU processing: byte conversion failed");
       return null;
     } catch (e) {
@@ -143,7 +147,7 @@ class GpuShaderService {
     required double sharpen,
   }) async {
     if (!isAvailable) return null;
-    
+
     try {
       return await processOnGpu(
         inputBytes: inputBytes,
@@ -157,12 +161,4 @@ class GpuShaderService {
       return null;
     }
   }
-}
-
-void debugPrint(String message) {
-  assert(() {
-    // ignore: avoid_print
-    print(message);
-    return true;
-  }());
 }
