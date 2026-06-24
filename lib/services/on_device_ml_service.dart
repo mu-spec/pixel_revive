@@ -4,16 +4,60 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:path_provider/path_provider.dart';
 
+class FaceRegion {
+  final Rect boundingBox;
+  final Rect leftEye;
+  final Rect rightEye;
+  final Rect mouth;
+
+  const FaceRegion({
+    required this.boundingBox,
+    required this.leftEye,
+    required this.rightEye,
+    required this.mouth,
+  });
+
+  factory FaceRegion.fromFace(Face face) {
+    final box = face.boundingBox;
+
+    Rect getLandmarkOrFallback(FaceLandmarkType type, double fx, double fy, double wRatio, double hRatio) {
+      final landmark = face.landmarks[type];
+      final w = box.width * wRatio;
+      final h = box.height * hRatio;
+      if (landmark != null && landmark.position != null) {
+        final pos = landmark.position!;
+        return Rect.fromCenter(
+          center: Offset(pos.x.toDouble(), pos.y.toDouble()),
+          width: w,
+          height: h,
+        );
+      }
+      return Rect.fromCenter(
+        center: Offset(box.left + box.width * fx, box.top + box.height * fy),
+        width: w,
+        height: h,
+      );
+    }
+
+    return FaceRegion(
+      boundingBox: box,
+      leftEye: getLandmarkOrFallback(FaceLandmarkType.leftEye, 0.30, 0.38, 0.28, 0.18),
+      rightEye: getLandmarkOrFallback(FaceLandmarkType.rightEye, 0.70, 0.38, 0.28, 0.18),
+      mouth: getLandmarkOrFallback(FaceLandmarkType.bottomMouth, 0.50, 0.75, 0.40, 0.20),
+    );
+  }
+}
+
 class OnDeviceMlService {
   static FaceDetector? _faceDetector;
   
   /// Cache for face detection results to avoid repeated processing
-  static final Map<String, List<Rect>> _faceCache = {};
+  static final Map<String, List<FaceRegion>> _regionCache = {};
   static const int _maxCacheSize = 10;
   static const Duration _cacheExpiry = Duration(minutes: 5);
   static final Map<String, DateTime> _cacheTimestamps = {};
 
-  /// Initializes the Google ML Kit Face Detector
+  /// Initializes the Google ML Kit Face Detector with Landmark support
   static void initialize() {
     if (_faceDetector != null) return;
     
@@ -21,10 +65,10 @@ class OnDeviceMlService {
       performanceMode: FaceDetectorMode.accurate,
       enableContours: false,
       enableClassification: false,
-      enableLandmarks: false,
+      enableLandmarks: true, // Upgraded to true for eyes/lips separation
     );
     _faceDetector = FaceDetector(options: options);
-    debugPrint("🧠 On-Device ML Kit Face Detector initialized (fully offline!)");
+    debugPrint("🧠 On-Device ML Kit Face Detector initialized with Landmarks (fully offline!)");
   }
 
   /// Generates a unique cache key from image bytes (first 1KB hash)
@@ -48,29 +92,28 @@ class OnDeviceMlService {
         .toList();
     
     for (final key in expiredKeys) {
-      _faceCache.remove(key);
+      _regionCache.remove(key);
       _cacheTimestamps.remove(key);
     }
     
-    while (_faceCache.length > _maxCacheSize) {
+    while (_regionCache.length > _maxCacheSize) {
       final oldestKey = _cacheTimestamps.keys.first;
-      _faceCache.remove(oldestKey);
+      _regionCache.remove(oldestKey);
       _cacheTimestamps.remove(oldestKey);
     }
   }
 
-  /// Processes the image bytes completely offline to detect faces
-  /// Uses caching to avoid repeated detection on the same image
-  static Future<List<Rect>> detectFaces(Uint8List imageBytes, {bool forceRefresh = false}) async {
+  /// Processes the image bytes completely offline to detect face regions and facial landmarks
+  static Future<List<FaceRegion>> detectFaceRegions(Uint8List imageBytes, {bool forceRefresh = false}) async {
     initialize();
     
     final cacheKey = _generateCacheKey(imageBytes);
     
-    if (!forceRefresh && _faceCache.containsKey(cacheKey)) {
+    if (!forceRefresh && _regionCache.containsKey(cacheKey)) {
       final timestamp = _cacheTimestamps[cacheKey];
       if (timestamp != null && DateTime.now().difference(timestamp) < _cacheExpiry) {
-        debugPrint("🧠 Face Detection: Using cached result (${_faceCache[cacheKey]!.length} faces)");
-        return _faceCache[cacheKey]!;
+        debugPrint("🧠 Face Detection: Using cached regions (${_regionCache[cacheKey]!.length} faces)");
+        return _regionCache[cacheKey]!;
       }
     }
     
@@ -94,17 +137,23 @@ class OnDeviceMlService {
         debugPrint("⚠️ Failed to cleanup temp file: $e");
       }
 
-      final List<Rect> boundingBoxes = faces.map((face) => face.boundingBox).toList();
+      final List<FaceRegion> regions = faces.map((face) => FaceRegion.fromFace(face)).toList();
 
-      _faceCache[cacheKey] = boundingBoxes;
+      _regionCache[cacheKey] = regions;
       _cacheTimestamps[cacheKey] = DateTime.now();
 
-      debugPrint("🧠 Face Detection: Detected ${faces.length} face(s) (cached)");
-      return boundingBoxes;
+      debugPrint("🧠 Face Detection: Detected ${faces.length} face region(s) with landmarks");
+      return regions;
     } catch (e) {
       debugPrint("⚠️ Face Detection failed: $e");
       return [];
     }
+  }
+
+  /// Backward compatible helper returning just bounding boxes
+  static Future<List<Rect>> detectFaces(Uint8List imageBytes, {bool forceRefresh = false}) async {
+    final regions = await detectFaceRegions(imageBytes, forceRefresh: forceRefresh);
+    return regions.map((r) => r.boundingBox).toList();
   }
 
   static Future<Directory> _getMlCacheDirectory() async {
@@ -124,7 +173,7 @@ class OnDeviceMlService {
   }
 
   static void clearCache() {
-    _faceCache.clear();
+    _regionCache.clear();
     _cacheTimestamps.clear();
     debugPrint("🧠 Face detection cache cleared");
   }
@@ -134,4 +183,12 @@ class OnDeviceMlService {
     _faceDetector = null;
     clearCache();
   }
+}
+
+void debugPrint(String message) {
+  assert(() {
+    // ignore: avoid_print
+    print(message);
+    return true;
+  }());
 }

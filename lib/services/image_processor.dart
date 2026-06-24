@@ -77,6 +77,67 @@ class ImageProcessor {
     return out;
   }
 
+  // ADVANCED EDGE-PRESERVING LUMINANCE BILATERAL DENOISE
+  static img.Image _advancedDenoise(img.Image src, {double sigmaR = 32.0}) {
+    final w = src.width;
+    final h = src.height;
+    final out = img.Image(width: w, height: h, numChannels: 4);
+
+    double getSpaceWeight(int kx, int ky) {
+      final dSq = kx * kx + ky * ky;
+      if (dSq == 0) return 1.0;
+      if (dSq == 1) return 0.857;
+      if (dSq == 2) return 0.735;
+      if (dSq == 4) return 0.539;
+      if (dSq == 5) return 0.462;
+      return 0.291;
+    }
+
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        if (x < 2 || y < 2 || x >= w - 2 || y >= h - 2) {
+          out.setPixel(x, y, src.getPixel(x, y));
+          continue;
+        }
+
+        final center = src.getPixel(x, y);
+        final double cLum = 0.299 * center.r + 0.587 * center.g + 0.114 * center.b;
+
+        double sumR = 0, sumG = 0, sumB = 0;
+        double totalWeight = 0;
+
+        for (int ky = -2; ky <= 2; ky++) {
+          for (int kx = -2; kx <= 2; kx++) {
+            final neighbor = src.getPixel(x + kx, y + ky);
+            final double nLum = 0.299 * neighbor.r + 0.587 * neighbor.g + 0.114 * neighbor.b;
+            
+            final double lumDist = (cLum - nLum).abs();
+            final double rangeWeight = math.exp(-(lumDist * lumDist) / (2 * sigmaR * sigmaR));
+            final double weight = getSpaceWeight(kx, ky) * rangeWeight;
+
+            sumR += neighbor.r * weight;
+            sumG += neighbor.g * weight;
+            sumB += neighbor.b * weight;
+            totalWeight += weight;
+          }
+        }
+
+        out.setPixel(x, y, img.ColorRgba8(
+          (sumR / totalWeight).round().clamp(0, 255),
+          (sumG / totalWeight).round().clamp(0, 255),
+          (sumB / totalWeight).round().clamp(0, 255),
+          center.a.toInt(),
+        ));
+      }
+    }
+
+    return out;
+  }
+
+  static img.Image _lightDenoise(img.Image src) {
+    return _advancedDenoise(src, sigmaR: 28.0);
+  }
+
   // FILTER 1: AUTO ENHANCE
   static Future<Uint8List> autoEnhance(Uint8List input, {double strength = 0.8}) async {
     return await compute(_autoEnhanceSync, _AutoEnhanceArgs(input, strength));
@@ -102,59 +163,6 @@ class ImageProcessor {
     final result = _encode(out);
     out.dispose();
     return result;
-  }
-
-  static img.Image _lightDenoise(img.Image src) {
-    final w = src.width;
-    final h = src.height;
-    final out = img.Image(width: w, height: h, numChannels: 4);
-    
-    const sigmaR = 30.0;
-    
-    for (int y = 1; y < h - 1; y++) {
-      for (int x = 1; x < w - 1; x++) {
-        final center = src.getPixel(x, y);
-        double sumR = 0, sumG = 0, sumB = 0;
-        double totalWeight = 0;
-        
-        for (int ky = -1; ky <= 1; ky++) {
-          for (int kx = -1; kx <= 1; kx++) {
-            final neighbor = src.getPixel(x + kx, y + ky);
-            final colorDist = math.sqrt(
-              math.pow(center.r - neighbor.r, 2) +
-              math.pow(center.g - neighbor.g, 2) +
-              math.pow(center.b - neighbor.b, 2)
-            );
-            final spaceWeight = (kx == 0 && ky == 0) ? 1.0 : 0.5;
-            final rangeWeight = math.exp(-(colorDist * colorDist) / (2 * sigmaR * sigmaR));
-            final weight = spaceWeight * rangeWeight;
-            
-            sumR += neighbor.r * weight;
-            sumG += neighbor.g * weight;
-            sumB += neighbor.b * weight;
-            totalWeight += weight;
-          }
-        }
-        
-        out.setPixel(x, y, img.ColorRgba8(
-          (sumR / totalWeight).round(),
-          (sumG / totalWeight).round(),
-          (sumB / totalWeight).round(),
-          center.a.toInt(),
-        ));
-      }
-    }
-    
-    for (int x = 0; x < w; x++) {
-      out.setPixel(x, 0, src.getPixel(x, 0));
-      out.setPixel(x, h - 1, src.getPixel(x, h - 1));
-    }
-    for (int y = 0; y < h; y++) {
-      out.setPixel(0, y, src.getPixel(0, y));
-      out.setPixel(w - 1, y, src.getPixel(w - 1, y));
-    }
-    
-    return out;
   }
 
   // FILTER 2: HD UPSCALE (2X AND 4X)
@@ -188,10 +196,10 @@ class ImageProcessor {
     return result;
   }
 
-  // FILTER 3: FACE ENHANCE
+  // FILTER 3: FACE ENHANCE (UPGRADED WITH EYES/SKIN SEPARATION)
   static Future<Uint8List> faceEnhance(Uint8List input, {double smoothness = 0.5, double strength = 0.8}) async {
-    final faceRects = await OnDeviceMlService.detectFaces(input);
-    return await compute(_faceEnhanceSync, _FaceEnhanceArgs(input, smoothness, strength, faceRects));
+    final faceRegions = await OnDeviceMlService.detectFaceRegions(input);
+    return await compute(_faceEnhanceSync, _FaceEnhanceArgs(input, smoothness, strength, faceRegions));
   }
 
   static Uint8List _faceEnhanceSync(_FaceEnhanceArgs args) {
@@ -205,29 +213,47 @@ class ImageProcessor {
     
     final clone = _clone(src);
     final blurred = img.gaussianBlur(clone, radius: rRadius);
-    final smoothed = img.Image(width: w, height: h, numChannels: 4);
+    clone.dispose();
 
+    final out = img.Image(width: w, height: h, numChannels: 4);
     final int threshold = (12 + args.smoothness * 28).round();
 
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final orig = src.getPixel(x, y);
+        final pOffset = Offset(x.toDouble(), y.toDouble());
 
-        bool isInsideFace = args.faceRects.isEmpty;
-        if (!isInsideFace) {
-          final pOffset = Offset(x.toDouble(), y.toDouble());
-          for (final rect in args.faceRects) {
-            final paddedRect = Rect.fromLTRB(rect.left - 10, rect.top - 10, rect.right + 10, rect.bottom + 10);
-            if (paddedRect.contains(pOffset)) {
-              isInsideFace = true;
-              break;
-            }
+        bool inEyeMouth = false;
+        bool inFaceSkin = args.faceRegions.isEmpty;
+
+        for (final region in args.faceRegions) {
+          if (region.leftEye.inflate(6.0).contains(pOffset) ||
+              region.rightEye.inflate(6.0).contains(pOffset) ||
+              region.mouth.inflate(6.0).contains(pOffset)) {
+            inEyeMouth = true;
+            break;
+          }
+          if (region.boundingBox.inflate(12.0).contains(pOffset)) {
+            inFaceSkin = true;
           }
         }
 
-        if (isInsideFace) {
+        if (inEyeMouth) {
+          // Eye & Lip detail region: high-clarity sharpness boost
           final blur = blurred.getPixel(x, y);
-
+          int detail(int o, int b) {
+            final diff = o - b;
+            return _clamp((o + diff * (1.5 + args.strength * 1.5)).toInt());
+          }
+          out.setPixel(x, y, img.ColorRgba8(
+            detail(orig.r.toInt(), blur.r.toInt()),
+            detail(orig.g.toInt(), blur.g.toInt()),
+            detail(orig.b.toInt(), blur.b.toInt()),
+            orig.a.toInt(),
+          ));
+        } else if (inFaceSkin) {
+          // Skin region: Edge-preserving smoothing
+          final blur = blurred.getPixel(x, y);
           final int rDiff = (orig.r - blur.r).abs().toInt();
           final int gDiff = (orig.g - blur.g).abs().toInt();
           final int bDiff = (orig.b - blur.b).abs().toInt();
@@ -236,33 +262,32 @@ class ImageProcessor {
           double smoothWeight = (1.0 - (diff / threshold)).clamp(0.0, 1.0);
           smoothWeight = smoothWeight * smoothWeight;
 
-          smoothed.setPixel(x, y, img.ColorRgba8(
+          out.setPixel(x, y, img.ColorRgba8(
             (orig.r * (1.0 - smoothWeight) + blur.r * smoothWeight).toInt(),
             (orig.g * (1.0 - smoothWeight) + blur.g * smoothWeight).toInt(),
             (orig.b * (1.0 - smoothWeight) + blur.b * smoothWeight).toInt(),
             orig.a.toInt(),
           ));
         } else {
-          smoothed.setPixel(x, y, orig);
+          out.setPixel(x, y, orig);
         }
       }
     }
 
-    clone.dispose();
     blurred.dispose();
 
-    var out = img.adjustColor(smoothed,
+    var adjusted = img.adjustColor(out,
       contrast: 1.08 + args.strength * 0.18,
       brightness: 1.0 + args.strength * 0.08,
-      saturation: 1.0 + args.strength * 0.20,
+      saturation: 1.05 + args.strength * 0.20,
     );
-    smoothed.dispose();
+    out.dispose();
 
-    out = _sharpen(out, amount: args.strength * 1.5);
+    adjusted = _sharpen(adjusted, amount: args.strength * 1.4);
     
     src.dispose();
-    final result = _encode(out);
-    out.dispose();
+    final result = _encode(adjusted);
+    adjusted.dispose();
     return result;
   }
 
@@ -318,7 +343,7 @@ class ImageProcessor {
     return result;
   }
 
-  // FILTER 5: DENOISE
+  // FILTER 5: DENOISE (UPGRADED WITH 5X5 BILATERAL FILTERING)
   static Future<Uint8List> denoise(Uint8List input) async {
     return await compute(_denoiseSync, input);
   }
@@ -327,57 +352,18 @@ class ImageProcessor {
     final src = _decode(input);
     if (src == null) return input;
 
-    final w = src.width;
-    final h = src.height;
-    final out = img.Image(width: w, height: h, numChannels: 4);
-
-    const double sigmaR = 25.0;
-
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-        if (x == 0 || y == 0 || x == w - 1 || y == h - 1) {
-          out.setPixel(x, y, src.getPixel(x, y));
-          continue;
-        }
-
-        final center = src.getPixel(x, y);
-        double sumR = 0, sumG = 0, sumB = 0;
-        double totalWeight = 0;
-
-        for (int ky = -1; ky <= 1; ky++) {
-          for (int kx = -1; kx <= 1; kx++) {
-            final neighbor = src.getPixel(x + kx, y + ky);
-            final double colorDist = math.sqrt(
-              math.pow(center.r - neighbor.r, 2) +
-              math.pow(center.g - neighbor.g, 2) +
-              math.pow(center.b - neighbor.b, 2)
-            );
-            final double spaceWeight = (kx == 0 && ky == 0) ? 1.0 : 0.6;
-            final double rangeWeight = math.exp(-(colorDist * colorDist) / (2 * sigmaR * sigmaR));
-            final double weight = spaceWeight * rangeWeight;
-
-            sumR += neighbor.r * weight;
-            sumG += neighbor.g * weight;
-            sumB += neighbor.b * weight;
-            totalWeight += weight;
-          }
-        }
-
-        out.setPixel(x, y, img.ColorRgba8(
-          (sumR / totalWeight).round(),
-          (sumG / totalWeight).round(),
-          (sumB / totalWeight).round(),
-          center.a.toInt(),
-        ));
-      }
-    }
-
-    var contrastAdjusted = img.adjustColor(out, contrast: 1.12);
-    out.dispose();
-    
+    var denoised = _advancedDenoise(src, sigmaR: 35.0);
     src.dispose();
-    final result = _encode(contrastAdjusted);
-    contrastAdjusted.dispose();
+
+    final clone = _clone(denoised);
+    final blurred = img.gaussianBlur(clone, radius: 1);
+    var sharpened = _unsharpMask(denoised, blurred, amount: 1.3, noiseThreshold: 3.0);
+    clone.dispose();
+    blurred.dispose();
+    denoised.dispose();
+
+    final result = _encode(sharpened);
+    sharpened.dispose();
     return result;
   }
 
@@ -461,7 +447,7 @@ class ImageProcessor {
     return result;
   }
 
-  // FILTER 8: OLD PHOTO RESTORE
+  // FILTER 8: OLD PHOTO RESTORE (UPGRADED PERCENTILE & GRAY-WORLD)
   static Future<Uint8List> restoreOldPhoto(Uint8List input) async {
     return await compute(_restoreOldPhotoSync, input);
   }
@@ -473,47 +459,86 @@ class ImageProcessor {
     final w = src.width;
     final h = src.height;
 
-    int minLum = 255, maxLum = 0;
+    // 1. Robust Percentile Histogram Analysis (ignores dust/scratches)
+    final hist = List<int>.filled(256, 0);
+    int sampleCount = 0;
+    double sumR = 0, sumG = 0, sumB = 0;
 
-    for (int y = 0; y < h; y += 4) {
-      for (int x = 0; x < w; x += 4) {
+    for (int y = 0; y < h; y += 2) {
+      for (int x = 0; x < w; x += 2) {
         final p = src.getPixel(x, y);
-        final int lum = (0.299 * p.r + 0.587 * p.g + 0.114 * p.b).toInt();
-        if (lum < minLum) minLum = lum;
-        if (lum > maxLum) maxLum = lum;
+        final int lum = (0.299 * p.r + 0.587 * p.g + 0.114 * p.b).toInt().clamp(0, 255);
+        hist[lum]++;
+        sampleCount++;
+        sumR += p.r;
+        sumG += p.g;
+        sumB += p.b;
       }
     }
 
-    final stretched = img.Image(width: w, height: h, numChannels: 4);
-    final double range = (maxLum - minLum).clamp(1, 255).toDouble();
+    int count = 0;
+    int lowCut = 0;
+    final int lowThresh = (sampleCount * 0.015).round();
+    for (int i = 0; i < 256; i++) {
+      count += hist[i];
+      if (count >= lowThresh) {
+        lowCut = i;
+        break;
+      }
+    }
+
+    count = 0;
+    int highCut = 255;
+    final int highThresh = (sampleCount * 0.015).round();
+    for (int i = 255; i >= 0; i--) {
+      count += hist[i];
+      if (count >= highThresh) {
+        highCut = i;
+        break;
+      }
+    }
+
+    final double range = (highCut - lowCut).clamp(15, 255).toDouble();
+
+    // 2. Automatic Gray-World White Balance Correction
+    final avgR = sumR / sampleCount;
+    final avgG = sumG / sampleCount;
+    final avgB = sumB / sampleCount;
+    final avgAll = (avgR + avgG + avgB) / 3.0;
+
+    final double gainR = (avgAll / avgR.clamp(1.0, 255.0)).clamp(0.85, 1.25);
+    final double gainG = (avgAll / avgG.clamp(1.0, 255.0)).clamp(0.85, 1.25);
+    final double gainB = (avgAll / avgB.clamp(1.0, 255.0)).clamp(0.85, 1.35);
+
+    final restored = img.Image(width: w, height: h, numChannels: 4);
 
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final p = src.getPixel(x, y);
-        int stretch(int v) {
-          return (((v - minLum) / range) * 255).round().clamp(0, 255);
+        int proc(num val, double gain) {
+          double balanced = val * gain;
+          return _clamp((((balanced - lowCut) / range) * 255).round());
         }
-        stretched.setPixel(x, y, img.ColorRgba8(
-          stretch(p.r.toInt()),
-          stretch(p.g.toInt()),
-          stretch(p.b.toInt()),
+        restored.setPixel(x, y, img.ColorRgba8(
+          proc(p.r, gainR),
+          proc(p.g, gainG),
+          proc(p.b, gainB),
           p.a.toInt(),
         ));
       }
     }
 
-    var colorCorrected = img.colorOffset(stretched, red: -15, green: -5, blue: 20);
-    stretched.dispose();
-
-    var enhanced = _sharpen(colorCorrected, amount: 1.6);
-    colorCorrected.dispose();
-
-    var denoised = _lightDenoise(enhanced);
-    enhanced.dispose();
-
     src.dispose();
-    final result = _encode(denoised);
+
+    // 3. Advanced Denoise & Multi-Scale Sharpening
+    var denoised = _advancedDenoise(restored, sigmaR: 30.0);
+    restored.dispose();
+
+    var enhanced = _sharpen(denoised, amount: 1.8);
     denoised.dispose();
+
+    final result = _encode(enhanced);
+    enhanced.dispose();
     return result;
   }
 
@@ -675,8 +700,8 @@ class _FaceEnhanceArgs {
   final Uint8List input;
   final double smoothness;
   final double strength;
-  final List<Rect> faceRects;
-  _FaceEnhanceArgs(this.input, this.smoothness, this.strength, this.faceRects);
+  final List<FaceRegion> faceRegions;
+  _FaceEnhanceArgs(this.input, this.smoothness, this.strength, this.faceRegions);
 }
 
 class _BgBlurArgs {
