@@ -1,18 +1,16 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 class StorageService {
-  /// Save image bytes to device gallery. Returns saved path or null.
+  /// Save image bytes to internal app storage (Saved Images tab). Returns saved path or null.
   static Future<String?> saveToGallery(Uint8List bytes) async {
     try {
-      final tempDir = await getTemporaryDirectory();
+      final docDir = await getApplicationDocumentsDirectory();
       final fileName = 'pixel_revive_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final file = File('${tempDir.path}/$fileName');
+      final file = File('${docDir.path}/$fileName');
       await file.writeAsBytes(bytes);
-      await Gal.putImage(file.path);
       return file.path;
     } catch (e) {
       return null;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
@@ -58,7 +59,10 @@ class SettingsTab extends StatelessWidget {
               title: 'Share with Friends',
               subtitle: 'Spread the word about PixelRevive',
               onTap: () {
-                provider.shareImage();
+                Share.share(
+                  'Check out PixelRevive - AI Photo Restore & Enhance! Restore your old and faded photos instantly completely offline.\n\nDownload now: https://play.google.com/store/apps/details?id=com.pixelrevive.app',
+                  subject: 'PixelRevive AI Photo Studio',
+                );
               },
             ),
             const SizedBox(height: 14),
@@ -70,14 +74,7 @@ class SettingsTab extends StatelessWidget {
               iconColor: AppColors.gold,
               title: 'Rate Us',
               subtitle: 'Support us on the Play Store',
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Thank you! Real Play Store page connection is coming soon.'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              },
+              onTap: () => _launchURL('https://play.google.com/store/apps/details?id=com.pixelrevive.app'),
             ),
             const SizedBox(height: 14),
 
