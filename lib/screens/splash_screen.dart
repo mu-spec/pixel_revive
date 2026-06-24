@@ -20,10 +20,9 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    // Setup high-fidelity loading bar animation (3.2 seconds duration)
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3200),
+      duration: const Duration(milliseconds: 1500),
     );
     _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOutQuart),
@@ -34,8 +33,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _routeToNext() async {
-    // Wait until the loading animation fully completes (3.2 seconds)
-    await Future.delayed(const Duration(milliseconds: 3300));
+    await Future.delayed(const Duration(milliseconds: 1600));
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -65,7 +63,6 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background Atmospheric lighting (glowing neon circles behind)
           Positioned(
             top: -100,
             left: -100,
@@ -91,12 +88,10 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
 
-          // Main splash content
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Animated floating logo container
                 Hero(
                   tag: 'app_logo',
                   child: Container(
@@ -125,7 +120,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 32),
-                // Premium app title
                 Text(
                   AppStrings.appName,
                   style: const TextStyle(
@@ -136,7 +130,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 10),
-                // Tagline with subtitle translation mapping
                 Text(
                   AppStrings.getText('tagline', 'en'),
                   style: const TextStyle(
@@ -148,7 +141,6 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 56),
 
-                // Beautiful, High-End Neon Glowing Loading Bar
                 SizedBox(
                   width: 250,
                   height: 12,
@@ -157,7 +149,6 @@ class _SplashScreenState extends State<SplashScreen>
                     builder: (context, child) {
                       return Stack(
                         children: [
-                          // Base track
                           Positioned.fill(
                             child: Container(
                               decoration: BoxDecoration(
@@ -170,7 +161,6 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                           ),
-                          // Moving progress line with custom glowing shadow
                           Positioned(
                             left: 0,
                             top: 0,
@@ -203,7 +193,6 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
                 const SizedBox(height: 18),
-                // Micro percentage indicator
                 AnimatedBuilder(
                   animation: _animation,
                   builder: (context, child) {

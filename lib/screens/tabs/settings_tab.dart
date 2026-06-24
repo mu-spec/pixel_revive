@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
-import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/language_screen.dart';
 

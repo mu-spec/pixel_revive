@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
@@ -582,7 +581,7 @@ class _CropRotateScreenState extends State<CropRotateScreen> {
             ],
           ),
           const SizedBox(height: 20),
-          const Divider(color: AppColors.card, height: 1),
+          const Divider(color: AppColors.primary, height: 1),
           const SizedBox(height: 16),
           // Row 2: Aspect Ratios
           SizedBox(
@@ -611,7 +610,7 @@ class _CropRotateScreenState extends State<CropRotateScreen> {
                     ),
                     selected: isSelected,
                     selectedColor: AppColors.accent,
-                    backgroundColor: AppColors.card,
+                    backgroundColor: AppColors.primary,
                     checkmarkColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

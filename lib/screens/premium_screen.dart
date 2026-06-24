@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
@@ -178,7 +177,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.06),
+                  color: Colors.black.withOpacity(0.06),
                   width: 1,
                 ),
               ),

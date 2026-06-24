@@ -7,7 +7,6 @@ import 'package:pixel_revive/services/image_processor.dart';
 import 'package:pixel_revive/services/storage_service.dart';
 import 'package:pixel_revive/services/ai_api_service.dart';
 import 'package:pixel_revive/services/gpu_shader_service.dart';
-import 'package:pixel_revive/services/native_ffi_service.dart';
 import 'package:pixel_revive/services/on_device_ml_service.dart';
 
 class AppProvider extends ChangeNotifier {
@@ -23,28 +22,21 @@ class AppProvider extends ChangeNotifier {
   int freeExportsToday = 0;
   String? lastExportDate;
 
-  // Sliders for dynamic fine-tuning
   double enhanceStrength = 0.8;
   double skinSmoothness = 0.5;
   double bokehBlur = 0.6;
 
-  // Cloud AI configs (Switched to Fal.ai!)
   bool useCloudAi = false;
   String falToken = '';
 
-  // Language settings
   String languageCode = 'en';
 
-  // Creations History List (Saves paths of enhanced images)
   List<String> creationHistory = [];
 
   static const int _dailyFreeExports = 3;
 
   AppProvider() {
     _loadPrefs();
-    GpuShaderService.initialize(); // Compile GLSL shader program into VRAM on app launch
-    NativeFfiService.initialize(); // Link C++ FFI library into Dart runtime on launch
-    OnDeviceMlService.initialize(); // Initialize local ML Kit Face Detector on app launch
   }
 
   Future<void> _loadPrefs() async {
@@ -99,6 +91,11 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDisplayBytes(Uint8List bytes) {
+    displayBytes = bytes;
+    notifyListeners();
+  }
+
   void setUseCloudAi(bool value) {
     useCloudAi = value;
     _savePrefs();
@@ -119,7 +116,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> addToHistory(String filePath) async {
     if (!creationHistory.contains(filePath)) {
-      creationHistory.insert(0, filePath); // Add to beginning of list
+      creationHistory.insert(0, filePath);
       await _savePrefs();
       notifyListeners();
     }
@@ -143,7 +140,6 @@ class AppProvider extends ChangeNotifier {
 
   void _preWarmAllCloudModels() {
     if (useCloudAi && falToken.isNotEmpty) {
-      debugPrint('⚡ Instant background pre-warming triggered!');
       AiApiService.preWarmModel(modelName: 'fal-ai/codeformer', apiToken: falToken);
       AiApiService.preWarmModel(modelName: 'fal-ai/esrgan', apiToken: falToken);
       AiApiService.preWarmModel(modelName: 'fal-ai/image-editing/photo-restoration', apiToken: falToken);
@@ -166,7 +162,7 @@ class AppProvider extends ChangeNotifier {
       displayBytes = null;
       notifyListeners();
 
-      // PART 2 OPTIMIZATION 1: Pre-warming the exact millisecond the photo is selected!
+      GpuShaderService.initialize();
       _preWarmAllCloudModels();
     } catch (e) {
       debugPrint('pickImage error: $e');
@@ -187,37 +183,29 @@ class AppProvider extends ChangeNotifier {
     isProcessing = true;
     notifyListeners();
 
-    // 1. Try Cloud AI if configured and enabled (SWITCHED TO HIGH-SPEED FAL.AI!)
     if (useCloudAi && falToken.isNotEmpty) {
       try {
         Uint8List? cloudResult;
         if (featureId == 'face' || featureId == 'restore' || featureId == 'auto') {
-          // PART 2 OPTIMIZATION 3: Multi-Stage Cloud Pipeline (Remini Studio Mode)
-          // Runs Stage 1 (CodeFormer) + Stage 2 (Real-ESRGAN) + Stage 3 (Local detail-preserving blending filter)
           cloudResult = await AiApiService.runMultiStagePipeline(
             imageBytes: originalBytes!,
             apiToken: falToken,
-            blendFactor: 0.25, // Blend 25% of original high-frequency details for natural skin grain
+            blendFactor: 0.25,
           );
         } else if (featureId == 'upscale') {
-          // Runs ultra-fast 2x Real-ESRGAN scaling
           cloudResult = await AiApiService.runFalPrediction(
             imageBytes: originalBytes!,
             modelName: 'fal-ai/esrgan',
             apiToken: falToken,
-            additionalInput: {
-              'upscaling': 2,
-            },
+            additionalInput: {'upscaling': 2},
           );
         } else if (featureId == 'colorize') {
-          // Runs complete Photo Restoration & Colorization in one unified pass!
           cloudResult = await AiApiService.runFalPrediction(
             imageBytes: originalBytes!,
             modelName: 'fal-ai/image-editing/photo-restoration',
             apiToken: falToken,
           );
         } else if (featureId == 'bg_cleanup') {
-          // Cloud Background Cleanup (Removes background with high-end AI segmentation!)
           cloudResult = await AiApiService.runFalPrediction(
             imageBytes: originalBytes!,
             modelName: 'fal-ai/imageutils/rembg',
@@ -232,14 +220,13 @@ class AppProvider extends ChangeNotifier {
           await _savePrefs();
           isProcessing = false;
           notifyListeners();
-          return; // SUCCESS - EXIT METHOD EARLY
+          return;
         }
       } catch (e) {
         debugPrint("Cloud AI failed, falling back to local processing: $e");
       }
     }
 
-    // 2. FALLBACK - Run Local On-Device processing
     try {
       Uint8List result;
       switch (featureId) {
@@ -308,13 +295,13 @@ class AppProvider extends ChangeNotifier {
     try {
       final path = await StorageService.saveToGallery(displayBytes!);
       if (path != null) {
-        await addToHistory(path); // Save file path persistently to creationHistory list!
+        await addToHistory(path);
         if (!isPremium) {
           freeExportsToday++;
           await _savePrefs();
         }
         notifyListeners();
-        return path; // Return saved file path on success
+        return path;
       }
       return null;
     } catch (e) {
@@ -357,12 +344,11 @@ class AppProvider extends ChangeNotifier {
     }
     notifyListeners();
 
-    // PART 2 OPTIMIZATION 1: Pre-warming the exact millisecond the photo is updated (cropped/rotated)!
     _preWarmAllCloudModels();
   }
 
   // =========================================================================
-  // 🏭 BATCH PROCESSING ENGINE (PRD Page 4 - Real Implementation)
+  // BATCH PROCESSING ENGINE
   // =========================================================================
   List<File> batchImages = [];
   List<Uint8List> batchOriginalBytes = [];
@@ -370,6 +356,13 @@ class AppProvider extends ChangeNotifier {
   bool isBatchProcessing = false;
   int batchCurrentIndex = 0;
   String? batchStatusMessage;
+
+  void clearBatch() {
+    batchImages.clear();
+    batchOriginalBytes.clear();
+    batchProcessedBytes.clear();
+    notifyListeners();
+  }
 
   Future<void> pickBatchImages() async {
     try {
@@ -451,7 +444,7 @@ class AppProvider extends ChangeNotifier {
         batchProcessedBytes.add(finalBytes);
       }
 
-      batchStatusMessage = "Batch processing complete! 🎉";
+      batchStatusMessage = "Batch processing complete!";
     } catch (e) {
       batchStatusMessage = "Batch process failed: $e";
       debugPrint("processBatch error: $e");

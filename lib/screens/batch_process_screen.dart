@@ -1,9 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
-import 'package:pixel_revive/constants/app_strings.dart';
-import 'package:pixel_revive/models/feature_item.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/premium_screen.dart';
 
@@ -152,6 +149,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                   backgroundColor: Colors.transparent,
                   foregroundColor: Colors.black,
                   shadowColor: Colors.transparent,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             ),
@@ -174,6 +172,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
             padding: const EdgeInsets.all(16.0),
             child: GridView.builder(
               physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
                 crossAxisSpacing: 10,
@@ -189,7 +188,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: hasProcessed ? AppColors.success : Colors.white.withOpacity(0.08),
+                      color: hasProcessed ? AppColors.success : Colors.black.withOpacity(0.08),
                       width: hasProcessed ? 2 : 1.2,
                     ),
                   ),
@@ -215,12 +214,16 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                             bottom: 6,
                             right: 6,
                             child: Container(
-                              padding: const EdgeInsets.all(4),
                               decoration: const BoxDecoration(
-                                color: AppColors.success,
+                                color: Colors.black54,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.check, size: 12, color: Colors.white),
+                              padding: const EdgeInsets.all(2),
+                              child: const Icon(
+                                Icons.check_circle,
+                                color: AppColors.success,
+                                size: 22,
+                              ),
                             ),
                           )
                         else
@@ -230,7 +233,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.65),
+                                color: Colors.black54,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -263,7 +266,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Select AI Batch Action:',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: AppColors.text, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -281,19 +284,19 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                           avatar: Icon(
                             _getIconData(item['icon']!),
                             size: 14,
-                            color: isSelected ? Colors.black : AppColors.text,
+                            color: isSelected ? Colors.white : AppColors.textMuted,
                           ),
                           label: Text(
                             item['title']!,
                             style: TextStyle(
-                              color: isSelected ? Colors.black : AppColors.text,
+                              color: isSelected ? Colors.white : AppColors.text,
                               fontWeight: FontWeight.bold,
                               fontSize: 11.5,
                             ),
                           ),
                           selected: isSelected,
                           selectedColor: AppColors.gold,
-                          backgroundColor: AppColors.card,
+                          backgroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -324,7 +327,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                       Expanded(
                         child: Text(
                           'All photos processed successfully! You can now save them to your device gallery in one tap.',
-                          style: TextStyle(color: Colors.white, fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w500),
+                          style: TextStyle(color: AppColors.text, fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w500),
                         ),
                       ),
                     ],
@@ -417,12 +420,12 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                     value: percent,
                     strokeWidth: 8,
                     color: AppColors.gold,
-                    backgroundColor: AppColors.card,
+                    backgroundColor: AppColors.primary,
                   ),
                 ),
                 Text(
                   '${(percent * 100).round()}%',
-                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
+                  style: const TextStyle(color: AppColors.text, fontSize: 24, fontWeight: FontWeight.w900),
                 ),
               ],
             ),
@@ -430,7 +433,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
             Text(
               provider.batchStatusMessage ?? 'Processing queue...',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: const TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             const Text(
