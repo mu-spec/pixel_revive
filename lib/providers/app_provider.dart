@@ -49,7 +49,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> _preWarmServices() async {
     if (_mlServicePreWarmed) return;
     _mlServicePreWarmed = true;
-
+    
     Future.wait<bool>([
       GpuShaderService.initialize(),
       OnDeviceMlService.preWarm().then((_) => true),
@@ -65,7 +65,7 @@ class AppProvider extends ChangeNotifier {
     isPremium = prefs.getBool('is_premium') ?? false;
     freeExportsToday = prefs.getInt('free_exports_today') ?? 0;
     lastExportDate = prefs.getString('last_export_date');
-    useCloudAi = prefs.getBool('use_cloud_ai') ?? false;
+    useCloudAi = prefs.getBool('use_cloud_ai') ?? CloudApiConfig.useBackendProxy;
     devOverrideToken = prefs.getString('dev_override_token') ?? '';
     cloudAiUsedToday = prefs.getInt('cloud_ai_used_today') ?? 0;
     languageCode = prefs.getString('language_code') ?? 'en';
@@ -105,17 +105,17 @@ class AppProvider extends ChangeNotifier {
     return CloudApiConfig.activeToken;
   }
 
-  bool get isCloudAiAvailable => _activeApiToken.isNotEmpty;
+  bool get isCloudAiAvailable => CloudApiConfig.isCloudAvailable || devOverrideToken.isNotEmpty;
 
   bool get canUseCloudAi {
     if (!isCloudAiAvailable) return false;
     if (!useCloudAi) return false;
     if (isPremium) return true;
+    if (CloudApiConfig.cloudAiPremiumOnly) return false;
     return cloudAiUsedToday < CloudApiConfig.freeDailyCloudLimit;
   }
 
-  bool get _canUseCache =>
-      _lastProcessedBytes != null && _lastFeatureId != null && originalBytes != null;
+  bool get _canUseCache => _lastProcessedBytes != null && _lastFeatureId != null && originalBytes != null;
 
   void setEnhanceStrength(double value) {
     enhanceStrength = value;
@@ -191,16 +191,16 @@ class AppProvider extends ChangeNotifier {
 
       originalImage = File(picked.path);
       originalBytes = await originalImage!.readAsBytes();
-
+      
       _lastProcessedBytes = null;
       _lastFeatureId = null;
       processedBytes = null;
       displayBytes = null;
-
+      
       notifyListeners();
 
       GpuShaderService.initialize();
-
+      
       if (originalBytes != null) {
         OnDeviceMlService.detectFaces(originalBytes!, forceRefresh: true);
       }
@@ -227,8 +227,7 @@ class AppProvider extends ChangeNotifier {
 
     if (_canUseCache && _lastFeatureId == featureId) {
       processedBytes = _lastProcessedBytes;
-      displayBytes =
-          isPremium ? processedBytes : await ImageProcessor.applyWatermark(processedBytes!);
+      displayBytes = isPremium ? processedBytes : await ImageProcessor.applyWatermark(processedBytes!);
       isProcessing = false;
       notifyListeners();
       return;
@@ -245,17 +244,14 @@ class AppProvider extends ChangeNotifier {
 
         if (cloudResult != null) {
           processedBytes = cloudResult;
-          displayBytes = isPremium
-              ? cloudResult
-              : await ImageProcessor.applyWatermark(cloudResult);
-
+          displayBytes = isPremium ? cloudResult : await ImageProcessor.applyWatermark(cloudResult);
+          
           _lastProcessedBytes = cloudResult;
           _lastFeatureId = featureId;
-
+          
           if (!isPremium) cloudAiUsedToday++;
           _resetDailyIfNeeded();
           await _savePrefs();
-
           isProcessing = false;
           notifyListeners();
           return;
@@ -271,20 +267,13 @@ class AppProvider extends ChangeNotifier {
 
       switch (featureId) {
         case 'auto':
-          result = await ImageProcessor.autoEnhance(
-            originalBytes!,
-            strength: enhanceStrength,
-          );
+          result = await ImageProcessor.autoEnhance(originalBytes!, strength: enhanceStrength);
           break;
         case 'upscale':
           result = await ImageProcessor.upscale(originalBytes!, scale: 2);
           break;
         case 'face':
-          result = await ImageProcessor.faceEnhance(
-            originalBytes!,
-            smoothness: skinSmoothness,
-            strength: enhanceStrength,
-          );
+          result = await ImageProcessor.faceEnhance(originalBytes!, smoothness: skinSmoothness, strength: enhanceStrength);
           break;
         case 'denoise':
           result = await ImageProcessor.denoise(originalBytes!);
@@ -302,19 +291,13 @@ class AppProvider extends ChangeNotifier {
           result = await ImageProcessor.cartoonEffect(originalBytes!);
           break;
         case 'bg':
-          result = await ImageProcessor.backgroundBlur(
-            originalBytes!,
-            radius: bokehBlur,
-          );
+          result = await ImageProcessor.backgroundBlur(originalBytes!, radius: bokehBlur);
           break;
         case 'bg_cleanup':
           result = await ImageProcessor.backgroundCleanup(originalBytes!);
           break;
         default:
-          result = await ImageProcessor.autoEnhance(
-            originalBytes!,
-            strength: enhanceStrength,
-          );
+          result = await ImageProcessor.autoEnhance(originalBytes!, strength: enhanceStrength);
       }
 
       stopwatch.stop();
@@ -383,8 +366,7 @@ class AppProvider extends ChangeNotifier {
     isPremium = value;
     await _savePrefs();
     if (processedBytes != null) {
-      displayBytes =
-          isPremium ? processedBytes : await ImageProcessor.applyWatermark(processedBytes!);
+      displayBytes = isPremium ? processedBytes : await ImageProcessor.applyWatermark(processedBytes!);
     }
     notifyListeners();
   }
@@ -406,6 +388,7 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // BATCH PROCESSING
   List<File> batchImages = [];
   List<Uint8List> batchOriginalBytes = [];
   List<Uint8List> batchProcessedBytes = [];
@@ -457,15 +440,14 @@ class AppProvider extends ChangeNotifier {
     try {
       for (int i = 0; i < batchOriginalBytes.length; i++) {
         batchCurrentIndex = i;
-        batchStatusMessage =
-            "Processing image ${i + 1} of ${batchOriginalBytes.length}...";
+        batchStatusMessage = "Processing image ${i + 1} of ${batchOriginalBytes.length}...";
         notifyListeners();
 
         final Uint8List input = batchOriginalBytes[i];
         Uint8List result;
 
-        if (useCloudAi && isPremium && _activeApiToken.isNotEmpty) {
-          final cloudResult = await AiApiService.smartEnhance(
+        if (useCloudAi && isPremium && isCloudAiAvailable) {
+          Uint8List? cloudResult = await AiApiService.smartEnhance(
             imageBytes: input,
             featureId: featureId,
             apiToken: _activeApiToken,
@@ -476,13 +458,11 @@ class AppProvider extends ChangeNotifier {
           result = await _processLocalFeatureSync(input, featureId);
         }
 
-        final Uint8List finalBytes =
-            isPremium ? result : await ImageProcessor.applyWatermark(result);
+        final Uint8List finalBytes = isPremium ? result : await ImageProcessor.applyWatermark(result);
         batchProcessedBytes.add(finalBytes);
       }
 
-      batchStatusMessage =
-          "Batch complete! ${batchOriginalBytes.length} images processed.";
+      batchStatusMessage = "Batch complete! ${batchOriginalBytes.length} images processed.";
     } catch (e) {
       batchStatusMessage = "Batch failed: $e";
       debugPrint("processBatch error: $e");
@@ -492,29 +472,19 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<Uint8List> _processLocalFeatureSync(
-    Uint8List input,
-    String featureId,
-  ) async {
+  Future<Uint8List> _processLocalFeatureSync(Uint8List input, String featureId) async {
     final stopwatch = Stopwatch()..start();
-
+    
     Uint8List result;
     switch (featureId) {
       case 'auto':
-        result = await ImageProcessor.autoEnhance(
-          input,
-          strength: enhanceStrength,
-        );
+        result = await ImageProcessor.autoEnhance(input, strength: enhanceStrength);
         break;
       case 'upscale':
         result = await ImageProcessor.upscale(input, scale: 2);
         break;
       case 'face':
-        result = await ImageProcessor.faceEnhance(
-          input,
-          smoothness: skinSmoothness,
-          strength: enhanceStrength,
-        );
+        result = await ImageProcessor.faceEnhance(input, smoothness: skinSmoothness, strength: enhanceStrength);
         break;
       case 'denoise':
         result = await ImageProcessor.denoise(input);
@@ -538,16 +508,11 @@ class AppProvider extends ChangeNotifier {
         result = await ImageProcessor.backgroundCleanup(input);
         break;
       default:
-        result = await ImageProcessor.autoEnhance(
-          input,
-          strength: enhanceStrength,
-        );
+        result = await ImageProcessor.autoEnhance(input, strength: enhanceStrength);
     }
-
+    
     stopwatch.stop();
-    debugPrint(
-      "⚡ Batch image $featureId processed in ${stopwatch.elapsedMilliseconds}ms",
-    );
+    debugPrint("⚡ Batch image $featureId processed in ${stopwatch.elapsedMilliseconds}ms");
     return result;
   }
 

@@ -102,31 +102,21 @@ class _PremiumScreenState extends State<PremiumScreen> {
                               color: Colors.white.withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.star,
-                              color: Colors.white,
-                              size: 24,
-                            ),
+                            child: const Icon(Icons.star, color: Colors.white, size: 24),
                           ),
                           const SizedBox(width: 12),
-
                           // Tap "PixelRevive PRO" 5 times to reveal dev settings
                           GestureDetector(
                             onTap: () {
                               _devModeTapCount++;
-
                               if (_devModeTapCount == 5) {
                                 _devModeTapCount = 0;
-
                                 setState(() {
                                   _showDevSettings = true;
                                 });
-
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text(
-                                      '🔓 Developer settings unlocked!',
-                                    ),
+                                    content: Text('🔓 Developer settings unlocked!'),
                                     backgroundColor: AppColors.accent,
                                     duration: Duration(seconds: 2),
                                   ),
@@ -135,11 +125,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                                 ScaffoldMessenger.of(context).clearSnackBars();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(
-                                      '🔒 ${5 - _devModeTapCount} more taps for dev settings',
-                                    ),
-                                    duration:
-                                        const Duration(milliseconds: 600),
+                                    content: Text('🔒 ${5 - _devModeTapCount} more taps for dev settings'),
+                                    duration: const Duration(milliseconds: 600),
                                   ),
                                 );
                               }
@@ -158,10 +145,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        AppStrings.getText(
-                          'subTagline',
-                          provider.languageCode,
-                        ),
+                        AppStrings.getText('subTagline', provider.languageCode),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -174,10 +158,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 28),
 
-            // Cloud AI Status Card
+            // Cloud AI Status Card (visible to ALL users)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(18),
@@ -197,12 +180,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   Row(
                     children: [
                       Icon(
-                        CloudApiConfig.isCloudAvailable
-                            ? Icons.cloud_done
-                            : Icons.cloud_off,
-                        color: CloudApiConfig.isCloudAvailable
-                            ? AppColors.success
-                            : AppColors.textMuted,
+                        CloudApiConfig.isCloudAvailable ? Icons.cloud_done : Icons.cloud_off,
+                        color: CloudApiConfig.isCloudAvailable ? AppColors.success : AppColors.textMuted,
                         size: 22,
                       ),
                       const SizedBox(width: 12),
@@ -225,7 +204,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     CloudApiConfig.isCloudAvailable
                         ? (provider.isPremium
                             ? '✨ Premium: Unlimited cloud AI enhancements powered by ${CloudApiConfig.useReplicate ? "Replicate" : "Fal.ai"}'
-                            : '⚡ Free: ${CloudApiConfig.freeDailyCloudLimit} cloud AI enhancements/day. Upgrade for unlimited!')
+                            : (CloudApiConfig.cloudAiPremiumOnly
+                                ? '☁️ Cloud AI is available for Premium users only. Free users continue with local on-device processing.'
+                                : '⚡ Free: ${CloudApiConfig.freeDailyCloudLimit} cloud AI enhancements/day. Upgrade for unlimited!'))
                         : 'All processing runs locally on your device. No internet needed — fast & private!',
                     style: const TextStyle(
                       color: AppColors.textMuted,
@@ -233,14 +214,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       height: 1.4,
                     ),
                   ),
-                  if (CloudApiConfig.isCloudAvailable &&
-                      !provider.isPremium) ...[
+                  if (CloudApiConfig.isCloudAvailable && !provider.isPremium && !CloudApiConfig.cloudAiPremiumOnly) ...[
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         color: AppColors.gold.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -258,7 +235,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
 
             Text(
@@ -271,40 +247,21 @@ class _PremiumScreenState extends State<PremiumScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            _benefit(
-              Icons.hd,
-              AppStrings.getText('benefit1', provider.languageCode),
-            ),
-            _benefit(
-              Icons.water_drop_outlined,
-              AppStrings.getText('benefit2', provider.languageCode),
-            ),
-            _benefit(
-              Icons.all_inclusive,
-              AppStrings.getText('benefit3', provider.languageCode),
-            ),
-            _benefit(
-              Icons.speed,
-              AppStrings.getText('benefit4', provider.languageCode),
-            ),
-            _benefit(
-              Icons.photo_library_outlined,
-              AppStrings.getText('benefit5', provider.languageCode),
-            ),
+            _benefit(Icons.hd, AppStrings.getText('benefit1', provider.languageCode)),
+            _benefit(Icons.water_drop_outlined, AppStrings.getText('benefit2', provider.languageCode)),
+            _benefit(Icons.all_inclusive, AppStrings.getText('benefit3', provider.languageCode)),
+            _benefit(Icons.speed, AppStrings.getText('benefit4', provider.languageCode)),
+            _benefit(Icons.photo_library_outlined, AppStrings.getText('benefit5', provider.languageCode)),
             if (CloudApiConfig.isCloudAvailable)
-              _benefit(
-                Icons.cloud_done,
-                'Cloud AI: Professional-grade enhancement via server GPUs',
-              ),
+              _benefit(Icons.cloud_done, 'Cloud AI: Professional-grade enhancement via server GPUs'),
 
             const SizedBox(height: 28),
 
-            // Hidden Developer Settings
-            if (_showDevSettings) _buildDevSettings(provider),
+            // ── HIDDEN DEVELOPER SETTINGS (tap title 5 times to reveal) ──
+            if (_showDevSettings)
+              _buildDevSettings(provider),
 
             const SizedBox(height: 28),
-
             Text(
               AppStrings.getText('selectPlan', provider.languageCode),
               style: const TextStyle(
@@ -320,7 +277,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ...List.generate(plans.length, (index) {
               final plan = plans[index];
               final isSelected = _selectedPlanIndex == index;
-
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: GestureDetector(
@@ -347,9 +303,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                           isSelected
                               ? Icons.radio_button_checked
                               : Icons.radio_button_off,
-                          color: isSelected
-                              ? AppColors.gold
-                              : AppColors.textMuted,
+                          color: isSelected ? AppColors.gold : AppColors.textMuted,
                           size: 20,
                         ),
                         const SizedBox(width: 14),
@@ -373,12 +327,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
                                     const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 3,
-                                      ),
+                                          horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color:
-                                            AppColors.gold.withOpacity(0.15),
+                                        color: AppColors.gold.withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -432,13 +383,13 @@ class _PremiumScreenState extends State<PremiumScreen> {
             }),
 
             const SizedBox(height: 16),
-
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed:
-                    provider.isPremium ? null : () => _unlockPremium(provider),
+                onPressed: provider.isPremium
+                    ? null
+                    : () => _unlockPremium(provider),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.gold,
                   foregroundColor: Colors.white,
@@ -451,14 +402,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 ),
                 child: Text(
                   provider.isPremium
-                      ? AppStrings.getText(
-                          'premiumActive',
-                          provider.languageCode,
-                        )
-                      : AppStrings.getText(
-                          'unlockPremium',
-                          provider.languageCode,
-                        ),
+                      ? AppStrings.getText('premiumActive', provider.languageCode)
+                      : AppStrings.getText('unlockPremium', provider.languageCode),
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -467,9 +412,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
             if (provider.isPremium)
               SizedBox(
                 width: double.infinity,
@@ -486,24 +429,17 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   child: const Text('Restore Free (For Testing)'),
                 ),
               ),
-
             const SizedBox(height: 24),
-
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Text(
                   AppStrings.getText('billingNotice', provider.languageCode),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 11,
-                    height: 1.4,
-                  ),
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.4),
                 ),
               ),
             ),
-
             const SizedBox(height: 32),
           ],
         ),
@@ -511,6 +447,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     );
   }
 
+  /// ── DEVELOPER SETTINGS (hidden, for you to test) ──
   Widget _buildDevSettings(AppProvider provider) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -531,7 +468,6 @@ class _PremiumScreenState extends State<PremiumScreen> {
           ],
         ),
         const SizedBox(height: 12),
-
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -547,10 +483,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             children: [
               // Provider info
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppColors.accent.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
@@ -558,24 +491,18 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 child: Row(
                   children: [
                     Icon(
-                      CloudApiConfig.useReplicate
-                          ? Icons.science
-                          : Icons.bolt,
-                      color: CloudApiConfig.useReplicate
-                          ? AppColors.success
-                          : AppColors.gold,
+                      CloudApiConfig.useReplicate ? Icons.science : Icons.bolt,
+                      color: CloudApiConfig.useReplicate ? AppColors.success : AppColors.gold,
                       size: 16,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        CloudApiConfig.useReplicate
-                            ? 'Provider: Replicate.com'
-                            : 'Provider: Fal.ai',
+                        CloudApiConfig.useBackendProxy
+                            ? 'Provider: ${CloudApiConfig.useReplicate ? "Replicate" : "Fal.ai"} via secure backend proxy'
+                            : 'Provider: ${CloudApiConfig.useReplicate ? "Replicate" : "Fal.ai"} direct token fallback',
                         style: TextStyle(
-                          color: CloudApiConfig.useReplicate
-                              ? AppColors.success
-                              : AppColors.gold,
+                          color: CloudApiConfig.useReplicate ? AppColors.success : AppColors.gold,
                           fontSize: 11,
                           height: 1.4,
                         ),
@@ -584,48 +511,38 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 12),
 
               // Embedded token status
               Row(
                 children: [
                   Icon(
-                    CloudApiConfig.isCloudAvailable
-                        ? Icons.check_circle
-                        : Icons.cancel,
-                    color: CloudApiConfig.isCloudAvailable
-                        ? AppColors.success
-                        : Colors.redAccent,
+                    CloudApiConfig.isCloudAvailable ? Icons.check_circle : Icons.cancel,
+                    color: CloudApiConfig.isCloudAvailable ? AppColors.success : Colors.redAccent,
                     size: 16,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      CloudApiConfig.isCloudAvailable
-                          ? 'Embedded token: ✅ Active (${CloudApiConfig.activeToken.substring(0, 8)}...)'
-                          : 'Embedded token: ❌ Not set. Use a backend proxy for production.',
+                      CloudApiConfig.useBackendProxy
+                          ? 'Backend proxy: ✅ Configured securely'
+                          : (CloudApiConfig.isCloudAvailable
+                              ? 'Direct token: ✅ Active (${CloudApiConfig.activeToken.substring(0, 8)}...)'
+                              : 'Cloud AI: ❌ Not configured. Deploy backend proxy first.'),
                       style: TextStyle(
-                        color: CloudApiConfig.isCloudAvailable
-                            ? AppColors.success
-                            : Colors.redAccent,
+                        color: CloudApiConfig.isCloudAvailable ? AppColors.success : Colors.redAccent,
                         fontSize: 11.5,
                       ),
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
 
               // Cloud AI toggle
               Row(
                 children: [
-                  const Icon(
-                    Icons.cloud_queue,
-                    color: AppColors.success,
-                    size: 20,
-                  ),
+                  const Icon(Icons.cloud_queue, color: AppColors.success, size: 20),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
@@ -641,68 +558,45 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     value: provider.useCloudAi,
                     activeColor: AppColors.success,
                     onChanged: (v) {
-                      if (v &&
-                          !CloudApiConfig.isCloudAvailable &&
-                          provider.devOverrideToken.isEmpty) {
+                      if (v && !CloudApiConfig.isCloudAvailable && provider.devOverrideToken.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text(
-                              'No API token configured. Use a backend proxy for production.',
-                            ),
+                            content: Text('No backend proxy/API token configured. Deploy backend proxy first or paste a dev token for testing.'),
                             backgroundColor: Colors.redAccent,
                           ),
                         );
                         return;
                       }
-
                       provider.setUseCloudAi(v);
                     },
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
 
-              // Developer token override
+              // Developer token override (for testing different keys)
               const Text(
                 'Override Token (dev testing only):',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold),
               ),
-
               const SizedBox(height: 6),
-
               TextField(
-                controller:
-                    TextEditingController(text: provider.devOverrideToken),
+                controller: TextEditingController(text: provider.devOverrideToken),
                 decoration: InputDecoration(
                   hintText: CloudApiConfig.useReplicate
-                      ? 'Paste temporary Replicate token for testing only'
-                      : 'Paste temporary Fal.ai token for testing only',
-                  hintStyle: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 12,
-                  ),
+                      ? 'Paste Replicate token (r8_...) to override'
+                      : 'Paste Fal.ai token to override',
+                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                   filled: true,
                   fillColor: AppColors.primary,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   suffixIcon: provider.devOverrideToken.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(
-                            Icons.clear,
-                            size: 16,
-                            color: AppColors.textMuted,
-                          ),
+                          icon: const Icon(Icons.clear, size: 16, color: AppColors.textMuted),
                           onPressed: () {
                             provider.setDevOverrideToken('');
                             setState(() {});
@@ -710,31 +604,20 @@ class _PremiumScreenState extends State<PremiumScreen> {
                         )
                       : null,
                 ),
-                style: const TextStyle(
-                  color: AppColors.text,
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                ),
+                style: const TextStyle(color: AppColors.text, fontSize: 12, fontFamily: 'monospace'),
                 obscureText: true,
                 onChanged: (val) {
                   provider.setDevOverrideToken(val.trim());
                 },
               ),
-
               const SizedBox(height: 8),
-
               const Text(
-                '⚠️ Hidden developer-only testing area. Do not rely on this for production API security.',
-                style: TextStyle(
-                  color: AppColors.gold,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
+                '⚠️ Hidden developer-only testing area. Do not rely on direct tokens for production API security.',
+                style: TextStyle(color: AppColors.gold, fontSize: 10, fontWeight: FontWeight.w500),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 16),
       ],
     );
@@ -771,19 +654,13 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
   void _unlockPremium(AppProvider provider) {
     provider.setPremium(true);
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             const Icon(Icons.workspace_premium, color: AppColors.gold),
             const SizedBox(width: 12),
-            Text(
-              AppStrings.getText(
-                'localUnlockSnack',
-                provider.languageCode,
-              ),
-            ),
+            Text(AppStrings.getText('localUnlockSnack', provider.languageCode)),
           ],
         ),
         backgroundColor: AppColors.surface,

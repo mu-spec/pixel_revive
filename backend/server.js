@@ -371,6 +371,10 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, error: 'Not found' });
 });
 
-app.listen(PORT, () => {
-  console.log(`PixelRevive backend listening on port ${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`PixelRevive backend listening on port ${PORT}`);
+  });
+}
+
+export default app;

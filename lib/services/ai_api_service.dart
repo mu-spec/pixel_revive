@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:pixel_revive/services/image_processor.dart';
+import 'package:pixel_revive/services/cloud_api_config.dart';
 
 class AiApiService {
 
@@ -15,6 +16,77 @@ class AiApiService {
     required String apiToken,
   }) async {
     // Removed — pre-warming is not needed and causes errors on Fal.ai
+  }
+
+
+  /// Secure backend proxy call. This keeps Replicate/Fal.ai keys out of the APK.
+  static Future<Uint8List?> runBackendProxyPrediction({
+    required Uint8List imageBytes,
+    required String featureId,
+    required bool isReplicate,
+  }) async {
+    final baseUrl = CloudApiConfig.backendBaseUrl.trim();
+    if (baseUrl.isEmpty) return null;
+
+    final client = http.Client();
+    try {
+      var uploadBytes = imageBytes;
+      var decoded = img.decodeImage(uploadBytes);
+      if (decoded != null) {
+        if (decoded.width > 2048 || decoded.height > 2048) {
+          decoded = img.copyResize(
+            decoded,
+            width: decoded.width > decoded.height ? 2048 : null,
+            height: decoded.height >= decoded.width ? 2048 : null,
+          );
+        }
+        uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 92));
+      }
+
+      final uri = Uri.parse("${baseUrl.replaceAll(RegExp(r'/+$'), '')}/enhance");
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+
+      if (CloudApiConfig.backendClientSecret.isNotEmpty) {
+        headers['x-pixelrevive-client'] = CloudApiConfig.backendClientSecret;
+      }
+
+      debugPrint('Backend proxy posting to: $uri');
+
+      final response = await client
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode({
+              'provider': isReplicate ? 'replicate' : 'fal',
+              'featureId': featureId,
+              'mimeType': 'image/jpeg',
+              'imageBase64': base64Encode(uploadBytes),
+            }),
+          )
+          .timeout(const Duration(minutes: 4));
+
+      if (response.statusCode != 200) {
+        debugPrint('Backend proxy error ${response.statusCode}: ${response.body}');
+        return null;
+      }
+
+      final data = jsonDecode(response.body);
+      if (data['success'] != true || data['imageBase64'] == null) {
+        debugPrint('Backend proxy returned no image: ${response.body}');
+        return null;
+      }
+
+      final imageBase64 = data['imageBase64'].toString();
+      final cleaned = imageBase64.contains(',') ? imageBase64.split(',').last : imageBase64;
+      return Uint8List.fromList(base64Decode(cleaned));
+    } catch (e) {
+      debugPrint('Backend proxy error: $e');
+      return null;
+    } finally {
+      client.close();
+    }
   }
 
   static Future<Uint8List?> runFalPrediction({
@@ -289,6 +361,20 @@ class AiApiService {
     required String apiToken,
     required bool isReplicate,
   }) async {
+    // Preferred secure route: Flutter -> your backend proxy -> Replicate/Fal.ai.
+    if (CloudApiConfig.useBackendProxy) {
+      final backendResult = await runBackendProxyPrediction(
+        imageBytes: imageBytes,
+        featureId: featureId,
+        isReplicate: isReplicate,
+      );
+      if (backendResult != null) return backendResult;
+      debugPrint('Backend proxy failed; falling back if a direct dev token exists.');
+    }
+
+    // Optional developer-only fallback. In production apiToken should be empty.
+    if (apiToken.isEmpty) return null;
+
     if (isReplicate) {
       return _runReplicateFeature(
         imageBytes: imageBytes,

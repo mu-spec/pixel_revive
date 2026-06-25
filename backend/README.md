@@ -1,74 +1,84 @@
-# PixelRevive Backend Proxy
+# PixelRevive Backend Proxy — Vercel Deployment
 
-Secure Node.js backend proxy for PixelRevive cloud AI enhancement.
+This backend keeps your Replicate/Fal.ai API keys out of the Flutter APK.
 
-## Why this exists
-
-Do **not** put Replicate/Fal.ai API keys inside Flutter code. Flutter code is compiled into the APK and can be extracted.
-
-Use this flow instead:
+Safe flow:
 
 ```text
-Flutter App → Backend Proxy → Replicate/Fal.ai
+Flutter App → Vercel Backend Proxy → Replicate/Fal.ai API
 ```
 
-## Local setup
+## Files
 
-```bash
-cd backend
-npm install
-cp .env.example .env
-# put your real REPLICATE_API_TOKEN in .env locally only
-npm run dev
+```text
+backend/
+  api/index.js
+  server.js
+  package.json
+  package-lock.json
+  vercel.json
+  .env.example
+  .gitignore
 ```
 
-Test:
+## Deploy on Vercel Free Plan
 
-```bash
-curl http://localhost:8080/health
+1. Push this `backend/` folder to GitHub.
+2. Go to https://vercel.com and sign in with GitHub.
+3. Click **Add New → Project**.
+4. Import your `pixel_revive` GitHub repo.
+5. Set **Root Directory** to:
+
+```text
+backend
 ```
 
-## Deploy on Render
-
-1. Push this repo to GitHub.
-2. Go to Render → New → Web Service.
-3. Select the repo.
-4. Root directory: `backend`
-5. Build command: `npm install`
-6. Start command: `npm start`
-7. Add environment variables:
+6. Add Environment Variables in Vercel:
 
 ```text
 DEFAULT_AI_PROVIDER=replicate
 REPLICATE_API_TOKEN=your_new_replicate_token
 MAX_JSON_MB=25
 MAX_IMAGE_MB=8
-REQUEST_TIMEOUT_MS=180000
+REQUEST_TIMEOUT_MS=55000
 ```
 
-Optional:
+Do not put your API key in Flutter code or GitHub.
+
+7. Deploy.
+8. Open your health URL:
 
 ```text
-FAL_API_KEY=your_fal_key
-CLIENT_SHARED_SECRET=some_random_secret
+https://your-vercel-project.vercel.app/health
 ```
 
-8. Deploy.
-9. Copy the public Render URL.
-10. Put that URL into Flutter:
+You should see:
+
+```json
+"replicateConfigured": true
+```
+
+## Connect Flutter app
+
+After Vercel deploys, copy your Vercel URL and put it in:
+
+```text
+lib/services/cloud_api_config.dart
+```
+
+Example:
 
 ```dart
-// lib/services/cloud_api_config.dart
-static const String backendBaseUrl = 'https://your-service.onrender.com';
+static const String backendBaseUrl = 'https://your-vercel-project.vercel.app';
 ```
 
-Do not put the Replicate key into Flutter.
+Do not add `/health` or `/enhance` at the end.
 
-## API
+## API endpoints
 
 ### GET `/health`
 
-Returns backend status.
+Checks backend status.
 
 ### POST `/enhance`
 
@@ -95,16 +105,6 @@ Response:
 }
 ```
 
-## Model overrides
+## Vercel limitation
 
-You can override default Replicate models with env vars:
-
-```text
-REPLICATE_FACE_MODEL=tencentarc/gfpgan
-REPLICATE_RESTORE_MODEL=tencentarc/gfpgan
-REPLICATE_AUTO_MODEL=tencentarc/gfpgan
-REPLICATE_UPSCALE_MODEL=nightmareai/real-esrgan
-REPLICATE_BG_CLEANUP_MODEL=lucataco/remove-bg
-```
-
-Use either `owner/model` or `owner/model:version`.
+Vercel free functions can time out on slow AI jobs. This is good for testing/MVP. For production or slow models, use a longer-running backend later.
