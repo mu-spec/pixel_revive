@@ -7,38 +7,42 @@
 /// Anything inside Flutter code is compiled into the APK and can be extracted.
 ///
 /// Safe production flow:
-/// Flutter App → Backend Proxy → Replicate/Fal.ai API
+/// Flutter App → Vercel Backend Proxy → Replicate/Fal.ai API
 ///
-/// Put your real API key only in your backend host environment variables,
-/// for example Render/Railway/Firebase secrets.
+/// Your real Replicate API key is stored safely in Vercel Environment Variables:
+/// REPLICATE_API_TOKEN
+///
+/// The Flutter app only stores the public backend URL.
 /// =============================================
 
 class CloudApiConfig {
-  // ── SECURE BACKEND PROXY ───────────────────────────
-  // After deploying /backend to Vercel, paste the public URL here.
-  // Example: https://pixel-revive-backend.vercel.app
-  // Leave empty until your backend is deployed; app will use local processing.
-  static const String backendBaseUrl = '';
+  // ── SECURE VERCEL BACKEND PROXY ────────────────────
+  // This is your live Vercel backend URL.
+  // Do NOT add /health or /enhance at the end.
+  static const String backendBaseUrl = 'https://pixel-reviveapp.vercel.app';
 
-  // Optional light anti-abuse header. Only use if CLIENT_SHARED_SECRET is set
-  // on the backend. This is not a replacement for Firebase Auth/App Check.
+  // Optional light anti-abuse header.
+  // Keep empty unless you also set CLIENT_SHARED_SECRET in Vercel.
   static const String backendClientSecret = '';
 
   // ── DIRECT API TOKENS — KEEP EMPTY IN FLUTTER ──────
-  // These are only kept for developer override/testing. Do NOT put real keys
-  // here for a production APK.
+  // Do NOT put real Replicate/Fal.ai keys here.
+  // API keys must stay only in Vercel Environment Variables.
   static const String replicateToken = '';
   static const String falToken = '';
 
-  // ── WHICH PROVIDER TO USE THROUGH THE BACKEND ──────
+  // ── WHICH PROVIDER TO USE THROUGH BACKEND ──────────
   // true  = Replicate
   // false = Fal.ai
   static const bool useReplicate = true;
 
   // ── CLOUD AI FOR PREMIUM USERS ONLY ────────────────
+  // true  = only premium users use cloud AI
+  // false = free users can also use limited cloud AI
   static const bool cloudAiPremiumOnly = true;
 
-  // ── DAILY CLOUD AI LIMIT PER USER ──────────────────
+  // ── DAILY CLOUD AI LIMIT PER FREE USER ─────────────
+  // Only used if cloudAiPremiumOnly = false.
   static const int freeDailyCloudLimit = 3;
 
   static bool get useBackendProxy => backendBaseUrl.trim().isNotEmpty;
@@ -48,6 +52,7 @@ class CloudApiConfig {
   // ── HELPER: Is Cloud AI available? ─────────────────
   static bool get isCloudAvailable {
     if (useBackendProxy) return true;
+
     if (useReplicate) {
       return replicateToken.isNotEmpty;
     } else {
@@ -55,8 +60,8 @@ class CloudApiConfig {
     }
   }
 
-  // ── HELPER: Get the active direct token ─────────────
-  // This should stay empty in production when using backend proxy.
+  // ── HELPER: Get direct token fallback ──────────────
+  // This should stay empty in production when backend proxy is used.
   static String get activeToken {
     if (useReplicate) {
       return replicateToken;
