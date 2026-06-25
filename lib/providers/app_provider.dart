@@ -27,6 +27,11 @@ class AppProvider extends ChangeNotifier {
   double enhanceStrength = 0.8;
   double skinSmoothness = 0.5;
   double bokehBlur = 0.6;
+  int upscaleScale = 2;
+
+  bool lastProcessingUsedCloud = false;
+  String lastProcessingSource = 'Local';
+  String lastProcessingMessage = 'Ready for on-device enhancement';
 
   bool useCloudAi = false;
   String devOverrideToken = '';
@@ -68,6 +73,7 @@ class AppProvider extends ChangeNotifier {
     useCloudAi = prefs.getBool('use_cloud_ai') ?? CloudApiConfig.useBackendProxy;
     devOverrideToken = prefs.getString('dev_override_token') ?? '';
     cloudAiUsedToday = prefs.getInt('cloud_ai_used_today') ?? 0;
+    upscaleScale = (prefs.getInt('upscale_scale') ?? 2).clamp(2, 4).toInt();
     languageCode = prefs.getString('language_code') ?? 'en';
     creationHistory = prefs.getStringList('creation_history') ?? [];
     _resetDailyIfNeeded();
@@ -82,6 +88,7 @@ class AppProvider extends ChangeNotifier {
     await prefs.setBool('use_cloud_ai', useCloudAi);
     await prefs.setString('dev_override_token', devOverrideToken);
     await prefs.setInt('cloud_ai_used_today', cloudAiUsedToday);
+    await prefs.setInt('upscale_scale', upscaleScale);
     await prefs.setString('language_code', languageCode);
     await prefs.setStringList('creation_history', creationHistory);
   }
@@ -115,6 +122,35 @@ class AppProvider extends ChangeNotifier {
     return cloudAiUsedToday < CloudApiConfig.freeDailyCloudLimit;
   }
 
+  String get cloudProviderLabel => CloudApiConfig.activeProviderLabel;
+
+  String get processingRouteLabel {
+    if (isProcessing) return 'Processing...';
+    if (processedBytes == null) {
+      return CloudApiConfig.isCloudAvailable
+          ? 'Cloud ready • ${CloudApiConfig.activeProviderLabel}'
+          : 'Local ready';
+    }
+    return lastProcessingUsedCloud
+        ? 'Cloud AI • ${CloudApiConfig.activeProviderLabel}'
+        : lastProcessingSource;
+  }
+
+  IconData get processingRouteIcon {
+    if (lastProcessingUsedCloud || (processedBytes == null && CloudApiConfig.isCloudAvailable)) {
+      return Icons.cloud_done_rounded;
+    }
+    return Icons.phone_android_rounded;
+  }
+
+  Color get processingRouteColor {
+    if (lastProcessingUsedCloud || (processedBytes == null && CloudApiConfig.isCloudAvailable)) {
+      return Colors.lightBlueAccent;
+    }
+    if (lastProcessingSource == 'Local Fallback') return Colors.orangeAccent;
+    return Colors.greenAccent;
+  }
+
   bool get _canUseCache => _lastProcessedBytes != null && _lastFeatureId != null && originalBytes != null;
 
   void setEnhanceStrength(double value) {
@@ -129,6 +165,16 @@ class AppProvider extends ChangeNotifier {
 
   void setBokehBlur(double value) {
     bokehBlur = value;
+    notifyListeners();
+  }
+
+  void setUpscaleScale(int value) {
+    upscaleScale = value.clamp(2, 4).toInt();
+    _lastProcessedBytes = null;
+    if (_lastFeatureId == 'upscale') {
+      _lastFeatureId = null;
+    }
+    _savePrefs();
     notifyListeners();
   }
 
@@ -196,6 +242,9 @@ class AppProvider extends ChangeNotifier {
       _lastFeatureId = null;
       processedBytes = null;
       displayBytes = null;
+      lastProcessingUsedCloud = false;
+      lastProcessingSource = 'Local';
+      lastProcessingMessage = 'Ready for enhancement';
       
       notifyListeners();
 
@@ -216,6 +265,9 @@ class AppProvider extends ChangeNotifier {
     displayBytes = null;
     _lastProcessedBytes = null;
     _lastFeatureId = null;
+    lastProcessingUsedCloud = false;
+    lastProcessingSource = 'Local';
+    lastProcessingMessage = 'Ready for on-device enhancement';
     notifyListeners();
   }
 
@@ -233,7 +285,9 @@ class AppProvider extends ChangeNotifier {
       return;
     }
 
+    bool cloudAttempted = false;
     if (useCloudAi && canUseCloudAi) {
+      cloudAttempted = true;
       try {
         final cloudResult = await AiApiService.smartEnhance(
           imageBytes: originalBytes!,
@@ -248,6 +302,9 @@ class AppProvider extends ChangeNotifier {
           
           _lastProcessedBytes = cloudResult;
           _lastFeatureId = featureId;
+          lastProcessingUsedCloud = true;
+          lastProcessingSource = 'Cloud AI';
+          lastProcessingMessage = 'Processed securely with ${CloudApiConfig.activeProviderLabel} via Vercel backend.';
           
           if (!isPremium) cloudAiUsedToday++;
           _resetDailyIfNeeded();
@@ -270,7 +327,7 @@ class AppProvider extends ChangeNotifier {
           result = await ImageProcessor.autoEnhance(originalBytes!, strength: enhanceStrength);
           break;
         case 'upscale':
-          result = await ImageProcessor.upscale(originalBytes!, scale: 2);
+          result = await ImageProcessor.upscale(originalBytes!, scale: upscaleScale);
           break;
         case 'face':
           result = await ImageProcessor.faceEnhance(originalBytes!, smoothness: skinSmoothness, strength: enhanceStrength);
@@ -308,6 +365,11 @@ class AppProvider extends ChangeNotifier {
 
       _lastProcessedBytes = result;
       _lastFeatureId = featureId;
+      lastProcessingUsedCloud = false;
+      lastProcessingSource = cloudAttempted ? 'Local Fallback' : 'Local';
+      lastProcessingMessage = cloudAttempted
+          ? 'Cloud AI was unavailable or timed out. Local processing was used.'
+          : 'Processed on-device with local image enhancement.';
 
       _resetDailyIfNeeded();
       await _savePrefs();
@@ -377,6 +439,9 @@ class AppProvider extends ChangeNotifier {
     displayBytes = null;
     _lastProcessedBytes = null;
     _lastFeatureId = null;
+    lastProcessingUsedCloud = false;
+    lastProcessingSource = 'Local';
+    lastProcessingMessage = 'Image edited. Run enhancement again.';
 
     if (originalImage != null) {
       try {
@@ -481,7 +546,7 @@ class AppProvider extends ChangeNotifier {
         result = await ImageProcessor.autoEnhance(input, strength: enhanceStrength);
         break;
       case 'upscale':
-        result = await ImageProcessor.upscale(input, scale: 2);
+        result = await ImageProcessor.upscale(input, scale: upscaleScale);
         break;
       case 'face':
         result = await ImageProcessor.faceEnhance(input, smoothness: skinSmoothness, strength: enhanceStrength);

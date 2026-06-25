@@ -426,7 +426,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Running high-speed server pipeline. Please keep the app open.',
+              'Processing your queue. Cloud is used for Premium when available; otherwise local fallback is used. Please keep the app open.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
@@ -449,7 +449,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
           ],
         ),
         content: const Text(
-          'Batch AI Processing is a PRO exclusive feature. Upgrade to Premium now to process multiple photos in parallel with extreme cloud GPU acceleration and no limits!',
+          'Batch AI Processing is a PRO exclusive feature. Upgrade to Premium to process multiple photos in one queue, save all results, and use cloud enhancement when available.',
           style: TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.4),
         ),
         actions: [

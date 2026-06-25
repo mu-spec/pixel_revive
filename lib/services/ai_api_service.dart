@@ -43,7 +43,7 @@ class AiApiService {
         uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 92));
       }
 
-      final uri = Uri.parse("${baseUrl.replaceAll(RegExp(r'/+$'), '')}/enhance");
+      final uri = CloudApiConfig.backendEnhanceUri;
       final headers = <String, String>{
         'Content-Type': 'application/json',
       };

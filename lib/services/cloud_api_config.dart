@@ -45,9 +45,20 @@ class CloudApiConfig {
   // Only used if cloudAiPremiumOnly = false.
   static const int freeDailyCloudLimit = 3;
 
-  static bool get useBackendProxy => backendBaseUrl.trim().isNotEmpty;
+  static String get normalizedBackendBaseUrl =>
+      backendBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+
+  static bool get useBackendProxy => normalizedBackendBaseUrl.isNotEmpty;
+
+  static Uri get backendEnhanceUri =>
+      Uri.parse('$normalizedBackendBaseUrl/enhance');
+
+  static Uri get backendHealthUri =>
+      Uri.parse('$normalizedBackendBaseUrl/health');
 
   static String get activeProviderName => useReplicate ? 'replicate' : 'fal';
+
+  static String get activeProviderLabel => useReplicate ? 'Replicate' : 'Fal.ai';
 
   // ── HELPER: Is Cloud AI available? ─────────────────
   static bool get isCloudAvailable {
@@ -60,7 +71,8 @@ class CloudApiConfig {
     }
   }
 
-  // ── HELPER: Get direct token fallback ──────────────
+  // ── HELPER: Get direct todir backend
+  ken fallback ──────────────
   // This should stay empty in production when backend proxy is used.
   static String get activeToken {
     if (useReplicate) {

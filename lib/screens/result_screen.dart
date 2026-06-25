@@ -4,6 +4,7 @@ import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/premium_screen.dart';
+import 'package:pixel_revive/services/storage_service.dart';
 import 'package:pixel_revive/widgets/before_after_slider.dart';
 
 class ResultScreen extends StatelessWidget {
@@ -28,6 +29,7 @@ class ResultScreen extends StatelessWidget {
             flex: 6,
             child: _buildSliderView(provider),
           ),
+          _buildProcessingSourcePanel(provider),
           _buildInfoPanel(context, provider),
           _buildActionPanel(context, provider),
         ],
@@ -85,6 +87,60 @@ class ResultScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProcessingSourcePanel(AppProvider provider) {
+    if (provider.processedBytes == null) return const SizedBox.shrink();
+
+    final color = provider.processingRouteColor;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(provider.processingRouteIcon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  provider.processingRouteLabel,
+                  style: const TextStyle(
+                    color: AppColors.text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  provider.lastProcessingMessage,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    height: 1.3,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -252,7 +308,7 @@ class ResultScreen extends StatelessWidget {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to write photo file to native gallery.'),
+            content: Text('Failed to save to phone gallery. Please allow Photos/Gallery access.'),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -322,19 +378,37 @@ class ResultScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context); // Pop dialog
-                    Navigator.pop(context); // Pop result screen to go back to editor
-                  },
-                  child: Text(
-                    AppStrings.getText('excellent', provider.languageCode),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await StorageService.openGallery();
+                        },
+                        icon: const Icon(Icons.photo_library_outlined, size: 18),
+                        label: const Text('Open Gallery'),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context); // Pop dialog
+                          Navigator.pop(context); // Pop result screen to go back to editor
+                        },
+                        child: Text(
+                          AppStrings.getText('excellent', provider.languageCode),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

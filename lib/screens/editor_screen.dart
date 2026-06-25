@@ -132,6 +132,35 @@ class _EditorScreenState extends State<EditorScreen> {
                 ),
               ),
             ),
+            Positioned(
+              left: 14,
+              top: 14,
+              child: _processingRouteBadge(provider),
+            ),
+            if (provider.processedBytes != null && provider.lastProcessingMessage.isNotEmpty)
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 14,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    provider.lastProcessingMessage,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ),
             if (provider.isProcessing)
               Positioned.fill(
                 child: Container(
@@ -180,19 +209,178 @@ class _EditorScreenState extends State<EditorScreen> {
     final id = selectedFeatureId ?? 'auto';
 
     if (id == 'auto') {
-      return _sliderCard(title: 'Enhance Strength', value: provider.enhanceStrength, onChanged: (v) { provider.setEnhanceStrength(v); _applyRealTimePreview(v); }, icon: Icons.shutter_speed, activeColor: AppColors.success);
+      return _sliderCard(
+        title: 'Enhance Strength',
+        value: provider.enhanceStrength,
+        onChanged: (v) {
+          provider.setEnhanceStrength(v);
+          _applyRealTimePreview(v);
+        },
+        icon: Icons.shutter_speed,
+        activeColor: AppColors.success,
+      );
+    } else if (id == 'upscale') {
+      return _upscaleSelectorCard(provider);
     } else if (id == 'face') {
       return Column(
         children: [
-          _sliderCard(title: 'Face Enhance Strength', value: provider.enhanceStrength, onChanged: (v) { provider.setEnhanceStrength(v); _applyRealTimePreview(v); }, icon: Icons.face_retouching_natural, activeColor: AppColors.success),
-          _sliderCard(title: 'Skin Smoothness', value: provider.skinSmoothness, onChanged: (v) { provider.setSkinSmoothness(v); _applyRealTimePreviewSmoothness(v); }, icon: Icons.spa, activeColor: AppColors.accentLight),
+          _sliderCard(
+            title: 'Face Enhance Strength',
+            value: provider.enhanceStrength,
+            onChanged: (v) {
+              provider.setEnhanceStrength(v);
+              _applyRealTimePreview(v);
+            },
+            icon: Icons.face_retouching_natural,
+            activeColor: AppColors.success,
+          ),
+          _sliderCard(
+            title: 'Skin Smoothness',
+            value: provider.skinSmoothness,
+            onChanged: (v) {
+              provider.setSkinSmoothness(v);
+              _applyRealTimePreviewSmoothness(v);
+            },
+            icon: Icons.spa,
+            activeColor: AppColors.accentLight,
+          ),
         ],
       );
     } else if (id == 'bg') {
-      return _sliderCard(title: 'Background Bokeh Depth', value: provider.bokehBlur, onChanged: (v) { provider.setBokehBlur(v); _applyRealTimePreviewBokeh(v); }, icon: Icons.blur_on, activeColor: AppColors.accent);
+      return _sliderCard(
+        title: 'Background Bokeh Depth',
+        value: provider.bokehBlur,
+        onChanged: (v) {
+          provider.setBokehBlur(v);
+          _applyRealTimePreviewBokeh(v);
+        },
+        icon: Icons.blur_on,
+        activeColor: AppColors.accent,
+      );
     }
 
     return const SizedBox.shrink();
+  }
+
+  Widget _processingRouteBadge(AppProvider provider) {
+    final color = provider.processingRouteColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.62),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.45), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(provider.processingRouteIcon, color: color, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            provider.processingRouteLabel,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _upscaleSelectorCard(AppProvider provider) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.04), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.hd, color: AppColors.gold, size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                'Upscale Size',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              Text(
+                '${provider.upscaleScale}x',
+                style: const TextStyle(color: AppColors.gold, fontSize: 13, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _scaleOption(provider, 2, '2x', 'Fast HD'),
+              const SizedBox(width: 10),
+              _scaleOption(provider, 4, '4x', 'Ultra HD'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '4x creates larger files and may take longer, especially on-device.',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 10.5, height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scaleOption(AppProvider provider, int scale, String title, String subtitle) {
+    final selected = provider.upscaleScale == scale;
+    return Expanded(
+      child: InkWell(
+        onTap: provider.isProcessing
+            ? null
+            : () {
+                provider.setUpscaleScale(scale);
+                if (selectedFeatureId == 'upscale' && provider.originalBytes != null) {
+                  _process();
+                }
+              },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.gold : AppColors.card,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.gold : Colors.white.withOpacity(0.08),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: selected ? Colors.black : AppColors.text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: selected ? Colors.black.withOpacity(0.7) : AppColors.textMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _sliderCard({required String title, required double value, required ValueChanged<double> onChanged, required IconData icon, required Color activeColor}) {
