@@ -9,6 +9,9 @@ workflows:
       - name: Get Flutter dependencies
         script: |
           flutter pub get
+      - name: Generate Android launcher icons
+        script: |
+          flutter pub run flutter_launcher_icons:main
       - name: Build Android Release APK
         script: |
           flutter build apk --release
