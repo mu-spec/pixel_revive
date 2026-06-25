@@ -14,7 +14,28 @@ workflows:
           flutter pub run flutter_launcher_icons:main
       - name: Build Android Release APK
         script: |
+          set +e
           flutter build apk --release
+          FLUTTER_BUILD_EXIT_CODE=$?
+          set -e
+
+          echo "flutter build apk exit code: $FLUTTER_BUILD_EXIT_CODE"
+          echo "Searching for generated APK files..."
+          find build android -name "*.apk" -type f -print || true
+
+          APK_PATH=$(find build android -name "*.apk" -type f | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK file was generated. Failing build."
+            exit $FLUTTER_BUILD_EXIT_CODE
+          fi
+
+          echo "Found APK: $APK_PATH"
+          mkdir -p build/app/outputs/flutter-apk
+          cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
+          echo "APK copied to build/app/outputs/flutter-apk/app-release.apk"
     artifacts:
+      - build/app/outputs/flutter-apk/*.apk
       - build/**/outputs/**/*.apk
+      - android/app/build/outputs/**/*.apk
       - build/**/outputs/**/mapping.txt
+      - android/app/build/outputs/**/mapping.txt
