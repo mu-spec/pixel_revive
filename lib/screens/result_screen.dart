@@ -6,6 +6,7 @@ import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/premium_screen.dart';
 import 'package:pixel_revive/services/storage_service.dart';
 import 'package:pixel_revive/widgets/before_after_slider.dart';
+import 'package:pixel_revive/widgets/ad_banner.dart';
 
 class ResultScreen extends StatelessWidget {
   const ResultScreen({super.key});
@@ -31,6 +32,7 @@ class ResultScreen extends StatelessWidget {
           ),
           _buildProcessingSourcePanel(provider),
           _buildInfoPanel(context, provider),
+          const AdBanner(margin: EdgeInsets.fromLTRB(20, 4, 20, 8)),
           _buildActionPanel(context, provider),
         ],
       ),

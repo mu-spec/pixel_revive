@@ -8,7 +8,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const MAX_JSON_MB = Number(process.env.MAX_JSON_MB || 25);
 const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 8);
-const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 180000);
+const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 55000);
 const DEFAULT_AI_PROVIDER = (process.env.DEFAULT_AI_PROVIDER || 'replicate').toLowerCase();
 const CLIENT_SHARED_SECRET = process.env.CLIENT_SHARED_SECRET || '';
 
@@ -103,6 +103,31 @@ function replicateConfigForFeature(featureId, dataUri) {
         },
       };
 
+    case 'colorize':
+      return {
+        model: envModel(
+          'REPLICATE_COLORIZE_MODEL',
+          'piddnad/ddcolor:ca494ba129e44e45f661d6ece83c4c98a9a7c774309beca01429b58fce8aa695'
+        ),
+        input: {
+          image: dataUri,
+          model_size: process.env.REPLICATE_COLORIZE_MODEL_SIZE || 'large',
+        },
+      };
+
+    case 'restore':
+      return {
+        model: envModel(
+          'REPLICATE_RESTORE_MODEL',
+          'microsoft/bringing-old-photos-back-to-life:c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799'
+        ),
+        input: {
+          image: dataUri,
+          HR: false,
+          with_scratch: true,
+        },
+      };
+
     case 'face':
       return {
         model: envModel('REPLICATE_FACE_MODEL', 'tencentarc/gfpgan'),
@@ -113,18 +138,7 @@ function replicateConfigForFeature(featureId, dataUri) {
         },
       };
 
-    case 'restore':
-      return {
-        model: envModel('REPLICATE_RESTORE_MODEL', 'tencentarc/gfpgan'),
-        input: {
-          img: dataUri,
-          version: 'v1.4',
-          scale: 2,
-        },
-      };
-
     case 'auto':
-    case 'colorize':
     default:
       return {
         model: envModel('REPLICATE_AUTO_MODEL', 'tencentarc/gfpgan'),
@@ -188,7 +202,7 @@ function extractOutputUrl(output) {
   if (typeof output === 'string') return output;
   if (Array.isArray(output) && output.length > 0) return extractOutputUrl(output[0]);
   if (typeof output === 'object') {
-    return output.url || output.image || output.output || null;
+    return output.url || output.file || output.image || output.output || null;
   }
   return null;
 }

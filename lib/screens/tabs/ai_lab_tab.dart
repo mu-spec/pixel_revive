@@ -10,6 +10,7 @@ import 'package:pixel_revive/screens/editor_screen.dart';
 import 'package:pixel_revive/screens/demo_comparison_screen.dart';
 import 'package:pixel_revive/screens/batch_process_screen.dart';
 import 'package:pixel_revive/widgets/feature_card.dart';
+import 'package:pixel_revive/widgets/ad_banner.dart';
 
 class AiLabTab extends StatelessWidget {
   const AiLabTab({super.key});
@@ -35,6 +36,7 @@ class AiLabTab extends StatelessWidget {
           _buildFeaturesTitle(context, provider),
           const SizedBox(height: 16),
           _buildFeaturesGrid(context),
+          const AdBanner(),
           const SizedBox(height: 32),
         ],
       ),

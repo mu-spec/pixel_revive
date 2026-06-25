@@ -71,8 +71,7 @@ class CloudApiConfig {
     }
   }
 
-  // ── HELPER: Get direct todir backend
-  ken fallback ──────────────
+  // ── HELPER: Get direct token fallback ──────────────
   // This should stay empty in production when backend proxy is used.
   static String get activeToken {
     if (useReplicate) {

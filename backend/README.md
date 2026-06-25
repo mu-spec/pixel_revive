@@ -8,19 +8,6 @@ Safe flow:
 Flutter App → Vercel Backend Proxy → Replicate/Fal.ai API
 ```
 
-## Files
-
-```text
-backend/
-  api/index.js
-  server.js
-  package.json
-  package-lock.json
-  vercel.json
-  .env.example
-  .gitignore
-```
-
 ## Deploy on Vercel Free Plan
 
 1. Push this `backend/` folder to GitHub.
@@ -56,6 +43,31 @@ You should see:
 
 ```json
 "replicateConfigured": true
+```
+
+## Cloud feature mapping
+
+Current Replicate model mapping:
+
+| App feature | Backend model |
+|---|---|
+| Auto Enhance | `tencentarc/gfpgan` |
+| Face Enhance | `tencentarc/gfpgan` |
+| Old Photo Restore | `microsoft/bringing-old-photos-back-to-life` |
+| Colorize B&W | `piddnad/ddcolor` |
+| HD Upscale | `nightmareai/real-esrgan` |
+| BG Cleanup | `lucataco/remove-bg` |
+
+You can override models in Vercel Environment Variables:
+
+```text
+REPLICATE_FACE_MODEL=tencentarc/gfpgan
+REPLICATE_RESTORE_MODEL=microsoft/bringing-old-photos-back-to-life:c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799
+REPLICATE_COLORIZE_MODEL=piddnad/ddcolor:ca494ba129e44e45f661d6ece83c4c98a9a7c774309beca01429b58fce8aa695
+REPLICATE_COLORIZE_MODEL_SIZE=large
+REPLICATE_AUTO_MODEL=tencentarc/gfpgan
+REPLICATE_UPSCALE_MODEL=nightmareai/real-esrgan
+REPLICATE_BG_CLEANUP_MODEL=lucataco/remove-bg
 ```
 
 ## Connect Flutter app

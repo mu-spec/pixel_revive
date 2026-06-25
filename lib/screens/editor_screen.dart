@@ -10,6 +10,7 @@ import 'package:pixel_revive/screens/premium_screen.dart';
 import 'package:pixel_revive/screens/result_screen.dart';
 import 'package:pixel_revive/screens/crop_rotate_screen.dart';
 import 'package:pixel_revive/widgets/processing_dialog.dart';
+import 'package:pixel_revive/widgets/ad_banner.dart';
 import 'package:pixel_revive/services/ai_api_service.dart';
 import 'package:pixel_revive/services/gpu_shader_service.dart';
 import 'package:pixel_revive/services/image_processor.dart';
@@ -86,6 +87,7 @@ class _EditorScreenState extends State<EditorScreen> {
           _buildDescriptionBox(provider),
           _buildAdjustmentSliders(provider),
           _buildFeatureSelector(provider),
+          const AdBanner(margin: EdgeInsets.fromLTRB(20, 0, 20, 8)),
           _buildActionBar(provider),
         ],
       ),
