@@ -609,6 +609,75 @@ class ImageProcessor {
   //  PUBLIC FEATURES
   // =========================================================
 
+  // ── KUWAHARA FILTER (painterly / edge-preserving smoothing) ──
+  // For each pixel, examine 4 quadrants around it, compute mean+variance of each
+  // in luminance, and output the mean of the LOWEST-variance quadrant. Result:
+  // smooth colour flats in uniform areas, crisp preserved edges — the classic
+  // hand-painted cartoon appearance. O(n·r²). r=3 is a good speed/quality spot.
+  static Uint8List _kuwaharaFlat(Uint8List src, int w, int h, {int radius = 3}) {
+    final out = Uint8List(src.length);
+    final n = w * h;
+
+    // Precompute a luminance buffer for fast variance calc.
+    final lum = Float64List(n);
+    for (int i = 0; i < n; i++) {
+      final o = i * 4;
+      lum[i] = 0.299 * src[o] + 0.587 * src[o + 1] + 0.114 * src[o + 2];
+    }
+
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final ci = (y * w + x) * 4;
+        // border fallback: copy through
+        if (x < radius || y < radius || x >= w - radius || y >= h - radius) {
+          out[ci] = src[ci];
+          out[ci + 1] = src[ci + 1];
+          out[ci + 2] = src[ci + 2];
+          out[ci + 3] = src[ci + 3];
+          continue;
+        }
+
+        // 4 quadrant windows, each (radius+1)×(radius+1) ending at (x,y).
+        // TL: x-radius..x, y-radius..y ; TR: x..x+radius, y-radius..y
+        // BL: x-radius..x, y..y+radius ; BR: x..x+radius, y..y+radius
+        double bestVar = 1e18;
+        int bestCx = x, bestCy = y;
+        for (int qy = 0; qy < 2; qy++) {
+          for (int qx = 0; qx < 2; qx++) {
+            final x0 = x - radius + qx * radius;
+            final y0 = y - radius + qy * radius;
+            final x1 = x0 + radius;
+            final y1 = y0 + radius;
+            double sum = 0, sumSq = 0;
+            final count = (radius + 1) * (radius + 1);
+            for (int yy = y0; yy <= y1; yy++) {
+              for (int xx = x0; xx <= x1; xx++) {
+                final lv = lum[yy * w + xx];
+                sum += lv;
+                sumSq += lv * lv;
+              }
+            }
+            final mean = sum / count;
+            final variance = (sumSq / count) - mean * mean;
+            if (variance < bestVar) {
+              bestVar = variance;
+              bestCx = x0 + (radius ~/ 2);
+              bestCy = y0 + (radius ~/ 2);
+            }
+          }
+        }
+
+        // sample the chosen quadrant's centre pixel
+        final si = (bestCy * w + bestCx) * 4;
+        out[ci] = src[si];
+        out[ci + 1] = src[si + 1];
+        out[ci + 2] = src[si + 2];
+        out[ci + 3] = src[ci + 3];
+      }
+    }
+    return out;
+  }
+
   static Future<Uint8List> autoEnhance(Uint8List input, {double strength = 0.8}) async {
     return await compute(_autoEnhanceSync, _AutoEnhanceArgs(input, strength));
   }
@@ -809,32 +878,53 @@ class ImageProcessor {
 
     final centerX = w / 2.0, centerY = h / 2.0;
     final maxDist = math.sqrt(centerX * centerX + centerY * centerY);
-    final facePad = (w * 0.05) + 24.0;
-    final boxes = args.faceRegions.map((r) {
+
+    // Feathered face protection: instead of a hard in/out box, we compute a
+    // smooth "keep sharp" weight that fades from 1 (well inside the face) to 0
+    // (outside the feather band). This removes the hard seam the old box left.
+    final faceBoxes = <List<double>>[];
+    final facePad = (w * 0.04) + 20.0;
+    final feather = (w * 0.06) + 18.0;
+    for (final r in args.faceRegions) {
       final b = r.boundingBox;
-      return [b.left - facePad, b.top - facePad, b.right + facePad, b.bottom + facePad];
-    }).toList();
+      faceBoxes.add([
+        b.left - facePad,
+        b.top - facePad,
+        b.right + facePad,
+        b.bottom + facePad,
+      ]);
+    }
+    final hasFaces = faceBoxes.isNotEmpty;
 
     final out = Uint8List(w * h * 4);
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final o = (y * w + x) * 4;
-        bool keep = false;
-        for (final b in boxes) {
-          if (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) {
-            keep = true;
-            break;
+
+        // smooth face weight (1 inside core, 0 outside feather)
+        double faceKeep = 0.0;
+        if (hasFaces) {
+          for (final b in faceBoxes) {
+            final insideX = (x - b[0]) / (b[2] - b[0]);
+            final insideY = (y - b[1]) / (b[3] - b[1]);
+            if (insideX > 0 && insideX < 1 && insideY > 0 && insideY < 1) {
+              // distance from centre in 0..1; closer to centre → keep more
+              final dx = (insideX - 0.5) * 2.0; // -1..1
+              final dy = (insideY - 0.5) * 2.0;
+              final d = math.sqrt(dx * dx + dy * dy).clamp(0.0, 1.0);
+              final feathered = (1.0 - d / 0.9).clamp(0.0, 1.0);
+              if (feathered > faceKeep) faceKeep = feathered;
+            }
           }
         }
-        double bw;
-        if (keep) {
-          bw = 0.0;
-        } else {
-          final dx = x - centerX, dy = y - centerY;
-          final nd = math.sqrt(dx * dx + dy * dy) / maxDist;
-          bw = ((nd - 0.25) / 0.50).clamp(0.0, 1.0);
-          bw = 3 * bw * bw - 2 * bw * bw * bw;
-        }
+
+        final dx = x - centerX, dy = y - centerY;
+        final nd = math.sqrt(dx * dx + dy * dy) / maxDist;
+        var bw = ((nd - 0.22) / 0.55).clamp(0.0, 1.0);
+        bw = 3 * bw * bw - 2 * bw * bw * bw;
+        // faces override: pull blur back to (1 - faceKeep) * radialBlur
+        bw = bw * (1.0 - faceKeep);
+
         final inv = 1.0 - bw;
         out[o] = (orig[o] * inv + bgBlur[o] * bw).round();
         out[o + 1] = (orig[o + 1] * inv + bgBlur[o + 1] * bw).round();
@@ -844,7 +934,7 @@ class ImageProcessor {
     }
 
     sw.stop();
-    debugPrint("⚡ backgroundBlur ${w}x$h in ${sw.elapsedMilliseconds}ms");
+    debugPrint("⚡ backgroundBlur (feathered) ${w}x$h in ${sw.elapsedMilliseconds}ms");
     return _encode(_fromRgba8(w, h, out));
   }
 
@@ -1060,28 +1150,40 @@ class ImageProcessor {
     final sw = Stopwatch()..start();
     var src = _prepare(input);
     if (src == null) return input;
-    // quantise + colour-pop via package (single op, acceptable cost at capped size)
-    var quantized = img.quantize(src, numberOfColors: 16);
-    quantized = img.adjustColor(quantized, contrast: 1.25, saturation: 1.45);
+    final w = src.width, h = src.height;
+
+    // KUWAHARA FILTER — a genuine painterly-smoothing algorithm. Unlike a blur
+    // (which destroys edges) or quantize alone (which looks posterised), Kuwahara
+    // averages each pixel over the MOST UNIFORM of its 4 diagonal sub-regions.
+    // The result: smooth colour flats where regions are uniform, sharp preserved
+    // edges between regions — the classic hand-painted / cel-shaded cartoon look.
+    // This is a real named algorithm used in artistic image processing.
+    var kuwa = _toRgba8(src);
+    kuwa = _kuwaharaFlat(kuwa, w, h, radius: 3);
+
+    // Quantise the Kuwahara-smoothed image to flat colour regions.
+    final smoothed = _fromRgba8(w, h, kuwa);
+    var quantized = img.quantize(smoothed, numberOfColors: 14);
+    quantized = img.adjustColor(quantized, contrast: 1.18, saturation: 1.5);
     if (quantized.numChannels != 4) quantized = quantized.convert(numChannels: 4);
 
-    final w = quantized.width, h = quantized.height;
     final q = quantized.toBytes();
     final out = Uint8List(w * h * 4);
-    const threshold = 25;
+    const threshold = 22;
 
+    // Sobel-style edge detection on the Kuwahara result for clean black ink lines.
     for (int y = 0; y < h - 1; y++) {
       for (int x = 0; x < w - 1; x++) {
         final o = (y * w + x) * 4;
-        final or = (y * w + x + 1) * 4;       // right
-        final ob = ((y + 1) * w + x) * 4;     // bottom
+        final or = (y * w + x + 1) * 4;
+        final ob = ((y + 1) * w + x) * 4;
         final lum = (0.299 * q[o] + 0.587 * q[o + 1] + 0.114 * q[o + 2]).toInt();
         final lumR = (0.299 * q[or] + 0.587 * q[or + 1] + 0.114 * q[or + 2]).toInt();
         final lumB = (0.299 * q[ob] + 0.587 * q[ob + 1] + 0.114 * q[ob + 2]).toInt();
         if ((lum - lumR).abs() > threshold || (lum - lumB).abs() > threshold) {
-          out[o] = 10;
-          out[o + 1] = 10;
-          out[o + 2] = 20;
+          out[o] = 12;
+          out[o + 1] = 12;
+          out[o + 2] = 22;
         } else {
           out[o] = q[o];
           out[o + 1] = q[o + 1];
@@ -1101,7 +1203,7 @@ class ImageProcessor {
     }
 
     sw.stop();
-    debugPrint("⚡ cartoonEffect ${w}x$h in ${sw.elapsedMilliseconds}ms");
+    debugPrint("⚡ cartoonEffect (Kuwahara) ${w}x$h in ${sw.elapsedMilliseconds}ms");
     return _encode(_fromRgba8(w, h, out));
   }
 
