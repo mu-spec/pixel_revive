@@ -42,4 +42,4 @@ workflows:
     publishing:
       email:
         recipients:
-          - saaddkhan99@gmail.com
+          - your-email@example.com

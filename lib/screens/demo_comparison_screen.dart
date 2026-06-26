@@ -37,131 +37,173 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.text,
+        title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w800)),
         elevation: 0,
+        centerTitle: true,
       ),
       body: Column(
         children: [
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.45),
-                    blurRadius: 24,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final w = constraints.maxWidth;
-                    final h = constraints.maxHeight;
-                    final dividerX = w * _sliderPos;
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final w = constraints.maxWidth;
+                  final h = constraints.maxHeight;
+                  final dividerX = (w * _sliderPos).clamp(0.0, w);
 
-                    return GestureDetector(
-                      onHorizontalDragUpdate: (details) {
-                        setState(() {
-                          _sliderPos = (details.localPosition.dx / w).clamp(0.0, 1.0);
-                        });
-                      },
-                      onTapDown: (details) {
-                        setState(() {
-                          _sliderPos = (details.localPosition.dx / w).clamp(0.0, 1.0);
-                        });
-                      },
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 30,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          // 1. Enhanced View (Base - Sharp/Colorful)
+                          // BEFORE - base layer (left side revealed)
                           Image.asset(
-                            _getAfterPath(),
+                            _getBeforePath(),
                             fit: BoxFit.cover,
-                            width: w,
-                            height: h,
+                            alignment: Alignment.center,
                           ),
 
-                          // 2. Original View (Clipped - Blurry/Low Quality on the Left)
+                          // AFTER - clipped on the right
                           ClipRect(
-                            clipper: _DemoSliderClipper(_sliderPos),
+                            clipper: _AfterClipper(_sliderPos),
                             child: Image.asset(
-                              _getBeforePath(),
+                              _getAfterPath(),
                               fit: BoxFit.cover,
-                              width: w,
-                              height: h,
+                              alignment: Alignment.center,
                             ),
                           ),
 
-                          // Divider Line
+                          // Divider line
                           Positioned(
-                            left: dividerX - 1.25,
+                            left: dividerX - 1.5,
                             top: 0,
                             bottom: 0,
                             child: Container(
-                              width: 2.5,
-                              color: Colors.white,
-                            ),
-                          ),
-
-                          // Slider Handle
-                          Positioned(
-                            left: dividerX - 22,
-                            top: h / 2 - 22,
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: const BoxDecoration(
+                              width: 3,
+                              decoration: BoxDecoration(
                                 color: Colors.white,
-                                shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black45,
-                                    blurRadius: 10,
-                                    spreadRadius: 1,
-                                    offset: Offset(0, 4),
+                                    color: Colors.black.withOpacity(0.35),
+                                    blurRadius: 8,
                                   ),
                                 ],
                               ),
-                              child: const Icon(
-                                Icons.unfold_more,
-                                color: AppColors.primary,
-                                size: 24,
+                            ),
+                          ),
+
+                          // Handle
+                          Positioned(
+                            left: dividerX - 28,
+                            top: h / 2 - 28,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onHorizontalDragUpdate: (d) {
+                                final box = context.findRenderObject() as RenderBox?;
+                                if (box == null) return;
+                                final local = box.globalToLocal(d.globalPosition);
+                                final newPos = ((local.dx - 20) / w).clamp(0.0, 1.0);
+                                setState(() => _sliderPos = newPos);
+                              },
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.25),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                  border: Border.all(
+                                    color: AppColors.accent.withOpacity(0.2),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.chevron_left_rounded,
+                                        size: 22, color: AppColors.textMuted),
+                                    Icon(Icons.chevron_right_rounded,
+                                        size: 22, color: AppColors.textMuted),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
 
-                          // Tags
+                          // BEFORE tag - left
                           Positioned(
-                            left: 18,
-                            top: 18,
-                            child: _tag('AI ACTIVE', AppColors.success),
+                            left: 14,
+                            top: 14,
+                            child: _chip('BEFORE', false),
                           ),
+                          // AFTER tag - right
                           Positioned(
-                            right: 18,
-                            top: 18,
-                            child: _tag('BEFORE', AppColors.textMuted),
+                            right: 14,
+                            top: 14,
+                            child: _chip('AFTER', true),
+                          ),
+
+                          // Full-width drag catcher
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onHorizontalDragUpdate: (details) {
+                                setState(() {
+                                  _sliderPos =
+                                      (details.localPosition.dx / w).clamp(0.0, 1.0);
+                                });
+                              },
+                              onTapDown: (details) {
+                                setState(() {
+                                  _sliderPos =
+                                      (details.localPosition.dx / w).clamp(0.0, 1.0);
+                                });
+                              },
+                            ),
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
 
           // Detail Card
           Container(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 28),
             decoration: const BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 20,
+                  offset: Offset(0, -6),
+                )
+              ],
             ),
             child: SafeArea(
               top: false,
@@ -174,7 +216,7 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: AppColors.accent.withOpacity(0.15),
+                          color: AppColors.accent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
@@ -182,17 +224,21 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                           style: TextStyle(
                             color: AppColors.accent,
                             fontSize: 10,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: 0.8,
                           ),
                         ),
                       ),
                       const Spacer(),
-                      const Icon(Icons.touch_app, color: AppColors.textMuted, size: 16),
+                      const Icon(Icons.swap_horiz_rounded,
+                          color: AppColors.textMuted, size: 18),
                       const SizedBox(width: 6),
                       const Text(
-                        'Drag slider to compare',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                        'Drag to compare',
+                        style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -200,9 +246,9 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                   Text(
                     widget.title,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.text,
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -210,8 +256,8 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                     widget.description,
                     style: const TextStyle(
                       color: AppColors.textMuted,
-                      fontSize: 13,
-                      height: 1.45,
+                      fontSize: 13.5,
+                      height: 1.5,
                     ),
                   ),
                 ],
@@ -223,20 +269,26 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
     );
   }
 
-  Widget _tag(String text, Color color) {
+  Widget _chip(String text, bool isAfter) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.8),
+        color: isAfter ? AppColors.accent : Colors.black.withOpacity(0.55),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
       ),
       child: Text(
         text,
         style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
           letterSpacing: 1.0,
         ),
       ),
@@ -244,18 +296,17 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
   }
 }
 
-class _DemoSliderClipper extends CustomClipper<Rect> {
+/// Clips the AFTER image - shows it on the RIGHT side of the slider
+class _AfterClipper extends CustomClipper<Rect> {
   final double position;
-  _DemoSliderClipper(this.position);
+  _AfterClipper(this.position);
 
   @override
   Rect getClip(Size size) {
-    // Clips the top BEFORE image from 0 (left) to the slider dividerX position!
-    return Rect.fromLTRB(0, 0, size.width * position, size.height);
+    // Show AFTER on the right side
+    return Rect.fromLTRB(size.width * position, 0, size.width, size.height);
   }
 
   @override
-  bool shouldReclip(_DemoSliderClipper oldClipper) {
-    return oldClipper.position != position;
-  }
+  bool shouldReclip(_AfterClipper oldClipper) => oldClipper.position != position;
 }
