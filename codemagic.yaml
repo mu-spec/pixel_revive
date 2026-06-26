@@ -26,23 +26,22 @@ workflows:
       - name: Build Android APK
         script: |
           flutter build apk --release
-          
+
           echo "=========================================="
           echo "BUILD COMPLETED!"
           echo "=========================================="
-          
-          # List APK files
+
           ls -la build/app/outputs/flutter-apk/
-          
+
           echo "APK Size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+      - path: build/app/outputs/flutter-apk/app-release.apk
         name: PixelRevive_APK
         type: application/vnd.android.apk
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - saaddkhan99@gmail.com
         notify:
           success: true
           failure: true
