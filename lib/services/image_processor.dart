@@ -465,6 +465,146 @@ class ImageProcessor {
     return out;
   }
 
+  // ── LANCZOS RESAMPLING (gold-standard image upscale) ──
+  // Lanczos uses a sinc-windowed kernel that preserves sharp edges and fine
+  // detail FAR better than linear/bicubic, which just blur. This is the same
+  // high-quality resampling used by pro tools. Separable: horizontal then vertical.
+  // [src] is an RGB-only byte buffer (3 bytes/pixel).
+  static Uint8List _lanczosResizeRGB(Uint8List src, int sw, int sh, int dstW, int dstH, {int a = 3}) {
+    final xScale = sw / dstW;
+    final xWeights = List.generate(dstW, (ox) {
+      final center = (ox + 0.5) * xScale - 0.5;
+      final left = (center - a).ceil();
+      final right = (center + a).floor();
+      final ws = <int, double>{};
+      double sum = 0;
+      for (int ix = left; ix <= right; ix++) {
+        final sx = ix < 0 ? 0 : (ix >= sw ? sw - 1 : ix);
+        final d = (ix - center).abs();
+        if (d < 1e-6) {
+          ws[sx] = 1.0;
+          sum += 1.0;
+        } else if (d < a) {
+          final pi = math.pi;
+          final v = a * math.sin(pi * d) * math.sin(pi * d / a) / (pi * pi * d * d);
+          ws[sx] = v;
+          sum += v;
+        }
+      }
+      if (sum != 0) {
+        for (final k in ws.keys.toList()) {
+          ws[k] = ws[k]! / sum;
+        }
+      }
+      return ws;
+    });
+
+    final tmp = Float64List(sh * dstW * 3);
+    for (int y = 0; y < sh; y++) {
+      for (int ox = 0; ox < dstW; ox++) {
+        final ws = xWeights[ox];
+        double r = 0, g = 0, b = 0;
+        ws.forEach((sx, w) {
+          final si = (y * sw + sx) * 3;
+          r += src[si] * w;
+          g += src[si + 1] * w;
+          b += src[si + 2] * w;
+        });
+        final di = (y * dstW + ox) * 3;
+        tmp[di] = r;
+        tmp[di + 1] = g;
+        tmp[di + 2] = b;
+      }
+    }
+
+    final yScale = sh / dstH;
+    final yWeights = List.generate(dstH, (oy) {
+      final center = (oy + 0.5) * yScale - 0.5;
+      final left = (center - a).ceil();
+      final right = (center + a).floor();
+      final ws = <int, double>{};
+      double sum = 0;
+      for (int iy = left; iy <= right; iy++) {
+        final sy = iy < 0 ? 0 : (iy >= sh ? sh - 1 : iy);
+        final d = (iy - center).abs();
+        if (d < 1e-6) {
+          ws[sy] = 1.0;
+          sum += 1.0;
+        } else if (d < a) {
+          final pi = math.pi;
+          final v = a * math.sin(pi * d) * math.sin(pi * d / a) / (pi * pi * d * d);
+          ws[sy] = v;
+          sum += v;
+        }
+      }
+      if (sum != 0) {
+        for (final k in ws.keys.toList()) {
+          ws[k] = ws[k]! / sum;
+        }
+      }
+      return ws;
+    });
+
+    final out = Uint8List(dstW * dstH * 3);
+    for (int oy = 0; oy < dstH; oy++) {
+      final ws = yWeights[oy];
+      for (int x = 0; x < dstW; x++) {
+        double r = 0, g = 0, b = 0;
+        ws.forEach((sy, w) {
+          final si = (sy * dstW + x) * 3;
+          r += tmp[si] * w;
+          g += tmp[si + 1] * w;
+          b += tmp[si + 2] * w;
+        });
+        final di = (oy * dstW + x) * 3;
+        out[di] = r.round().clamp(0, 255);
+        out[di + 1] = g.round().clamp(0, 255);
+        out[di + 2] = b.round().clamp(0, 255);
+      }
+    }
+    return out;
+  }
+
+  // ── EDGE-AWARE UNSHARP (smart deblur that protects flat areas) ──
+  // A flat unsharp mask amplifies noise in smooth regions (sky, skin). This
+  // version measures local edge strength and only sharpens where real edges
+  // exist, suppressing noise halos. Closer to real deconvolution than blind sharpen.
+  static Uint8List _smartUnsharpFlat(Uint8List src, int w, int h, double amount, double radius) {
+    final blur = _gaussianBlurFlat(src, w, h, radius.round().clamp(1, 4));
+    final n = w * h;
+    final out = Uint8List(n * 4);
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final o = (y * w + x) * 4;
+        if (x == 0 || y == 0 || x == w - 1 || y == h - 1) {
+          out[o] = src[o];
+          out[o + 1] = src[o + 1];
+          out[o + 2] = src[o + 2];
+          out[o + 3] = src[o + 3];
+          continue;
+        }
+        // local edge strength from 3x3 luma min/max
+        double mn = 255, mx = 0;
+        for (int dy = -1; dy <= 1; dy++) {
+          for (int dx = -1; dx <= 1; dx++) {
+            final ni = ((y + dy) * w + (x + dx)) * 4;
+            final lum = 0.299 * src[ni] + 0.587 * src[ni + 1] + 0.114 * src[ni + 2];
+            if (lum < mn) mn = lum;
+            if (lum > mx) mx = lum;
+          }
+        }
+        final edgeStrength = (mx - mn).clamp(0.0, 60.0) / 60.0;
+        final amt = amount * edgeStrength;
+        for (int c = 0; c < 3; c++) {
+          final ov = src[o + c];
+          out[o + c] = _clampByte((ov + (ov - blur[o + c]) * amt).round());
+        }
+        out[o + 3] = src[o + 3];
+      }
+    }
+    return out;
+  }
+
   // =========================================================
   //  PUBLIC FEATURES
   // =========================================================
@@ -518,21 +658,32 @@ class ImageProcessor {
     final newW = (src.width * args.scale).clamp(1, maxDim).toInt();
     final newH = (src.height * args.scale).clamp(1, maxDim).toInt();
 
-    var out = img.copyResize(
-      src,
-      width: newW,
-      height: newH,
-      interpolation: img.Interpolation.linear, // linear ~6× faster than cubic, fine for upscale
-    );
+    // LANCZOS resampling: the gold standard for image upscaling. Its sinc-
+    // windowed kernel preserves sharp edges and fine detail far better than the
+    // linear/nearest-neighbour resize most apps use (which just smear pixels).
+    final sw0 = src.width, sh0 = src.height;
+    final rgbIn = Uint8List(sw0 * sh0 * 3);
+    final rgba = src.toBytes();
+    for (int i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
+      rgbIn[j] = rgba[i];
+      rgbIn[j + 1] = rgba[i + 1];
+      rgbIn[j + 2] = rgba[i + 2];
+    }
+    final rgbOut = _lanczosResizeRGB(rgbIn, sw0, sh0, newW, newH, a: 3);
 
-    // Light single-pass sharpen on flat buffer.
-    final w = out.width, h = out.height;
-    var buf = _toRgba8(out);
-    buf = _sharpenFlat(buf, w, h, args.scale >= 4 ? 1.1 : 1.0);
+    // Pack RGB -> RGBA + light edge-aware sharpen to crisp the result.
+    final out = Uint8List(newW * newH * 4);
+    for (int i = 0, j = 0; i < out.length; i += 4, j += 3) {
+      out[i] = rgbOut[j];
+      out[i + 1] = rgbOut[j + 1];
+      out[i + 2] = rgbOut[j + 2];
+      out[i + 3] = 255;
+    }
+    var buf = _smartUnsharpFlat(out, newW, newH, args.scale >= 4 ? 0.8 : 0.6, 2.0);
 
     sw.stop();
-    debugPrint("⚡ upscale ${newW}x$newH in ${sw.elapsedMilliseconds}ms");
-    return _encode(_fromRgba8(w, h, buf));
+    debugPrint("⚡ upscale ${newW}x$newH (Lanczos) in ${sw.elapsedMilliseconds}ms");
+    return _encode(_fromRgba8(newW, newH, buf));
   }
 
   static Future<Uint8List> faceEnhance(
@@ -730,13 +881,18 @@ class ImageProcessor {
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
-    // Collapse the old 5-pass pipeline into: blur → unsharp(strong) → contrast.
-    final blur = _gaussianBlurFlat(buf, w, h, 2);
-    buf = _unsharpFlat(buf, blur, w, h, 2.8, 2.0);
-    buf = _adjustFlat(buf, w, h, 1.0, 1.22, 1.0);
+    // Two-stage deconvolution-style deblur:
+    //  1. Edge-aware smart unsharp — sharpens real edges, ignores flat/noisy
+    //     regions (no halos, no amplified grain). This is the key improvement
+    //     over a blind unsharp mask.
+    //  2. A second finer-radius pass for micro-detail.
+    //  3. Gentle contrast to restore perceived "snap".
+    buf = _smartUnsharpFlat(buf, w, h, 2.4, 2.0);
+    buf = _smartUnsharpFlat(buf, w, h, 1.2, 1.0);
+    buf = _adjustFlat(buf, w, h, 1.0, 1.18, 1.05);
 
     sw.stop();
-    debugPrint("⚡ unblur ${w}x$h in ${sw.elapsedMilliseconds}ms");
+    debugPrint("⚡ unblur ${w}x$h (deconv) in ${sw.elapsedMilliseconds}ms");
     return _encode(_fromRgba8(w, h, buf));
   }
 
