@@ -54,31 +54,40 @@ class ImageProcessor {
   /// Decodes + (optionally) downscales to <= [maxDim] longest side.
   /// Returns null if decode fails (caller returns original input).
   static img.Image? _prepare(Uint8List bytes, {int maxDim = _maxWorkDim}) {
-    var src = _decode(bytes);
+    final src = _decode(bytes);
     if (src == null) return null;
 
     // Normalise to a plain 4-channel image (JPGs decode to 3 channels).
     if (src.numChannels != 4) {
       try {
-        src = src.convert(numChannels: 4);
-      } catch (_) {
-        final w = src.width;
-        final h = src.height;
-        final conv = img.Image(width: w, height: h, numChannels: 4);
-        for (int y = 0; y < h; y++) {
-          for (int x = 0; x < w; x++) {
-            final pixel = src.getPixel(x, y);
-            conv.setPixelRgba(x, y, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(), 255);
-          }
+        final converted = src.convert(numChannels: 4);
+        if (converted != null) {
+          return _processPrepared(converted, maxDim);
         }
-        src = conv;
+      } catch (_) {
+        // Fallback: manual conversion pixel by pixel
       }
+      // Manual fallback if convert() returned null or threw
+      final w = src.width;
+      final h = src.height;
+      final conv = img.Image(width: w, height: h, numChannels: 4);
+      for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+          final pixel = src.getPixel(x, y);
+          conv.setPixelRgba(x, y, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(), 255);
+        }
+      }
+      return _processPrepared(conv, maxDim);
     }
 
+    return _processPrepared(src, maxDim);
+  }
+
+  static img.Image _processPrepared(img.Image src, int maxDim) {
     final longest = math.max(src.width, src.height);
     if (longest > maxDim) {
       final scale = maxDim / longest;
-      src = img.copyResize(
+      return img.copyResize(
         src,
         width: (src.width * scale).round(),
         height: (src.height * scale).round(),
