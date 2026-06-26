@@ -35,9 +35,7 @@ workflows:
 
           echo "APK Size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
     artifacts:
-      - path: build/app/outputs/flutter-apk/app-release.apk
-        name: PixelRevive_APK
-        type: application/vnd.android.apk
+      - build/app/outputs/flutter-apk/app-release.apk
     publishing:
       email:
         recipients:
