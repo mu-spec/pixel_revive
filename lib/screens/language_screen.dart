@@ -27,6 +27,12 @@ class _LanguageScreenState extends State<LanguageScreen> {
     {'name': 'German', 'nativeName': 'Deutsch', 'code': 'de', 'flag': '🇩🇪'},
     {'name': 'Urdu', 'nativeName': 'اردو', 'code': 'ur', 'flag': '🇵🇰'},
     {'name': 'Arabic', 'nativeName': 'العربية', 'code': 'ar', 'flag': '🇸🇦'},
+    {'name': 'Portuguese', 'nativeName': 'Português', 'code': 'pt', 'flag': '🇧🇷'},
+    {'name': 'Hindi', 'nativeName': 'हिन्दी', 'code': 'hi', 'flag': '🇮🇳'},
+    {'name': 'Russian', 'nativeName': 'Русский', 'code': 'ru', 'flag': '🇷🇺'},
+    {'name': 'Indonesian', 'nativeName': 'Indonesia', 'code': 'id', 'flag': '🇮🇩'},
+    {'name': 'Chinese', 'nativeName': '中文', 'code': 'zh', 'flag': '🇨🇳'},
+    {'name': 'Turkish', 'nativeName': 'Türkçe', 'code': 'tr', 'flag': '🇹🇷'},
   ];
 
   @override
