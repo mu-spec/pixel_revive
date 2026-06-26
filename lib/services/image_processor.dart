@@ -62,9 +62,14 @@ class ImageProcessor {
       try {
         src = src.convert(numChannels: 4);
       } catch (_) {
-        final conv = img.Image(width: src.width, height: src.height, numChannels: 4);
-        for (final p in src) {
-          conv.setPixelRgba(p.x, p.y, p.r.toInt(), p.g.toInt(), p.b.toInt(), 255);
+        final w = src.width;
+        final h = src.height;
+        final conv = img.Image(width: w, height: h, numChannels: 4);
+        for (int y = 0; y < h; y++) {
+          for (int x = 0; x < w; x++) {
+            final pixel = src.getPixel(x, y);
+            conv.setPixelRgba(x, y, pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt(), 255);
+          }
         }
         src = conv;
       }
@@ -85,14 +90,14 @@ class ImageProcessor {
 
   // ── FLAT BUFFER HELPERS (fast, allocation-free inner loops) ──
   static Uint8List _toRgba8(img.Image image) {
-    return image.toBytes(); // numChannels == 4 → interleaved RGBA8
+    return image.getBytes(); // numChannels == 4 → interleaved RGBA8
   }
 
   static img.Image _fromRgba8(int w, int h, Uint8List bytes) {
     return img.Image.fromBytes(
       width: w,
       height: h,
-      bytes: bytes,
+      bytes: bytes.buffer,
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
@@ -223,19 +228,21 @@ class ImageProcessor {
           out[ci + 3] = src[ci + 3];
           continue;
         }
-        final cR = src[ci], cG = src[ci + 1], cB = src[ci + 2];
+        final cR = src[ci];
+        final cG = src[ci + 1];
+        final cB = src[ci + 2];
         final cLum = 0.299 * cR + 0.587 * cG + 0.114 * cB;
-        double sR = 0, sG = 0, sB = 0, tw = 0;
+        double sR = 0.0, sG = 0.0, sB = 0.0, tw = 0.0;
         for (final t in taps) {
-          final ni = ((y + t[1]) * w + (x + t[0])) * 4;
+          final ni = ((y + t[1].toInt()) * w + (x + t[0].toInt())) * 4;
           final nLum =
-              0.299 * src[ni] + 0.587 * src[ni + 1] + 0.114 * src[ni + 2];
+              0.299 * src[ni].toDouble() + 0.587 * src[ni + 1].toDouble() + 0.114 * src[ni + 2].toDouble();
           final ld = (cLum - nLum).abs();
           final rw = math.exp(-(ld * ld) * inv2s2);
           final weight = t[2] * rw;
-          sR += src[ni] * weight;
-          sG += src[ni + 1] * weight;
-          sB += src[ni + 2] * weight;
+          sR += src[ni].toDouble() * weight;
+          sG += src[ni + 1].toDouble() * weight;
+          sB += src[ni + 2].toDouble() * weight;
           tw += weight;
         }
         out[ci] = (sR / tw).round().clamp(0, 255);
@@ -251,10 +258,6 @@ class ImageProcessor {
   }
 
   // ── COLOR ADJUST (brightness/contrast/saturation) via precomputed LUT ──
-  // Brightness+contrast are a pure function of the input byte value, so we
-  // precompute a 256-entry lookup table once (cheap) and the inner loop becomes
-  // a fast array lookup instead of float math per channel. Saturation needs the
-  // per-pixel luma relationship so it's computed directly (but skipped when ~1).
   static Uint8List _adjustFlat(
     Uint8List src,
     int w,
@@ -291,11 +294,6 @@ class ImageProcessor {
   }
 
   // ── CLAHE: Contrast Limited Adaptive Histogram Equalization ──
-  // Professional-grade local contrast. Unlike global contrast (which lifts
-  // everything uniformly and clips shadows/highlights), CLAHE equalizes contrast
-  // in local tiles and blends them, so it pulls real detail out of BOTH shadows
-  // and highlights without blowing out. This is the biggest visible quality win
-  // for autoEnhance and restoreOldPhoto. O(n).
   static Uint8List _claheFlat(
     Uint8List src,
     int w,
@@ -312,7 +310,6 @@ class ImageProcessor {
     final tileW = w / tx;
     final tileH = h / ty;
 
-    // Per-tile normalized CDF (luminance mapping). ty × tx × 256.
     final mappings = List.generate(
         ty, (_) => List.generate(tx, (_) => Float64List(256)));
 
@@ -337,7 +334,6 @@ class ImageProcessor {
           }
         }
 
-        // Clip histogram to limit contrast amplification (avoid noise blow-out).
         final clipCount = (tilePixels * clipLimit / 256.0).floor();
         int excess = 0;
         for (int i = 0; i < 256; i++) {
@@ -360,7 +356,6 @@ class ImageProcessor {
       }
     }
 
-    // Apply mapping with bilinear interpolation between tile centres.
     final out = Uint8List(n * 4);
     for (int y = 0; y < h; y++) {
       final fy = (y / tileH) - 0.5;
@@ -382,7 +377,9 @@ class ImageProcessor {
 
       for (int x = 0; x < w; x++) {
         final o = (y * w + x) * 4;
-        final r = src[o], g = src[o + 1], b = src[o + 2];
+        final r = src[o];
+        final g = src[o + 1];
+        final b = src[o + 2];
         final oldLum =
             (0.299 * r + 0.587 * g + 0.114 * b).round().clamp(0, 255);
 
@@ -411,7 +408,6 @@ class ImageProcessor {
         final bot = m10 + (m11 - m10) * wax;
         final newLum = top + (bot - top) * way;
 
-        // Preserve colour by scaling RGB so its luminance tracks the new value.
         if (oldLum > 0) {
           final ratio = newLum / oldLum;
           out[o] = (r * ratio).round().clamp(0, 255);
@@ -429,13 +425,11 @@ class ImageProcessor {
     return out;
   }
 
-  // ── 3×3 MEDIAN FILTER (excellent for salt/pepper & sensor noise) ──
-  // Faster than bilateral for pure denoise and removes bright/dark specks the
-  // bilateral leaves behind. Reuses one buffer to avoid per-pixel allocation.
+  // ── 3×3 MEDIAN FILTER ──
   static Uint8List _median3x3Flat(Uint8List src, int w, int h) {
     final out = Uint8List(src.length);
     final n = w * h;
-    final p = List<int>.filled(9, 0); // reused scratch buffer
+    final p = List<int>.filled(9, 0);
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final ci = (y * w + x) * 4;
@@ -465,11 +459,7 @@ class ImageProcessor {
     return out;
   }
 
-  // ── LANCZOS RESAMPLING (gold-standard image upscale) ──
-  // Lanczos uses a sinc-windowed kernel that preserves sharp edges and fine
-  // detail FAR better than linear/bicubic, which just blur. This is the same
-  // high-quality resampling used by pro tools. Separable: horizontal then vertical.
-  // [src] is an RGB-only byte buffer (3 bytes/pixel).
+  // ── LANCZOS RESAMPLING ──
   static Uint8List _lanczosResizeRGB(Uint8List src, int sw, int sh, int dstW, int dstH, {int a = 3}) {
     final xScale = sw / dstW;
     final xWeights = List.generate(dstW, (ox) {
@@ -565,10 +555,7 @@ class ImageProcessor {
     return out;
   }
 
-  // ── EDGE-AWARE UNSHARP (smart deblur that protects flat areas) ──
-  // A flat unsharp mask amplifies noise in smooth regions (sky, skin). This
-  // version measures local edge strength and only sharpens where real edges
-  // exist, suppressing noise halos. Closer to real deconvolution than blind sharpen.
+  // ── EDGE-AWARE UNSHARP ──
   static Uint8List _smartUnsharpFlat(Uint8List src, int w, int h, double amount, double radius) {
     final blur = _gaussianBlurFlat(src, w, h, radius.round().clamp(1, 4));
     final n = w * h;
@@ -583,7 +570,6 @@ class ImageProcessor {
           out[o + 3] = src[o + 3];
           continue;
         }
-        // local edge strength from 3x3 luma min/max
         double mn = 255, mx = 0;
         for (int dy = -1; dy <= 1; dy++) {
           for (int dx = -1; dx <= 1; dx++) {
@@ -605,20 +591,11 @@ class ImageProcessor {
     return out;
   }
 
-  // =========================================================
-  //  PUBLIC FEATURES
-  // =========================================================
-
-  // ── KUWAHARA FILTER (painterly / edge-preserving smoothing) ──
-  // For each pixel, examine 4 quadrants around it, compute mean+variance of each
-  // in luminance, and output the mean of the LOWEST-variance quadrant. Result:
-  // smooth colour flats in uniform areas, crisp preserved edges — the classic
-  // hand-painted cartoon appearance. O(n·r²). r=3 is a good speed/quality spot.
+  // ── KUWAHARA FILTER ──
   static Uint8List _kuwaharaFlat(Uint8List src, int w, int h, {int radius = 3}) {
     final out = Uint8List(src.length);
     final n = w * h;
 
-    // Precompute a luminance buffer for fast variance calc.
     final lum = Float64List(n);
     for (int i = 0; i < n; i++) {
       final o = i * 4;
@@ -628,7 +605,6 @@ class ImageProcessor {
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final ci = (y * w + x) * 4;
-        // border fallback: copy through
         if (x < radius || y < radius || x >= w - radius || y >= h - radius) {
           out[ci] = src[ci];
           out[ci + 1] = src[ci + 1];
@@ -637,9 +613,6 @@ class ImageProcessor {
           continue;
         }
 
-        // 4 quadrant windows, each (radius+1)×(radius+1) ending at (x,y).
-        // TL: x-radius..x, y-radius..y ; TR: x..x+radius, y-radius..y
-        // BL: x-radius..x, y..y+radius ; BR: x..x+radius, y..y+radius
         double bestVar = 1e18;
         int bestCx = x, bestCy = y;
         for (int qy = 0; qy < 2; qy++) {
@@ -667,7 +640,6 @@ class ImageProcessor {
           }
         }
 
-        // sample the chosen quadrant's centre pixel
         final si = (bestCy * w + bestCx) * 4;
         out[ci] = src[si];
         out[ci + 1] = src[si + 1];
@@ -677,6 +649,10 @@ class ImageProcessor {
     }
     return out;
   }
+
+  // =========================================================
+  //  PUBLIC FEATURES
+  // =========================================================
 
   static Future<Uint8List> autoEnhance(Uint8List input, {double strength = 0.8}) async {
     return await compute(_autoEnhanceSync, _AutoEnhanceArgs(input, strength));
@@ -689,18 +665,11 @@ class ImageProcessor {
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
 
-    // 1. CLAHE — local adaptive contrast pulls detail out of shadows AND
-    //    highlights (far superior to global contrast). Strength scales clip limit.
     final cl = 1.5 + args.strength * 2.0;
     buf = _claheFlat(buf, w, h, clipLimit: cl.clamp(1.0, 4.0));
-
-    // 2. saturation/vibrance lift (brightness stays neutral — CLAHE handles tone).
     buf = _adjustFlat(buf, w, h, 1.0, 1.0, 1.0 + args.strength * 0.45);
-
-    // 3. sharpen detail that CLAHE revealed.
     buf = _sharpenFlat(buf, w, h, 0.8 + args.strength * 1.2);
 
-    // 4. light denoise at high strength to tame any amplified grain.
     if (args.strength > 0.5) {
       buf = _bilateralFlat(buf, w, h, 30.0);
     }
@@ -716,7 +685,6 @@ class ImageProcessor {
 
   static Uint8List _upscaleSync(_UpscaleArgs args) {
     final sw = Stopwatch()..start();
-    // Decode at FULL resolution (do not cap — this is an upscale feature).
     var src = _decode(args.input);
     if (src == null) return args.input;
     if (src.numChannels != 4) {
@@ -727,12 +695,9 @@ class ImageProcessor {
     final newW = (src.width * args.scale).clamp(1, maxDim).toInt();
     final newH = (src.height * args.scale).clamp(1, maxDim).toInt();
 
-    // LANCZOS resampling: the gold standard for image upscaling. Its sinc-
-    // windowed kernel preserves sharp edges and fine detail far better than the
-    // linear/nearest-neighbour resize most apps use (which just smear pixels).
     final sw0 = src.width, sh0 = src.height;
     final rgbIn = Uint8List(sw0 * sh0 * 3);
-    final rgba = src.toBytes();
+    final rgba = src.getBytes();
     for (int i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
       rgbIn[j] = rgba[i];
       rgbIn[j + 1] = rgba[i + 1];
@@ -740,7 +705,6 @@ class ImageProcessor {
     }
     final rgbOut = _lanczosResizeRGB(rgbIn, sw0, sh0, newW, newH, a: 3);
 
-    // Pack RGB -> RGBA + light edge-aware sharpen to crisp the result.
     final out = Uint8List(newW * newH * 4);
     for (int i = 0, j = 0; i < out.length; i += 4, j += 3) {
       out[i] = rgbOut[j];
@@ -760,8 +724,6 @@ class ImageProcessor {
     double smoothness = 0.5,
     double strength = 0.8,
   }) async {
-    // Prepare (downscale) FIRST so face detection coordinates match the
-    // working-resolution image that the isolate processes.
     final prepared = _prepare(input);
     if (prepared == null) return input;
     final preparedBytes = Uint8List.fromList(img.encodeJpg(prepared, quality: 92));
@@ -785,7 +747,6 @@ class ImageProcessor {
     final threshold = (12 + args.smoothness * 28).round();
     final detailAmt = 1.5 + args.strength * 1.5;
 
-    // Precompute inflated face rects in pixel space for fast inside-tests.
     final List<List<double>> boxes = args.faceRegions.map((r) {
       final b = r.boundingBox;
       final pad = (w * 0.05) + 12.0;
@@ -802,7 +763,9 @@ class ImageProcessor {
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
         final o = (y * w + x) * 4;
-        final oR = orig[o], oG = orig[o + 1], oB = orig[o + 2];
+        final oR = orig[o];
+        final oG = orig[o + 1];
+        final oB = orig[o + 2];
         final a = orig[o + 3];
 
         bool inEyeMouth = false;
@@ -847,7 +810,6 @@ class ImageProcessor {
       }
     }
 
-    // One combined colour/sharpen pass.
     var buf = _adjustFlat(out, w, h,
         1.0 + args.strength * 0.08, 1.08 + args.strength * 0.18, 1.05 + args.strength * 0.20);
     buf = _sharpenFlat(buf, w, h, args.strength * 1.4);
@@ -858,7 +820,6 @@ class ImageProcessor {
   }
 
   static Future<Uint8List> backgroundBlur(Uint8List input, {double radius = 0.6}) async {
-    // Prepare (downscale) FIRST so face coordinates match the working image.
     final prepared = _prepare(input);
     if (prepared == null) return input;
     final preparedBytes = Uint8List.fromList(img.encodeJpg(prepared, quality: 92));
@@ -879,12 +840,8 @@ class ImageProcessor {
     final centerX = w / 2.0, centerY = h / 2.0;
     final maxDist = math.sqrt(centerX * centerX + centerY * centerY);
 
-    // Feathered face protection: instead of a hard in/out box, we compute a
-    // smooth "keep sharp" weight that fades from 1 (well inside the face) to 0
-    // (outside the feather band). This removes the hard seam the old box left.
     final faceBoxes = <List<double>>[];
     final facePad = (w * 0.04) + 20.0;
-    final feather = (w * 0.06) + 18.0;
     for (final r in args.faceRegions) {
       final b = r.boundingBox;
       faceBoxes.add([
@@ -901,15 +858,13 @@ class ImageProcessor {
       for (int x = 0; x < w; x++) {
         final o = (y * w + x) * 4;
 
-        // smooth face weight (1 inside core, 0 outside feather)
         double faceKeep = 0.0;
         if (hasFaces) {
           for (final b in faceBoxes) {
             final insideX = (x - b[0]) / (b[2] - b[0]);
             final insideY = (y - b[1]) / (b[3] - b[1]);
             if (insideX > 0 && insideX < 1 && insideY > 0 && insideY < 1) {
-              // distance from centre in 0..1; closer to centre → keep more
-              final dx = (insideX - 0.5) * 2.0; // -1..1
+              final dx = (insideX - 0.5) * 2.0;
               final dy = (insideY - 0.5) * 2.0;
               final d = math.sqrt(dx * dx + dy * dy).clamp(0.0, 1.0);
               final feathered = (1.0 - d / 0.9).clamp(0.0, 1.0);
@@ -922,7 +877,6 @@ class ImageProcessor {
         final nd = math.sqrt(dx * dx + dy * dy) / maxDist;
         var bw = ((nd - 0.22) / 0.55).clamp(0.0, 1.0);
         bw = 3 * bw * bw - 2 * bw * bw * bw;
-        // faces override: pull blur back to (1 - faceKeep) * radialBlur
         bw = bw * (1.0 - faceKeep);
 
         final inv = 1.0 - bw;
@@ -948,11 +902,8 @@ class ImageProcessor {
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
-    // Two-stage denoise: median removes specks/outliers, bilateral smooths
-    // remaining grain while keeping edges. Better quality than bilateral alone.
     buf = _median3x3Flat(buf, w, h);
     buf = _bilateralFlat(buf, w, h, 38.0);
-    // light unsharp to recover crispness the smoothing softened.
     final blur = _gaussianBlurFlat(buf, w, h, 1);
     buf = _unsharpFlat(buf, blur, w, h, 1.2, 3.0);
 
@@ -971,12 +922,6 @@ class ImageProcessor {
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
-    // Two-stage deconvolution-style deblur:
-    //  1. Edge-aware smart unsharp — sharpens real edges, ignores flat/noisy
-    //     regions (no halos, no amplified grain). This is the key improvement
-    //     over a blind unsharp mask.
-    //  2. A second finer-radius pass for micro-detail.
-    //  3. Gentle contrast to restore perceived "snap".
     buf = _smartUnsharpFlat(buf, w, h, 2.4, 2.0);
     buf = _smartUnsharpFlat(buf, w, h, 1.2, 1.0);
     buf = _adjustFlat(buf, w, h, 1.0, 1.18, 1.05);
@@ -999,15 +944,6 @@ class ImageProcessor {
     final out = Uint8List(n * 4);
     final inBytes = _toRgba8(src);
 
-    // Photographic color gradient keyed on luminance — far more natural than the
-    // old 3-zone tint. We precompute a 256-entry palette (target RGB per luma),
-    // then per pixel scale that target so its brightness matches the original
-    // (preserves tonal detail while applying believable colour).
-    //   shadow   → cool deep brown/blue
-    //   dark-mid → warm brown (earth / hair)
-    //   mid      → warm skin tone
-    //   high-mid → light warm (sky / clothing)
-    //   highlight→ cream / near-white
     const stops = <List<double>>[
       [0, 16, 20, 34],
       [45, 78, 58, 40],
@@ -1029,7 +965,8 @@ class ImageProcessor {
         }
         if (l > stops[i][0]) s = i;
       }
-      final a0 = stops[s], a1 = stops[s + 1];
+      final a0 = stops[s];
+      final a1 = stops[s + 1];
       final span = (a1[0] - a0[0]);
       final t = span == 0 ? 0.0 : (l - a0[0]) / span;
       palR[L] = a0[1] + (a1[1] - a0[1]) * t;
@@ -1042,9 +979,10 @@ class ImageProcessor {
       final lum = (0.299 * inBytes[o] + 0.587 * inBytes[o + 1] + 0.114 * inBytes[o + 2])
           .round()
           .clamp(0, 255);
-      var tR = palR[lum], tG = palG[lum], tB = palB[lum];
+      var tR = palR[lum];
+      var tG = palG[lum];
+      var tB = palB[lum];
       final tLum = 0.299 * tR + 0.587 * tG + 0.114 * tB;
-      // scale so target brightness matches source luminance (preserves detail)
       if (tLum > 0) {
         final k = lum / tLum;
         tR *= k;
@@ -1057,7 +995,6 @@ class ImageProcessor {
       out[o + 3] = inBytes[o + 3];
     }
 
-    // gentle vibrance + contrast polish
     var buf = _adjustFlat(out, w, h, 1.0, 1.12, 1.35);
     sw.stop();
     debugPrint("⚡ colorize ${w}x$h in ${sw.elapsedMilliseconds}ms");
@@ -1075,7 +1012,6 @@ class ImageProcessor {
     final w = src.width, h = src.height;
     final inBytes = _toRgba8(src);
 
-    // ---- 1. histogram + channel balance on a 2× sub-sample ----
     final hist = List<int>.filled(256, 0);
     int sampleCount = 0;
     double sumR = 0, sumG = 0, sumB = 0;
@@ -1118,7 +1054,6 @@ class ImageProcessor {
     final gainB = (avgAll / sumB * sampleCount).clamp(0.85, 1.35);
     final invRange = 255.0 / range;
 
-    // ---- 2. balance + stretch in one flat pass ----
     final n = w * h;
     final balanced = Uint8List(n * 4);
     for (int i = 0; i < n; i++) {
@@ -1129,10 +1064,7 @@ class ImageProcessor {
       balanced[o + 3] = inBytes[o + 3];
     }
 
-    // ---- 3. CLAHE local contrast + denoise + sharpen ----
-    // CLAHE recovers shadow/highlight detail the white-balance alone can't.
     var buf = _claheFlat(balanced, w, h, clipLimit: 2.5);
-    // median removes specks/dust the bilateral misses; bilateral smooths grain.
     buf = _median3x3Flat(buf, w, h);
     buf = _bilateralFlat(buf, w, h, 32.0);
     buf = _sharpenFlat(buf, w, h, 1.6);
@@ -1152,26 +1084,18 @@ class ImageProcessor {
     if (src == null) return input;
     final w = src.width, h = src.height;
 
-    // KUWAHARA FILTER — a genuine painterly-smoothing algorithm. Unlike a blur
-    // (which destroys edges) or quantize alone (which looks posterised), Kuwahara
-    // averages each pixel over the MOST UNIFORM of its 4 diagonal sub-regions.
-    // The result: smooth colour flats where regions are uniform, sharp preserved
-    // edges between regions — the classic hand-painted / cel-shaded cartoon look.
-    // This is a real named algorithm used in artistic image processing.
     var kuwa = _toRgba8(src);
     kuwa = _kuwaharaFlat(kuwa, w, h, radius: 3);
 
-    // Quantise the Kuwahara-smoothed image to flat colour regions.
     final smoothed = _fromRgba8(w, h, kuwa);
     var quantized = img.quantize(smoothed, numberOfColors: 14);
     quantized = img.adjustColor(quantized, contrast: 1.18, saturation: 1.5);
     if (quantized.numChannels != 4) quantized = quantized.convert(numChannels: 4);
 
-    final q = quantized.toBytes();
+    final q = quantized.getBytes();
     final out = Uint8List(w * h * 4);
     const threshold = 22;
 
-    // Sobel-style edge detection on the Kuwahara result for clean black ink lines.
     for (int y = 0; y < h - 1; y++) {
       for (int x = 0; x < w - 1; x++) {
         final o = (y * w + x) * 4;
@@ -1192,14 +1116,19 @@ class ImageProcessor {
         out[o + 3] = 255;
       }
     }
-    // last row/col passthrough
     for (int x = 0; x < w; x++) {
       final o = ((h - 1) * w + x) * 4;
-      out[o] = q[o]; out[o + 1] = q[o + 1]; out[o + 2] = q[o + 2]; out[o + 3] = 255;
+      out[o] = q[o];
+      out[o + 1] = q[o + 1];
+      out[o + 2] = q[o + 2];
+      out[o + 3] = 255;
     }
     for (int y = 0; y < h; y++) {
       final o = (y * w + w - 1) * 4;
-      out[o] = q[o]; out[o + 1] = q[o + 1]; out[o + 2] = q[o + 2]; out[o + 3] = 255;
+      out[o] = q[o];
+      out[o + 1] = q[o + 1];
+      out[o + 2] = q[o + 2];
+      out[o + 3] = 255;
     }
 
     sw.stop();
@@ -1360,8 +1289,8 @@ class ImageProcessor {
     }
 
     final w = enhanced.width, h = enhanced.height;
-    final oBytes = original.toBytes();
-    final eBytes = enhanced.toBytes();
+    final oBytes = original.getBytes();
+    final eBytes = enhanced.getBytes();
     final n = w * h;
     final out = Uint8List(n * 4);
     final ow = args.blendFactor.clamp(0.0, 1.0);
@@ -1399,7 +1328,7 @@ class ImageProcessor {
   }
 }
 
-// ── ARGS CLASSES (unchanged signatures) ───────────────
+// ── ARGS CLASSES ───────────────────────────────────────
 class _AutoEnhanceArgs {
   final Uint8List input;
   final double strength;

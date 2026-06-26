@@ -114,8 +114,13 @@ class IapService {
     _products.clear();
     final subsResponse = await _iap.queryProductDetails(subscriptionIds);
     final oneTimeResponse = await _iap.queryProductDetails(nonConsumableIds);
-    _products.addAll(subsResponse.productDetails);
-    _products.addAll(oneTimeResponse.productDetails);
+    // Convert List<ProductDetails> to Map<String, ProductDetails>
+    for (final product in subsResponse.productDetails) {
+      _products[product.id] = product;
+    }
+    for (final product in oneTimeResponse.productDetails) {
+      _products[product.id] = product;
+    }
 
     if (subsResponse.notFoundIDs.isNotEmpty ||
         oneTimeResponse.notFoundIDs.isNotEmpty) {
@@ -204,7 +209,7 @@ class IapService {
       // the store treats them according to their configured type.
       return await _iap.buyNonConsumable(purchaseParam: purchaseParam);
     } on InAppPurchaseException catch (e) {
-      _message(e.message);
+      _message(e.message ?? 'Purchase failed.');
       debugPrint('🛒 buyProduct error: ${e.message}');
       return false;
     } catch (e) {

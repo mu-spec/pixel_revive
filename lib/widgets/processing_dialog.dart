@@ -66,8 +66,8 @@ class _ProcessingDialogState extends State<ProcessingDialog>
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final phrases = _loadingPhrases(provider.languageCode);
-    return WillPopScope(
-      onWillPop: () async => false, // Prevent dismissing by back button
+    return PopScope(
+      canPop: false, // Prevent dismissing by back button
       child: Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,

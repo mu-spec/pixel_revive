@@ -309,7 +309,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppColors.success.withOpacity(0.3), width: 1),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
                       const Icon(Icons.check_circle_outline, color: AppColors.success, size: 22),
                       const SizedBox(width: 12),
