@@ -8,34 +8,38 @@ workflows:
     scripts:
       - name: Get Flutter dependencies
         script: |
+          flutter clean
           flutter pub get
       - name: Generate Android launcher icons
         script: |
           flutter pub run flutter_launcher_icons:main
-      - name: Build Android Release APK
+      - name: Build Android Release APK - Universal Single APK
         script: |
-          set +e
-          flutter build apk --release
-          FLUTTER_BUILD_EXIT_CODE=$?
           set -e
-
-          echo "flutter build apk exit code: $FLUTTER_BUILD_EXIT_CODE"
+          # Build ONE universal fat APK - no ABI splits
+          flutter build apk --release --no-split-per-abi --target-platform android-arm,android-arm64,android-x64
+          
           echo "Searching for generated APK files..."
-          find build android -name "*.apk" -type f -print || true
+          find build -name "*.apk" -type f -print || true
 
-          APK_PATH=$(find build android -name "*.apk" -type f | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "No APK file was generated. Failing build."
-            exit $FLUTTER_BUILD_EXIT_CODE
+          # The universal APK
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+          
+          if [ ! -f "$APK_PATH" ]; then
+            echo "Universal APK not found at $APK_PATH, searching..."
+            APK_PATH=$(find build/app/outputs/flutter-apk -name "app-release.apk" -type f | head -n 1)
+          fi
+
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: No app-release.apk was generated."
+            exit 1
           fi
 
           echo "Found APK: $APK_PATH"
-          mkdir -p build/app/outputs/flutter-apk
-          cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
-          echo "APK copied to build/app/outputs/flutter-apk/app-release.apk"
+          echo "APK size: $(du -h "$APK_PATH" | cut -f1)"
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
-      - build/**/outputs/**/*.apk
-      - android/app/build/outputs/**/*.apk
-      - build/**/outputs/**/mapping.txt
-      - android/app/build/outputs/**/mapping.txt
+      - build/app/outputs/flutter-apk/app-release.apk
+    publishing:
+      email:
+        recipients:
+          - saaddkhan99@gmail.com
