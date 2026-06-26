@@ -250,7 +250,11 @@ class ImageProcessor {
     return out;
   }
 
-  // ── COLOR ADJUST (brightness/contrast/saturation) in one flat pass ──
+  // ── COLOR ADJUST (brightness/contrast/saturation) via precomputed LUT ──
+  // Brightness+contrast are a pure function of the input byte value, so we
+  // precompute a 256-entry lookup table once (cheap) and the inner loop becomes
+  // a fast array lookup instead of float math per channel. Saturation needs the
+  // per-pixel luma relationship so it's computed directly (but skipped when ~1).
   static Uint8List _adjustFlat(
     Uint8List src,
     int w,
@@ -261,26 +265,202 @@ class ImageProcessor {
   ) {
     final n = w * h;
     final out = Uint8List(n * 4);
+    final lut = Uint8List(256);
+    for (int i = 0; i < 256; i++) {
+      final v = ((i * brightness) - 128) * contrast + 128;
+      lut[i] = v.round().clamp(0, 255);
+    }
+    final doSat = (saturation - 1.0).abs() > 0.001;
     for (int i = 0; i < n; i++) {
       final o = i * 4;
-      double r = src[o], g = src[o + 1], b = src[o + 2];
-      // brightness
-      r *= brightness;
-      g *= brightness;
-      b *= brightness;
-      // contrast around 128
-      r = (r - 128) * contrast + 128;
-      g = (g - 128) * contrast + 128;
-      b = (b - 128) * contrast + 128;
-      // saturation toward luma
-      final lum = 0.299 * r + 0.587 * g + 0.114 * b;
-      r = lum + (r - lum) * saturation;
-      g = lum + (g - lum) * saturation;
-      b = lum + (b - lum) * saturation;
-      out[o] = _clampByte(r.round());
-      out[o + 1] = _clampByte(g.round());
-      out[o + 2] = _clampByte(b.round());
+      int r = lut[src[o]];
+      int g = lut[src[o + 1]];
+      int b = lut[src[o + 2]];
+      if (doSat) {
+        final lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = (lum + (r - lum) * saturation).round().clamp(0, 255);
+        g = (lum + (g - lum) * saturation).round().clamp(0, 255);
+        b = (lum + (b - lum) * saturation).round().clamp(0, 255);
+      }
+      out[o] = r;
+      out[o + 1] = g;
+      out[o + 2] = b;
       out[o + 3] = src[o + 3];
+    }
+    return out;
+  }
+
+  // ── CLAHE: Contrast Limited Adaptive Histogram Equalization ──
+  // Professional-grade local contrast. Unlike global contrast (which lifts
+  // everything uniformly and clips shadows/highlights), CLAHE equalizes contrast
+  // in local tiles and blends them, so it pulls real detail out of BOTH shadows
+  // and highlights without blowing out. This is the biggest visible quality win
+  // for autoEnhance and restoreOldPhoto. O(n).
+  static Uint8List _claheFlat(
+    Uint8List src,
+    int w,
+    int h, {
+    double clipLimit = 2.0,
+    int tileSize = 64,
+  }) {
+    final n = w * h;
+
+    int tx = w ~/ tileSize;
+    int ty = h ~/ tileSize;
+    if (tx < 2) tx = 2;
+    if (ty < 2) ty = 2;
+    final tileW = w / tx;
+    final tileH = h / ty;
+
+    // Per-tile normalized CDF (luminance mapping). ty × tx × 256.
+    final mappings = List.generate(
+        ty, (_) => List.generate(tx, (_) => Float64List(256)));
+
+    for (int tyi = 0; tyi < ty; tyi++) {
+      for (int txi = 0; txi < tx; txi++) {
+        final x0 = (txi * tileW).floor();
+        final y0 = (tyi * tileH).floor();
+        final x1 = (txi == tx - 1) ? w : ((txi + 1) * tileW).floor();
+        final y1 = (tyi == ty - 1) ? h : ((tyi + 1) * tileH).floor();
+        final tilePixels = (x1 - x0) * (y1 - y0);
+
+        final hist = List<int>.filled(256, 0);
+        for (int y = y0; y < y1; y++) {
+          for (int x = x0; x < x1; x++) {
+            final o = (y * w + x) * 4;
+            final lum = (0.299 * src[o] +
+                    0.587 * src[o + 1] +
+                    0.114 * src[o + 2])
+                .round()
+                .clamp(0, 255);
+            hist[lum]++;
+          }
+        }
+
+        // Clip histogram to limit contrast amplification (avoid noise blow-out).
+        final clipCount = (tilePixels * clipLimit / 256.0).floor();
+        int excess = 0;
+        for (int i = 0; i < 256; i++) {
+          if (hist[i] > clipCount) {
+            excess += hist[i] - clipCount;
+            hist[i] = clipCount;
+          }
+        }
+        final redistrib = excess ~/ 256;
+        for (int i = 0; i < 256; i++) {
+          hist[i] += redistrib;
+        }
+
+        int sum = 0;
+        final scale = 255.0 / tilePixels;
+        for (int i = 0; i < 256; i++) {
+          sum += hist[i];
+          mappings[tyi][txi][i] = sum * scale;
+        }
+      }
+    }
+
+    // Apply mapping with bilinear interpolation between tile centres.
+    final out = Uint8List(n * 4);
+    for (int y = 0; y < h; y++) {
+      final fy = (y / tileH) - 0.5;
+      int tyi0, tyi1;
+      double way;
+      if (fy <= 0) {
+        tyi0 = 0;
+        tyi1 = 0;
+        way = 0;
+      } else if (fy >= ty - 1) {
+        tyi0 = ty - 1;
+        tyi1 = ty - 1;
+        way = 0;
+      } else {
+        tyi0 = fy.floor();
+        tyi1 = tyi0 + 1;
+        way = fy - tyi0;
+      }
+
+      for (int x = 0; x < w; x++) {
+        final o = (y * w + x) * 4;
+        final r = src[o], g = src[o + 1], b = src[o + 2];
+        final oldLum =
+            (0.299 * r + 0.587 * g + 0.114 * b).round().clamp(0, 255);
+
+        final fx = (x / tileW) - 0.5;
+        int txi0, txi1;
+        double wax;
+        if (fx <= 0) {
+          txi0 = 0;
+          txi1 = 0;
+          wax = 0;
+        } else if (fx >= tx - 1) {
+          txi0 = tx - 1;
+          txi1 = tx - 1;
+          wax = 0;
+        } else {
+          txi0 = fx.floor();
+          txi1 = txi0 + 1;
+          wax = fx - txi0;
+        }
+
+        final m00 = mappings[tyi0][txi0][oldLum];
+        final m01 = mappings[tyi0][txi1][oldLum];
+        final m10 = mappings[tyi1][txi0][oldLum];
+        final m11 = mappings[tyi1][txi1][oldLum];
+        final top = m00 + (m01 - m00) * wax;
+        final bot = m10 + (m11 - m10) * wax;
+        final newLum = top + (bot - top) * way;
+
+        // Preserve colour by scaling RGB so its luminance tracks the new value.
+        if (oldLum > 0) {
+          final ratio = newLum / oldLum;
+          out[o] = (r * ratio).round().clamp(0, 255);
+          out[o + 1] = (g * ratio).round().clamp(0, 255);
+          out[o + 2] = (b * ratio).round().clamp(0, 255);
+        } else {
+          final v = newLum.round().clamp(0, 255);
+          out[o] = v;
+          out[o + 1] = v;
+          out[o + 2] = v;
+        }
+        out[o + 3] = src[o + 3];
+      }
+    }
+    return out;
+  }
+
+  // ── 3×3 MEDIAN FILTER (excellent for salt/pepper & sensor noise) ──
+  // Faster than bilateral for pure denoise and removes bright/dark specks the
+  // bilateral leaves behind. Reuses one buffer to avoid per-pixel allocation.
+  static Uint8List _median3x3Flat(Uint8List src, int w, int h) {
+    final out = Uint8List(src.length);
+    final n = w * h;
+    final p = List<int>.filled(9, 0); // reused scratch buffer
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+        final ci = (y * w + x) * 4;
+        if (x == 0 || y == 0 || x == w - 1 || y == h - 1) {
+          out[ci] = src[ci];
+          out[ci + 1] = src[ci + 1];
+          out[ci + 2] = src[ci + 2];
+          out[ci + 3] = src[ci + 3];
+          continue;
+        }
+        for (int c = 0; c < 3; c++) {
+          p[0] = src[((y - 1) * w + (x - 1)) * 4 + c];
+          p[1] = src[((y - 1) * w + x) * 4 + c];
+          p[2] = src[((y - 1) * w + (x + 1)) * 4 + c];
+          p[3] = src[(y * w + (x - 1)) * 4 + c];
+          p[4] = src[ci + c];
+          p[5] = src[(y * w + (x + 1)) * 4 + c];
+          p[6] = src[((y + 1) * w + (x - 1)) * 4 + c];
+          p[7] = src[((y + 1) * w + x) * 4 + c];
+          p[8] = src[((y + 1) * w + (x + 1)) * 4 + c];
+          p.sort();
+          out[ci + c] = p[4];
+        }
+        out[ci + 3] = src[ci + 3];
+      }
     }
     return out;
   }
@@ -300,17 +480,20 @@ class ImageProcessor {
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
 
-    buf = _adjustFlat(
-      buf,
-      w,
-      h,
-      1.0 + args.strength * 0.15,
-      1.0 + args.strength * 0.45,
-      1.0 + args.strength * 0.50,
-    );
-    buf = _sharpenFlat(buf, w, h, args.strength * 2.0);
+    // 1. CLAHE — local adaptive contrast pulls detail out of shadows AND
+    //    highlights (far superior to global contrast). Strength scales clip limit.
+    final cl = 1.5 + args.strength * 2.0;
+    buf = _claheFlat(buf, w, h, clipLimit: cl.clamp(1.0, 4.0));
+
+    // 2. saturation/vibrance lift (brightness stays neutral — CLAHE handles tone).
+    buf = _adjustFlat(buf, w, h, 1.0, 1.0, 1.0 + args.strength * 0.45);
+
+    // 3. sharpen detail that CLAHE revealed.
+    buf = _sharpenFlat(buf, w, h, 0.8 + args.strength * 1.2);
+
+    // 4. light denoise at high strength to tame any amplified grain.
     if (args.strength > 0.5) {
-      buf = _bilateralFlat(buf, w, h, 28.0); // light denoise
+      buf = _bilateralFlat(buf, w, h, 30.0);
     }
 
     sw.stop();
@@ -524,10 +707,13 @@ class ImageProcessor {
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
-    buf = _bilateralFlat(buf, w, h, 35.0);
-    // light unsharp using the denoised buffer's own blur (single extra blur).
+    // Two-stage denoise: median removes specks/outliers, bilateral smooths
+    // remaining grain while keeping edges. Better quality than bilateral alone.
+    buf = _median3x3Flat(buf, w, h);
+    buf = _bilateralFlat(buf, w, h, 38.0);
+    // light unsharp to recover crispness the smoothing softened.
     final blur = _gaussianBlurFlat(buf, w, h, 1);
-    buf = _unsharpFlat(buf, blur, w, h, 1.3, 3.0);
+    buf = _unsharpFlat(buf, blur, w, h, 1.2, 3.0);
 
     sw.stop();
     debugPrint("⚡ denoise ${w}x$h in ${sw.elapsedMilliseconds}ms");
@@ -567,30 +753,66 @@ class ImageProcessor {
     final out = Uint8List(n * 4);
     final inBytes = _toRgba8(src);
 
+    // Photographic color gradient keyed on luminance — far more natural than the
+    // old 3-zone tint. We precompute a 256-entry palette (target RGB per luma),
+    // then per pixel scale that target so its brightness matches the original
+    // (preserves tonal detail while applying believable colour).
+    //   shadow   → cool deep brown/blue
+    //   dark-mid → warm brown (earth / hair)
+    //   mid      → warm skin tone
+    //   high-mid → light warm (sky / clothing)
+    //   highlight→ cream / near-white
+    const stops = <List<double>>[
+      [0, 16, 20, 34],
+      [45, 78, 58, 40],
+      [110, 168, 128, 96],
+      [175, 206, 178, 150],
+      [225, 236, 218, 196],
+      [255, 250, 246, 238],
+    ];
+    final palR = Float64List(256);
+    final palG = Float64List(256);
+    final palB = Float64List(256);
+    for (int L = 0; L < 256; L++) {
+      final l = L.toDouble();
+      int s = 0;
+      for (int i = 0; i < stops.length - 1; i++) {
+        if (l >= stops[i][0] && l <= stops[i + 1][0]) {
+          s = i;
+          break;
+        }
+        if (l > stops[i][0]) s = i;
+      }
+      final a0 = stops[s], a1 = stops[s + 1];
+      final span = (a1[0] - a0[0]);
+      final t = span == 0 ? 0.0 : (l - a0[0]) / span;
+      palR[L] = a0[1] + (a1[1] - a0[1]) * t;
+      palG[L] = a0[2] + (a1[2] - a0[2]) * t;
+      palB[L] = a0[3] + (a1[3] - a0[3]) * t;
+    }
+
     for (int i = 0; i < n; i++) {
       final o = i * 4;
-      final lum = (0.299 * inBytes[o] + 0.587 * inBytes[o + 1] + 0.114 * inBytes[o + 2]).toInt();
-      int r, g, b;
-      if (lum < 60) {
-        r = (lum * 0.70).round();
-        g = (lum * 0.82).round();
-        b = (lum * 1.15).round().clamp(0, 255);
-      } else if (lum < 185) {
-        r = (lum * 1.28).round().clamp(0, 255);
-        g = (lum * 0.98).round().clamp(0, 255);
-        b = (lum * 0.78).round().clamp(0, 255);
-      } else {
-        r = (lum * 1.06).round().clamp(0, 255);
-        g = (lum * 1.02).round().clamp(0, 255);
-        b = (lum * 0.92).round().clamp(0, 255);
+      final lum = (0.299 * inBytes[o] + 0.587 * inBytes[o + 1] + 0.114 * inBytes[o + 2])
+          .round()
+          .clamp(0, 255);
+      var tR = palR[lum], tG = palG[lum], tB = palB[lum];
+      final tLum = 0.299 * tR + 0.587 * tG + 0.114 * tB;
+      // scale so target brightness matches source luminance (preserves detail)
+      if (tLum > 0) {
+        final k = lum / tLum;
+        tR *= k;
+        tG *= k;
+        tB *= k;
       }
-      out[o] = r;
-      out[o + 1] = g;
-      out[o + 2] = b;
+      out[o] = tR.round().clamp(0, 255);
+      out[o + 1] = tG.round().clamp(0, 255);
+      out[o + 2] = tB.round().clamp(0, 255);
       out[o + 3] = inBytes[o + 3];
     }
 
-    var buf = _adjustFlat(out, w, h, 1.0, 1.22, 1.55);
+    // gentle vibrance + contrast polish
+    var buf = _adjustFlat(out, w, h, 1.0, 1.12, 1.35);
     sw.stop();
     debugPrint("⚡ colorize ${w}x$h in ${sw.elapsedMilliseconds}ms");
     return _encode(_fromRgba8(w, h, buf));
@@ -661,9 +883,13 @@ class ImageProcessor {
       balanced[o + 3] = inBytes[o + 3];
     }
 
-    // ---- 3. denoise + sharpen ----
-    var buf = _bilateralFlat(balanced, w, h, 30.0);
-    buf = _sharpenFlat(buf, w, h, 1.8);
+    // ---- 3. CLAHE local contrast + denoise + sharpen ----
+    // CLAHE recovers shadow/highlight detail the white-balance alone can't.
+    var buf = _claheFlat(balanced, w, h, clipLimit: 2.5);
+    // median removes specks/dust the bilateral misses; bilateral smooths grain.
+    buf = _median3x3Flat(buf, w, h);
+    buf = _bilateralFlat(buf, w, h, 32.0);
+    buf = _sharpenFlat(buf, w, h, 1.6);
 
     sw.stop();
     debugPrint("⚡ restoreOldPhoto ${w}x$h in ${sw.elapsedMilliseconds}ms");
