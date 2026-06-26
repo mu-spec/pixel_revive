@@ -15,28 +15,37 @@ workflows:
           flutter pub run flutter_launcher_icons:main
       - name: Build Android Release APK - Universal Single APK
         script: |
-          set -e
           # Build ONE universal APK (all ABIs in one file)
           flutter build apk --release
           
+          echo "=========================================="
           echo "Searching for generated APK files..."
-          find build -name "*.apk" -type f -print || true
-
-          # The universal APK
+          echo "=========================================="
+          
+          # Search for any APK in the build directory
+          find . -name "*.apk" -type f 2>/dev/null || true
+          
+          # The expected APK location
           APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
           
           if [ ! -f "$APK_PATH" ]; then
-            echo "Universal APK not found at $APK_PATH, searching..."
-            APK_PATH=$(find build/app/outputs/flutter-apk -name "app-release.apk" -type f | head -n 1)
+            echo "Universal APK not found at $APK_PATH, searching more broadly..."
+            APK_PATH=$(find . -name "app-release.apk" -type f 2>/dev/null | head -n 1)
           fi
 
           if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
             echo "ERROR: No app-release.apk was generated."
+            echo "Listing build directory contents:"
+            ls -la build/ 2>/dev/null || echo "build/ directory not found"
+            ls -la build/app/ 2>/dev/null || echo "build/app/ directory not found"
+            ls -la build/app/outputs/ 2>/dev/null || echo "build/app/outputs/ directory not found"
             exit 1
           fi
 
+          echo "=========================================="
           echo "Found APK: $APK_PATH"
           echo "APK size: $(du -h "$APK_PATH" | cut -f1)"
+          echo "=========================================="
     artifacts:
       - build/app/outputs/flutter-apk/app-release.apk
     publishing:
