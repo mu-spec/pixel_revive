@@ -156,21 +156,21 @@ class _HomeScreenState extends State<HomeScreen> {
               _currentIndex = index;
             });
           },
-          items: const [
+          items: [
             BottomNavigationBarItem(
-              icon: Icon(Icons.auto_fix_high_outlined),
-              activeIcon: Icon(Icons.auto_fix_high),
-              label: 'AI Lab',
+              icon: const Icon(Icons.auto_fix_high_outlined),
+              activeIcon: const Icon(Icons.auto_fix_high),
+              label: AppStrings.getText('tabAiLab', provider.languageCode),
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.collections_outlined),
-              activeIcon: Icon(Icons.collections),
-              label: 'Saved Images',
+              icon: const Icon(Icons.collections_outlined),
+              activeIcon: const Icon(Icons.collections),
+              label: AppStrings.getText('tabSaved', provider.languageCode),
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.settings_outlined),
-              activeIcon: Icon(Icons.settings),
-              label: 'Settings',
+              icon: const Icon(Icons.settings_outlined),
+              activeIcon: const Icon(Icons.settings),
+              label: AppStrings.getText('tabSettings', provider.languageCode),
             ),
           ],
         ),

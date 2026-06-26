@@ -62,9 +62,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: TextButton(
                   onPressed: _routeToHome,
-                  child: const Text(
-                    'Skip',
-                    style: TextStyle(
+                  child: Text(
+                    AppStrings.getText('skip', provider.languageCode),
+                    style: const TextStyle(
                       color: AppColors.textMuted,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -186,8 +186,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                         child: Text(
                           _currentPage == slides.length - 1
-                              ? 'Get Started'
-                              : 'Next',
+                              ? AppStrings.getText('getStarted', provider.languageCode)
+                              : AppStrings.getText('next', provider.languageCode),
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,

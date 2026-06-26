@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
+import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/onboarding_screen.dart';
 import 'package:pixel_revive/screens/home_screen.dart';
@@ -64,6 +65,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
     // Filtered languages based on search query
     final filteredLanguages = _languages.where((lang) {
       final name = lang['name']!.toLowerCase();
@@ -75,9 +77,9 @@ class _LanguageScreenState extends State<LanguageScreen> {
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: const Text(
-          'Choose Language',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        title: Text(
+          AppStrings.getText('chooseLanguage', provider.languageCode),
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         elevation: 0,
         automaticallyImplyLeading: widget.isFromSettings,
@@ -93,7 +95,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                   setState(() => _searchQuery = val);
                 },
                 decoration: InputDecoration(
-                  hintText: 'Search language...',
+                  hintText: AppStrings.getText('searchLanguage', provider.languageCode),
                   hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
                   prefixIcon: const Icon(Icons.search, color: AppColors.textMuted),
                   filled: true,
@@ -110,10 +112,10 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
             Expanded(
               child: filteredLanguages.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
-                        'No languages found',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+                        AppStrings.getText('noLanguagesFound', provider.languageCode),
+                        style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
                       ),
                     )
                   : GridView.builder(
@@ -231,9 +233,9 @@ class _LanguageScreenState extends State<LanguageScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Text(
-                      'Confirm',
-                      style: TextStyle(
+                    child: Text(
+                      AppStrings.getText('confirm', provider.languageCode),
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),

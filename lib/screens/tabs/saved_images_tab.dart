@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
+import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 
 class SavedImagesTab extends StatefulWidget {
@@ -30,7 +31,7 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
             "${lastMod.hour.toString().padLeft(2, '0')}:${lastMod.minute.toString().padLeft(2, '0')}";
       }
     } catch (_) {}
-    return "Unknown Date";
+    return "?";
   }
 
   void _toggleSelect(String path) {
@@ -61,8 +62,8 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
     _clearSelection();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Selected photos deleted successfully.'),
+        SnackBar(
+          content: Text(AppStrings.getText('deletedSelectedSnack', provider.languageCode)),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -70,19 +71,20 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
   }
 
   Future<void> _deleteAll(AppProvider provider) async {
+    final lang = provider.languageCode;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('Delete All Saved Images?'),
-        content: const Text(
-          'This will permanently delete all your saved AI enhanced creations from both the history and your device storage. This action cannot be undone.',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.4),
+        title: Text(AppStrings.getText('deleteAllTitle', lang)),
+        content: Text(
+          AppStrings.getText('deleteAllSub', lang),
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+            child: Text(AppStrings.getText('cancel', lang), style: const TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -94,15 +96,15 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
               _clearSelection();
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('All creations deleted from disk.'),
+                  SnackBar(
+                    content: Text(AppStrings.getText('allDeletedSnack', lang)),
                     backgroundColor: Colors.redAccent,
                   ),
                 );
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-            child: const Text('Delete All', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(AppStrings.getText('deleteAll', lang), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -117,7 +119,7 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
       backgroundColor: AppColors.primary,
       appBar: _isSelectionMode
           ? AppBar(
-              title: Text('${_selectedPaths.length} Selected', style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)),
+              title: Text('${_selectedPaths.length} ${AppStrings.getText('nSelected', provider.languageCode)}', style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)),
               leading: IconButton(
                 icon: const Icon(Icons.close, color: AppColors.text),
                 onPressed: _clearSelection,
@@ -125,18 +127,21 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.redAccent),
-                  tooltip: 'Delete Selected',
+                  tooltip: AppStrings.getText('deleteSelected', provider.languageCode),
                   onPressed: () => _deleteSelected(provider),
                 ),
               ],
             )
           : AppBar(
-              title: const Text('My Creations', style: TextStyle(fontWeight: FontWeight.w900)),
+              title: Text(
+                AppStrings.getText('myCreations', provider.languageCode),
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
               actions: [
                 if (provider.creationHistory.isNotEmpty)
                   IconButton(
                     icon: const Icon(Icons.delete_sweep, color: AppColors.textMuted),
-                    tooltip: 'Delete All History',
+                    tooltip: AppStrings.getText('deleteAllHistory', provider.languageCode),
                     onPressed: () => _deleteAll(provider),
                   ),
               ],
@@ -148,6 +153,7 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
   }
 
   Widget _buildEmptyState() {
+    final provider = context.read<AppProvider>();
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40.0),
@@ -164,15 +170,15 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
               child: const Icon(Icons.photo_library_outlined, size: 52, color: AppColors.textMuted),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'No Saved Creations',
-              style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              AppStrings.getText('noCreationsTitle', provider.languageCode),
+              style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Your enhanced masterpieces will appear here immediately after you save them to your gallery.',
+            Text(
+              AppStrings.getText('noCreationsSub', provider.languageCode),
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.45),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.45),
             ),
           ],
         ),
@@ -272,9 +278,9 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Enhanced Photo',
-                          style: TextStyle(color: AppColors.text, fontSize: 12.5, fontWeight: FontWeight.bold),
+                        Text(
+                          AppStrings.getText('enhancedPhoto', provider.languageCode),
+                          style: const TextStyle(color: AppColors.text, fontSize: 12.5, fontWeight: FontWeight.bold),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -306,6 +312,7 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
   }
 
   void _showFullscreenHistoryImage(BuildContext context, AppProvider provider, String path) {
+    final lang = provider.languageCode;
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -334,7 +341,7 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
                   OutlinedButton.icon(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close, size: 18),
-                    label: const Text('Close'),
+                    label: Text(AppStrings.getText('closeBtn', lang)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.text,
                       side: BorderSide(color: Colors.black.withOpacity(0.1)),
@@ -346,7 +353,7 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
                       await provider.shareImage();
                     },
                     icon: const Icon(Icons.share, size: 18, color: Colors.white),
-                    label: const Text('Share', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    label: Text(AppStrings.getText('share', lang), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
                     ),

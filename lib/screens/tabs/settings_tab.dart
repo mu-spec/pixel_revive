@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
+import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/language_screen.dart';
 
@@ -21,13 +22,14 @@ class SettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    final lang = provider.languageCode;
 
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: const Text(
-          'Settings',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        title: Text(
+          AppStrings.getText('settingsTitle', lang),
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
       body: SingleChildScrollView(
@@ -40,7 +42,7 @@ class SettingsTab extends StatelessWidget {
               context: context,
               icon: Icons.g_translate,
               iconColor: AppColors.success,
-              title: 'App Language',
+              title: AppStrings.getText('appLanguage', lang),
               subtitle: provider.languageCode.toUpperCase(),
               onTap: () {
                 Navigator.push(
@@ -56,8 +58,8 @@ class SettingsTab extends StatelessWidget {
               context: context,
               icon: Icons.share,
               iconColor: AppColors.accent,
-              title: 'Share with Friends',
-              subtitle: 'Spread the word about PixelRevive',
+              title: AppStrings.getText('shareFriends', lang),
+              subtitle: AppStrings.getText('shareFriendsSub', lang),
               onTap: () {
                 Share.share(
                   'Check out PixelRevive - AI Photo Restore & Enhance! Restore your old and faded photos instantly completely offline.\n\nDownload now: https://play.google.com/store/apps/details?id=com.pixelrevive.app',
@@ -72,8 +74,8 @@ class SettingsTab extends StatelessWidget {
               context: context,
               icon: Icons.thumb_up_alt_outlined,
               iconColor: AppColors.gold,
-              title: 'Rate Us',
-              subtitle: 'Support us on the Play Store',
+              title: AppStrings.getText('rateUs', lang),
+              subtitle: AppStrings.getText('rateUsSub', lang),
               onTap: () => _launchURL('https://play.google.com/store/apps/details?id=com.pixelrevive.app'),
             ),
             const SizedBox(height: 14),
@@ -83,8 +85,8 @@ class SettingsTab extends StatelessWidget {
               context: context,
               icon: Icons.gavel,
               iconColor: Colors.blueAccent,
-              title: 'Terms of Service',
-              subtitle: 'Read our legal guidelines',
+              title: AppStrings.getText('terms', lang),
+              subtitle: AppStrings.getText('termsSub', lang),
               onTap: () => _launchURL('https://clinquant-bombolone-e37a29.netlify.app/'),
             ),
             const SizedBox(height: 14),
@@ -94,8 +96,8 @@ class SettingsTab extends StatelessWidget {
               context: context,
               icon: Icons.privacy_tip_outlined,
               iconColor: Colors.purpleAccent,
-              title: 'Privacy Policy',
-              subtitle: 'Read our data handling rules',
+              title: AppStrings.getText('privacy', lang),
+              subtitle: AppStrings.getText('privacySub', lang),
               onTap: () => _launchURL('https://earnest-liger-072f0b.netlify.app/'),
             ),
             
@@ -120,9 +122,9 @@ class SettingsTab extends StatelessWidget {
                   child: const Icon(Icons.auto_fix_high, color: AppColors.accent, size: 28),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'PixelRevive AI Photo Studio',
-                  style: TextStyle(color: AppColors.text, fontSize: 14, fontWeight: FontWeight.bold),
+                Text(
+                  AppStrings.getText('appNameFull', lang),
+                  style: const TextStyle(color: AppColors.text, fontSize: 14, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 const Text(

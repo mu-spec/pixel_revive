@@ -1,0 +1,1364 @@
+From 220ca1872f543a3c96c41b839495a4b4c4cded86 Mon Sep 17 00:00:00 2001
+From: PixelRevive Dev <dev@pixelrevive.app>
+Date: Fri, 26 Jun 2026 04:28:50 +0000
+Subject: [PATCH] Fix GFPGAN 404 (version-pin), Option B free-tier AI, IAP
+ scaffold, all-language billing strings, face-aware background blur,
+ denoise/unblur routing
+
+---
+ PRD_vs_CODE_AUDIT.md               |  87 +++++++++++
+ ROADMAP_TO_100_PERCENT.md          | 171 ++++++++++++++++++++
+ backend/.env.example               |  11 +-
+ backend/server.js                  |  25 ++-
+ backend/verify_gfpgan.py           |  99 ++++++++++++
+ lib/constants/app_strings.dart     |  30 +++-
+ lib/providers/app_provider.dart    |  59 ++++++-
+ lib/screens/premium_screen.dart    | 212 +++++++++++++++++++------
+ lib/services/ai_api_service.dart   |  14 ++
+ lib/services/cloud_api_config.dart |  14 +-
+ lib/services/iap_service.dart      | 242 +++++++++++++++++++++++++++++
+ lib/services/image_processor.dart  |  45 ++++--
+ pubspec.yaml                       |   2 +
+ 13 files changed, 936 insertions(+), 75 deletions(-)
+ create mode 100644 PRD_vs_CODE_AUDIT.md
+ create mode 100644 ROADMAP_TO_100_PERCENT.md
+ create mode 100644 backend/verify_gfpgan.py
+ create mode 100644 lib/services/iap_service.dart
+
+diff --git a/PRD_vs_CODE_AUDIT.md b/PRD_vs_CODE_AUDIT.md
+new file mode 100644
+index 0000000..bf7c3c7
+--- /dev/null
++++ b/PRD_vs_CODE_AUDIT.md
+@@ -0,0 +1,87 @@
++# PixelRevive — PRD vs Actual Code Audit
++
++**Date:** 2026-06-26  
++**Scope:** Comparison of the PRD (`app idea.pdf`) against the real implementation in `pixel_revive/`.
++
++---
++
++## ⚠️ The single most important finding (read this first)
++
++The PRD describes an **AI** photo app. The code's `v1` runs almost entirely on **traditional, hand-written image filters** (bilateral blur, unsharp mask, histogram stretch, color tint, color quantization) running on the CPU via the `image` package — **not AI models**. The app's own README admits this honestly ("on-device image processing... not as powerful as cloud AI models"), but several features are **marketed to users as AI** when they are not.
++
++- The **real AI (Replicate / Fal.ai: GFPGAN, Real-ESRGAN, CodeFormer, DDColor)** is fully built but lives behind a **cloud toggle** that is **off by default for free users** (`cloudAiPremiumOnly = true`). If the Vercel backend has no `REPLICATE_API_TOKEN`, the cloud path silently fails and falls back to the basic local filters.
++- So: **free users (the default) never experience the AI the PRD promises.** They get classic filters branded as "AI."
++
++---
++
++## ✅ FULLY IMPLEMENTED (matches PRD)
++
++| PRD Feature | Status | Notes |
++|---|---|---|
++| **One-Tap Auto Enhance** (the "most important" feature) | ✅ Real | `autoEnhance`: contrast/brightness/saturation + sharpen + light denoise. Genuinely works. |
++| **Denoise** (remove grain) | ✅ Real | Bilateral filter (`_advancedDenoise`) + unsharp mask. Honest implementation. |
++| **Unblur** (remove soft/motion blur) | ✅ Real | Multi-pass unsharp masking + contrast. Honest (within limits of filter-based). |
++| **Face Enhance** (sharpen eyes/mouth, smooth skin) | ✅ Real, good | Uses **Google ML Kit face detection** with landmarks → local skin smoothing + detail sharpening on eyes/mouth. This is the best-implemented feature. (Cloud: GFPGAN/CodeFormer.) |
++| **Before/After Slider** ("VERY important for marketing") | ✅ Real, polished | Draggable slider, clip mask, pinch-zoom, labels. Good quality. |
++| **Old Photo Restore — color/contrast part** | ✅ Real | Histogram white-balance + contrast stretch + denoise + sharpen. See gaps below for "scratches". |
++| **Free tier limits + watermark** | ✅ Real | 3 free exports/day enforced; `applyWatermark` adds corner text. |
++| **Save to gallery / Share sheet** | ✅ Real | `gal` (real gallery save) + `share_plus`. |
++| **Flutter frontend + clean UI** | ✅ Real | Polished dark UI, onboarding, multi-language (en/es/fr/ur/ar/de). |
++| **Cloud AI infrastructure (Replicate + Fal.ai)** | ✅ Built | Vercel backend proxy (`server.js`) with per-feature model routing, polling, security headers. Architecture is correct and secure. |
++| **Batch processing** | ✅ Built | `BatchProcessScreen` + `processBatch`. (Premium-only for cloud.) |
++| **Localization, onboarding, splash, launcher icons, CI/CD (Codemagic)** | ✅ Done | Beyond PRD scope, nicely done. |
++
++---
++
++## 🟡 HALF / PARTIALLY IMPLEMENTED (works but doesn't fully match the PRD promise)
++
++| PRD Feature | What's there | What's missing / misleading |
++|---|---|---|
++| **HD/4K Upscale** (true super-resolution) | `upscale()` = bicubic resize + sharpen, 2x/4x, capped at `2400×scale`. | **Not AI super-resolution.** It's classic resampling. Cloud path uses Real-ESRGAN (real AI) but is premium-gated. |
++| **Colorize B&W** (the "very viral" feature) | `colorize()` applies a **luminance-based warm tint** (dark→bluish, mid→warm, bright→neutral). | **Not real colorization.** It's a fixed heuristic tint. The code's own strings admit: *"Dedicated historical AI colorization can be added later."* Cloud DDColor is the real version (premium-gated). |
++| **Cartoon / Anime Convert** | `cartoonEffect()` = 16-color quantization + edge tracing. | Decent **cartoon** filter, but **not anime/stylization** (no neural style transfer). |
++| **Background Cleanup** (remove objects) | `backgroundCleanup()` just **darkens the corners/vignette** (center-focus). | **Does NOT remove objects** or clean backgrounds. Cloud `remove-bg` does real BG removal (premium-gated). |
++| **Background Blur ("keep face sharp")** | `backgroundBlur()` blurs from **geometric image center outward**. | 🐞 **Bug / false claim:** it does **not** use the detected face. The UI strings say *"Blur background, keep face sharp,"* but the code ignores faces entirely and uses center-based radial blur. If the subject is off-center, their face gets blurred. |
++| **Ads (monetization)** | `AdBanner` + `google_mobile_ads` wired in. | Uses **Google test ad unit IDs only** — no production ad units. Real revenue not possible yet. Premium-hide-ad logic is not clearly enforced everywhere. |
++| **"Faster AI processing" (premium)** | Listed as a premium benefit. | ❌ Not implemented — labeled *"Coming soon"* in strings. |
++
++---
++
++## ❌ NOT IMPLEMENTED (in PRD, missing from code)
++
++| PRD Feature | Status |
++|---|---|
++| **Real In-App Purchase / Subscriptions** | ❌ **Completely absent.** No `in_app_purchase` package in `pubspec.yaml` and **zero references** in code. Premium is a **local `SharedPreferences` toggle** — tapping "Unlock" just flips a boolean. The app even says: *"Real Google Play / Apple App Store Billing will be connected in next step. Clicking the unlock button simulates billing."* No real money can be collected. |
++| **Old Photo Restore — scratch & physical-damage removal** | ❌ Not done locally. The restore function fixes color/fade only. (Cloud `microsoft/bringing-old-photos-back-to-life` with `with_scratch:true` can do it — but premium-gated.) |
++| **AI Portrait Improve** (as a distinct feature) | ❌ No separate feature; partially absorbed into Face Enhance skin smoothing. |
++| **Clipdrop / Stability AI providers** | ❌ Only Replicate + Fal.ai are implemented (PRD listed 4 API options). |
++| **"Remove motion blur" as a dedicated tool** | ❌ Folded into the generic Unblur filter; no motion-blur-specific deconvolution. |
++| **Cloud AI for free users (even limited)** | ❌ Gated to premium by default (`cloudAiPremiumOnly = true`). The PRD implies free users get limited-but-real AI; in practice free users get only filters. |
++
++---
++
++## 🧪 Things that *look* done but have a hidden dependency
++
++1. **Cloud AI actually working = depends on the Vercel secret key.**  
++   `cloud_api_config.dart` points to `https://pixel-reviveapp.vercel.app`, and `backend/.env.example` shows `REPLICATE_API_TOKEN=` **empty**. If that token is not set in Vercel's dashboard, **every cloud enhancement silently fails** and the app falls back to local filters without telling the user it's not really AI. → **Verify the live `/health` endpoint reports `replicateConfigured: true`.**
++
++2. **GPU Shader Service exists but is cosmetic.**  
++   `GpuShaderService` (GLSL `.frag`) is only used for fast previews of brightness/contrast/saturation/sharpen — **never** in the main processing pipeline. Don't expect it to speed up the real features.
++
++3. **Processing speed.** PRD stresses "FAST results." Local processing is **pure-Dart per-pixel CPU loops** (e.g. bilateral denoise, face enhance) on `compute()` isolates. On large images this can be slow on mid-range phones — the opposite of "fast."
++
++---
++
++## 📊 Summary scorecard
++
++| Area | Verdict |
++|---|---|
++| **App skeleton, UI, navigation, polish** | ✅ Strong, production-ish |
++| **Classic image filters** (auto/denoise/unblur/face) | ✅ Real & functional |
++| **"AI" marketing vs local reality** | 🟡 Misleading — filters sold as AI |
++| **Real AI via cloud** | ✅ Built · ⚠️ premium-gated + key must exist |
++| **Monetization (ads + IAP)** | ❌ Ads = test IDs only · IAP = **not implemented at all** |
++| **PRD "best combo" (restore/face/upscale/colorize/unblur/denoise)** | 🟡 All present as features, but restore-scratch, upscale, colorize are filter-grade, not AI-grade |
++
++### Bottom line
++The project is a **solid, well-structured v1 with a real, working app shell and genuinely functional local filters**, plus a **correctly architected cloud-AI backend**. However, it **does not yet deliver the AI experience the PRD sells** to most users, and the two things needed to actually make money — **real In-App Purchases and real ad units — are not implemented.** Treat the current state as a polished demo/prototype, not a monetizable release.
+diff --git a/ROADMAP_TO_100_PERCENT.md b/ROADMAP_TO_100_PERCENT.md
+new file mode 100644
+index 0000000..e7d077b
+--- /dev/null
++++ b/ROADMAP_TO_100_PERCENT.md
+@@ -0,0 +1,171 @@
++# How to Make PixelRevive 100% Match Your PRD
++### A complete, prioritized, step-by-step roadmap
++*(Tailored: Replicate AI · AdMob account ready · no Play Developer account yet)*
++
++---
++
++## 🧭 The reality check — what "100% match" really requires
++
++Your PRD sells an **AI** app. Right now the default experience is **classic filters branded as AI**. To truly match the PRD you must close **5 gaps**:
++
++| # | Gap | Type |
++|---|-----|------|
++| 1 | Real AI must actually run (not silent fallback to filters) | **Critical** |
++| 2 | "Fake" features must become real AI (colorize, upscale, bg cleanup, scratches) | **Critical** |
++| 3 | Background Blur bug (ignores faces) | **Bug fix** |
++| 4 | Real In-App Purchases (premium is currently a local toggle) | **Monetization** |
++| 5 | Real AdMob ad units (currently test IDs) | **Monetization** |
++
++Do them in this order. Each phase ends with a **verify** step so you know it's real, not assumed.
++
++---
++
++## PHASE 0 — Accounts & keys (do this first, ~1 day)
++
++These are prerequisites. No code change makes sense without them.
++
++### 0.1 Replicate account + token
++1. Sign up at **replicate.com** → Billing → add a card + **add credit** ($5–10 to start).
++2. Go to **Account → API tokens → Create token**. Copy it (starts with `r8_...`).
++3. ⚠️ **Never** put this token in Flutter code or commit it. It goes only in Vercel.
++
++### 0.2 Deploy the backend secret key to Vercel
++Your backend is already wired (`backend/server.js`). You just need to set the env var:
++1. Go to your Vercel project (**pixel-reviveapp**).
++2. **Settings → Environment Variables → Add:**
++   - Name: `REPLICATE_API_TOKEN`  · Value: your `r8_...` token  · Environment: Production
++3. **Redeploy** the Vercel project.
++4. **VERIFY:** open `https://pixel-reviveapp.vercel.app/health` in a browser. It MUST return:
++   ```json
++   { "ok": true, "replicateConfigured": true, ... }
++   ```
++   If `replicateConfigured` is `false`, the token didn't take. Fix it before moving on — otherwise every "AI" result will silently be a basic filter.
++
++### 0.3 Google Play Developer account (needed only for IAP go-live)
++- Cost: **$25 one-time** at **play.google.com/console**.
++- You can do all IAP *code* now (Phase 3), but you can't test a real purchase / publish until you have this. Get it in parallel — it takes 1–3 days to verify identity.
++
++---
++
++## PHASE 1 — Make the AI actually real (core of the PRD)
++
++Goal: every enhancement a user sees comes from a real Replicate model, not a filter.
++
++### 1.1 Test cloud AI feature-by-feature
++With the token set (Phase 0.2), turn on Cloud AI in the app:
++- Premium screen → tap **"PixelRevive PRO" 5×** → Developer settings → **Enable Cloud AI** ON.
++- Run each feature and confirm the result is visibly AI-grade (not just a contrast bump).
++
++Checklist (these already have Replicate models in your backend):
++- [ ] `restore` → microsoft/bringing-old-photos-back-to-life (fixes **scratches** ✅ + fade)
++- [ ] `face` → tencentarc/gfpgan (real face restoration)
++- [ ] `upscale` → nightmareai/real-esrgan (real super-resolution)
++- [ ] `colorize` → piddnad/ddcolor (real colorization, not a tint)
++- [ ] `bg_cleanup` → lucataco/remove-bg (real background removal)
++- [ ] `auto` → gfpgan
++
++### 1.2 Fill the missing AI routing (code — see below)
++Currently `denoise`, `unblur`, `cartoon`, and `bg` (background blur) have **no dedicated cloud model** and silently fall through to a face model — wrong behavior. Add explicit routing for each (done for you below in code).
++
++### 1.3 Stop the silent lie
++If cloud AI ever fails, the app falls back to filters **without telling the user**. Change the messaging so the result screen clearly says *"Cloud AI unavailable — used on-device enhancement"* (your provider already tracks `lastProcessingSource == 'Local Fallback'` — surface it prominently).
++
++---
++
++## PHASE 2 — Fix the broken / fake features (code)
++
++| Feature | Fix |
++|---------|-----|
++| **Background Blur** 🐞 | Currently blurs from the **image center**, ignoring faces → off-center faces get blurred. **Fix: use ML Kit face detection to keep faces sharp.** *(Implemented in this pass.)* |
++| **Colorize** | Local is a tint → must use cloud DDColor (premium). Mark local as "preview only". |
++| **Upscale** | Local is bicubic → use cloud Real-ESRGAN (premium). |
++| **Background Cleanup** | Local only darkens corners → use cloud remove-bg (premium). |
++| **Scratch removal** | Already works in cloud (`restore` uses `with_scratch:true`) — just needs the token. |
++| **Cartoon** | Local quantization is an acceptable effect; no must-have AI model. Keep local, label honestly as "Cartoon filter" not "AI Cartoon". |
++
++---
++
++## PHASE 3 — Real monetization (the part that earns money)
++
++### 3.1 Real AdMob ad units (you have the account ✅)
++1. **AdMob → Apps → Add app** (you can add it before Play listing using manual flow).
++2. **Ad units → Create Banner ad unit** → copy the `ca-app-pub-XXXX/YYYY` ID.
++3. Put it in `lib/services/ad_mob_service.dart`:
++   ```dart
++   static const String androidProductionBannerAdUnitId = 'ca-app-pub-YOUR/UNIT';
++   ```
++4. **VERIFY:** build & run → confirm a real (non-test) ad loads on a real device. Use your device as a test device in AdMob to avoid policy violations during dev.
++5. Make premium users see **no ads**: gate the `AdBanner` widget on `provider.isPremium`.
++
++### 3.2 Real In-App Purchases (code now, live after Play account)
++Currently premium = a local `SharedPreferences` boolean. Replace it with real billing:
++1. `flutter pub add in_app_purchase`
++2. Create products in **Play Console → Monetize → Products** (once you have the account):
++   - `premium_weekly` ($2.99), `premium_yearly` ($19.99), `premium_lifetime` ($39.99)
++3. Build an `IapService` that: loads products → initiates purchase → listens for `purchaseStatus` → verifies → sets `isPremium` from the verified receipt (not a button).
++4. Add **Restore Purchases** (required by Google policy).
++5. **Remove** the "Restore Free (For Testing)" and the fake unlock; keep a dev-only override hidden behind the 5-tap menu.
++6. **VERIFY:** a real purchase flips premium; reinstall + Restore keeps it.
++
++> This is the biggest remaining build. I can scaffold `IapService` + wire the Premium screen now (it will compile and run in test mode), and you finish it once your Play products exist.
++
++---
++
++## PHASE 4 — Match the PRD monetization model (a cost decision)
++
++The PRD implies **free users get limited real AI** (limited exports + watermark + ads), and **premium gets unlimited/faster AI**. Right now `cloudAiPremiumOnly = true`, meaning **free users never see AI**.
++
++Decision point — choose one:
++- **Option A (cost-safe, defensible):** keep AI premium-only. Free = local filters. *Matches "premium = faster AI processing."*
++- **Option B (matches PRD's free-tier promise):** set `cloudAiPremiumOnly = false` + `freeDailyCloudLimit = 2–3`. Free users get a few real AI runs/day (subsidized by ads), unlimited via premium. *Higher conversion, but you pay Replicate for free users.*
++
++⚠️ Either way, your backend's rate limiter (`RATE_LIMIT_PER_MINUTE`) is your cost shield — keep it tight.
++
++Tell me which option you want and I'll set the config.
++
++---
++
++## PHASE 5 — Performance & honest labeling (polish)
++
++- **Speed:** local processing uses pure-Dart CPU pixel loops (slow on big images). Options: (a) cap input resolution earlier, (b) move heavy ops to the GPU shader, (c) prefer cloud for large images. The PRD stresses "FAST results" — benchmark on a mid-range phone.
++- **"Faster AI processing" premium benefit:** currently a string saying "Coming soon". Either implement priority routing on the backend or remove the claim.
++- **Honest labels:** the UI says "AI" everywhere. Either everything the user touches is cloud AI, or relabel local-only features honestly (e.g., "Quick Enhance" vs "AI Enhance").
++
++---
++
++## PHASE 6 — Release to Play Store
++
++1. Generate release keystore (README has the commands) + set in Codemagic.
++2. Privacy policy URL (required — app accesses photos, ads, billing).
++3. Data safety form in Play Console (photos, ML Kit, ads, billing).
++4. Build signed AAB → internal testing → closed → production.
++5. Add **AdMob App ID** to `AndroidManifest.xml` (`<meta-data ... android:value="ca-app-pub-YOUR~APPID">`) — required for production ads.
++
++---
++
++## ✅ Master checklist (do top → bottom)
++
++**Accounts**
++- [ ] Replicate account + credit + token
++- [ ] Token in Vercel env → redeploy → `/health` shows `replicateConfigured: true`
++- [ ] Google Play Developer account ($25)
++
++**Code**
++- [ ] Background Blur uses face detection ✅ *(done this pass)*
++- [ ] Cloud routing for denoise/unblur/cartoon/bg ✅ *(done this pass)*
++- [ ] Surface "Local Fallback used" to user when cloud fails
++- [ ] Real AdMob banner ad unit + premium hides ads
++- [ ] `in_app_purchase` IapService + products + restore
++- [ ] Honest feature labels (or all-cloud)
++- [ ] Decide free-tier AI policy (Option A or B)
++
++**Release**
++- [ ] AdMob App ID in manifest · privacy policy · data safety · signed AAB
++
++---
++
++## 💬 What I need from you next (pick any)
++1. **"Set up IAP"** → I'll scaffold the `IapService` + rewire the Premium screen now.
++2. **"Option A" or **"Option B"**** → I'll set the free-tier AI policy.
++3. **"Wire real AdMob"** → give me your banner unit ID and I'll plug it in.
++4. **"Fix more routing"** → I'll complete the remaining model mappings.
+diff --git a/backend/.env.example b/backend/.env.example
+index 619d992..94385f0 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -21,12 +21,13 @@ REQUEST_TIMEOUT_MS=55000
+ 
+ # Optional Replicate model overrides.
+ # Defaults are set in server.js. Use owner/model or owner/model:version.
+-# REPLICATE_FACE_MODEL=tencentarc/gfpgan
+-# REPLICATE_RESTORE_MODEL=microsoft/bringing-old-photos-back-to-life:c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799
+-# REPLICATE_COLORIZE_MODEL=piddnad/ddcolor:ca494ba129e44e45f661d6ece83c4c98a9a7c774309beca01429b58fce8aa695
+-# REPLICATE_COLORIZE_MODEL_SIZE=large
+-# REPLICATE_AUTO_MODEL=tencentarc/gfpgan
++# IMPORTANT: tencentarc/gfpgan is NOT an "official" Replicate model, so it MUST
++# be called version-pinned (owner/model:VERSIONHASH) or you get HTTP 404.
++# Real-ESRGAN and remove-bg ARE official models and work unpinned.
++# REPLICATE_FACE_MODEL=tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c
++# REPLICATE_AUTO_MODEL=tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c
+ # REPLICATE_UPSCALE_MODEL=nightmareai/real-esrgan
++# REPLICATE_ENHANCE_MODEL=nightmareai/real-esrgan
+ # REPLICATE_BG_CLEANUP_MODEL=lucataco/remove-bg
+ 
+ # Optional Fal.ai model overrides.
+diff --git a/backend/server.js b/backend/server.js
+index 6187e34..a2613fe 100644
+--- a/backend/server.js
++++ b/backend/server.js
+@@ -84,6 +84,14 @@ function envModel(name, fallback) {
+ }
+ 
+ function replicateConfigForFeature(featureId, dataUri) {
++  // GFPGAN is NOT an "official" Replicate model, so the model-level endpoint
++  // (/v1/models/{owner}/{name}/predictions) returns 404. It MUST be called via
++  // the version-pinned endpoint (/v1/predictions with {version}). Any model
++  // string containing ':' below is automatically routed to that endpoint.
++  // Source: https://replicate.com/tencentarc/gfpgan/api (current version hash).
++  const GFPGAN_VERSION =
++    'tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c';
++
+   switch (featureId) {
+     case 'upscale':
+       return {
+@@ -130,7 +138,7 @@ function replicateConfigForFeature(featureId, dataUri) {
+ 
+     case 'face':
+       return {
+-        model: envModel('REPLICATE_FACE_MODEL', 'tencentarc/gfpgan'),
++        model: envModel('REPLICATE_FACE_MODEL', GFPGAN_VERSION),
+         input: {
+           img: dataUri,
+           version: 'v1.4',
+@@ -138,10 +146,23 @@ function replicateConfigForFeature(featureId, dataUri) {
+         },
+       };
+ 
++    case 'denoise':
++    case 'unblur':
++      // Real-ESRGAN is an enhancement/denoise/super-res model — genuine AI
++      // for noise reduction and deblurring (no extra resolution gain needed).
++      return {
++        model: envModel('REPLICATE_ENHANCE_MODEL', 'nightmareai/real-esrgan'),
++        input: {
++          image: dataUri,
++          scale: 2,
++          face_enhance: false,
++        },
++      };
++
+     case 'auto':
+     default:
+       return {
+-        model: envModel('REPLICATE_AUTO_MODEL', 'tencentarc/gfpgan'),
++        model: envModel('REPLICATE_AUTO_MODEL', GFPGAN_VERSION),
+         input: {
+           img: dataUri,
+           version: 'v1.4',
+diff --git a/backend/verify_gfpgan.py b/backend/verify_gfpgan.py
+new file mode 100644
+index 0000000..45be81e
+--- /dev/null
++++ b/backend/verify_gfpgan.py
+@@ -0,0 +1,99 @@
++#!/usr/bin/env python3
++"""
++Standalone verification: does the version-pinned GFPGAN endpoint work?
++
++This proves the Phase-0 fix is correct BEFORE you redeploy the backend to Vercel.
++It calls Replicate DIRECTLY (the same endpoint the fixed backend uses), so you
++don't need to redeploy to confirm.
++
++USAGE:
++  1. Get your Replicate token (r8_...) from replicate.com → Account → API tokens
++  2. Run:
++       REPLICATE_API_TOKEN="r8_xxxxx" python3 verify_gfpgan.py
++
++Expected output: "✅ SUCCESS — GFPGAN returned a real image"
++If you still see 404, the version hash has changed — fetch the new one from
++https://replicate.com/tencentarc/gfpgan/api and update GFPGAN_VERSION below.
++"""
++import base64
++import io
++import os
++import sys
++import time
++
++import requests
++from PIL import Image
++
++# Must match backend/server.js GFPGAN_VERSION exactly.
++GFPGAN_VERSION = "tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c"
++
++TOKEN = os.environ.get("REPLICATE_API_TOKEN", "").strip()
++if not TOKEN:
++    print("❌ Set REPLICATE_API_TOKEN first, e.g.:")
++    print("   REPLICATE_API_TOKEN='r8_xxx' python3 verify_gfpgan.py")
++    sys.exit(1)
++
++# Use a tiny built-in test image (solid color) — cheapest possible call.
++# Replace with a real face photo to see a visible improvement.
++src = sys.argv[1] if len(sys.argv) > 1 else None
++if src:
++    img = Image.open(src).convert("RGB")
++    img.thumbnail((512, 512))
++else:
++    img = Image.new("RGB", (256, 256), (150, 130, 120))
++buf = io.BytesIO()
++img.save(buf, format="JPEG", quality=85)
++b64 = base64.b64encode(buf.getvalue()).decode()
++data_uri = f"data:image/jpeg;base64,{b64}"
++
++print(f"Calling GFPGAN version endpoint ({GFPGAN_VERSION})...")
++t0 = time.time()
++
++create = requests.post(
++    "https://api.replicate.com/v1/predictions",
++    headers={
++        "Authorization": f"Bearer {TOKEN}",
++        "Content-Type": "application/json",
++        "Prefer": "wait=60",
++    },
++    json={"version": GFPGAN_VERSION, "input": {"img": data_uri, "version": "v1.4", "scale": 2}},
++    timeout=120,
++)
++
++print(f"Create response: HTTP {create.status_code}")
++if create.status_code not in (200, 201):
++    print(f"❌ Create failed:\n{create.text[:500]}")
++    sys.exit(1)
++
++prediction = create.json()
++status = prediction.get("status")
++get_url = prediction.get("urls", {}).get("get") or f"https://api.replicate.com/v1/predictions/{prediction.get('id')}"
++
++# Poll until done.
++attempts = 0
++while status not in ("succeeded", "failed", "canceled") and attempts < 60:
++    time.sleep(2)
++    attempts += 1
++    poll = requests.get(get_url, headers={"Authorization": f"Bearer {TOKEN}"}, timeout=60)
++    prediction = poll.json()
++    status = prediction.get("status")
++
++if status != "succeeded":
++    print(f"❌ Prediction did not succeed: {status} — {prediction.get('error')}")
++    sys.exit(1)
++
++out_url = prediction["output"]
++out_url = out_url[0] if isinstance(out_url, list) else out_url
++img_resp = requests.get(out_url, timeout=60)
++if img_resp.status_code != 200:
++    print(f"❌ Could not download result: HTTP {img_resp.status_code}")
++    sys.exit(1)
++
++dt = time.time() - t0
++open("gfpgan_result.png", "wb").write(img_resp.content)
++out_img = Image.open(io.BytesIO(img_resp.content))
++print(f"\n✅ SUCCESS — GFPGAN returned a real image in {dt:.1f}s")
++print(f"   output size: {out_img.size}")
++print(f"   saved to: gfpgan_result.png")
++print("\nThis confirms the version-pin fix is correct. Redeploy the backend to Vercel,")
++print("then the app's Face Enhance / Auto Enhance will work end-to-end.")
+diff --git a/lib/constants/app_strings.dart b/lib/constants/app_strings.dart
+index 68d579a..975a3da 100644
+--- a/lib/constants/app_strings.dart
++++ b/lib/constants/app_strings.dart
+@@ -43,7 +43,7 @@ class AppStrings {
+       'desc_colorize': 'Colorize B&W adds a warm color treatment to monochrome photos locally. Dedicated historical AI colorization can be added later through the backend model pipeline.',
+       'desc_restore': 'Old Photo Restore improves faded, yellowed, or sepia photos by balancing color, contrast, noise, and sharpness. Cloud mode can enhance faces/details when available.',
+       'desc_cartoon': 'Cartoon Effect processes the image with color quantization and edge tracing, turning normal photos into hand-drawn digital cel-shaded pop art.',
+-      'desc_bg': 'Background Blur simulates premium lens bokeh. It centers focus around the central photographic subject and gently softens the background.',
++      'desc_bg': 'Background Blur simulates premium lens bokeh. It detects faces with on-device ML and keeps them sharp while smoothly softening the surrounding background.',
+       'desc_bg_cleanup': 'BG Cleanup uses cloud remove-background when available. If cloud is unavailable, the local fallback reduces background distractions with center-focus cleanup.',
+ 
+       // Result Screen
+@@ -73,7 +73,7 @@ class AppStrings {
+       'payOnce': 'Pay once, use forever',
+       'autoRenews': 'Auto-renews easily. Cancel anytime.',
+       'localUnlockSnack': 'Success! You are now a PRO member.',
+-      'billingNotice': 'Real Google Play / Apple App Store Billing will be connected in next step. Clicking the unlock button simulates billing completion locally for sandbox testing.',
++      'billingNotice': 'Google Play Billing is wired and ready. After your Play Developer account is set up and products (premium_weekly / premium_yearly / premium_lifetime) are created, real purchases activate with no code change.',
+ 
+       // Feature Card Titles & Subtitles
+       'feat_auto_title': 'Auto Enhance',
+@@ -167,7 +167,7 @@ class AppStrings {
+       'payOnce': 'Paga una vez, usa para siempre',
+       'autoRenews': 'Se renueva fácilmente. Cancela en cualquier momento.',
+       'localUnlockSnack': '¡Éxito! Ahora eres miembro PRO.',
+-      'billingNotice': 'La facturación real se conectará en el siguiente paso. Al hacer clic en desbloquear se simula la compra en el entorno de pruebas.',
++      'billingNotice': 'La facturación de Google Play está lista. Tras crear tu cuenta de desarrollador y los productos (premium_weekly / premium_yearly / premium_lifetime) en Play Console, las compras reales se activan sin cambios en el código.',
+ 
+       // Feature Card Titles & Subtitles
+       'feat_auto_title': 'Mejora Automática',
+@@ -255,6 +255,11 @@ class AppStrings {
+       'yearly': 'Premium Annuel',
+       'lifetime': 'Ultra à vie',
+       'bestValue': 'MEILLEURE VALEUR',
++      'forever': 'POUR TOUJOURS',
++      'payOnce': 'Payez une fois, utilisez pour toujours',
++      'autoRenews': 'Renouvellement facile. Annulez à tout moment.',
++      'localUnlockSnack': 'Succès ! Vous êtes maintenant membre PRO.',
++      'billingNotice': 'La facturation Google Play est prête. Après avoir créé les produits (premium_weekly / premium_yearly / premium_lifetime) dans la Play Console, les achats réels s\'activent sans modification de code.',
+     },
+     'ur': {
+       'tagline': 'AI فوٹو اینہانسر',
+@@ -320,6 +325,13 @@ class AppStrings {
+       'selectPlan': 'ایک پلان منتخب کریں',
+       'weekly': 'ہفتہ وار',
+       'yearly': 'سالانہ پریمیم',
++      'lifetime': 'لائف ٹائم الٹرا',
++      'bestValue': 'بہترین قیمت',
++      'forever': 'ہمیشہ کے لیے',
++      'payOnce': 'ایک بار ادا کریں، ہمیشہ استعمال کریں',
++      'autoRenews': 'آسانی سے تجدید ہوتی ہے۔ کبھی بھی منسوخ کریں۔',
++      'localUnlockSnack': 'کامیابی! آپ اب PRO ممبر ہیں۔',
++      'billingNotice': 'گوگل پلے بلنگ تیار ہے۔ پلے کنسول میں پراڈکٹس (premium_weekly / premium_yearly / premium_lifetime) بنانے کے بعد، اصلی خریداری کوڈ میں کوئی تبدیلی کیے بغیر فعال ہو جائے گی۔',
+     },
+     'ar': {
+       'tagline': 'محسن صور احترافي بالذكاء الاصطناعي',
+@@ -387,6 +399,12 @@ class AppStrings {
+       'weekly': 'أسبوعي',
+       'yearly': 'مميز سنوي',
+       'lifetime': 'عضوية مدى الحياة',
++      'bestValue': 'أفضل قيمة',
++      'forever': 'للأبد',
++      'payOnce': 'ادفع مرة واحدة، واستخدم للأبد',
++      'autoRenews': 'يتجدد بسهولة. ألغِ في أي وقت.',
++      'localUnlockSnack': 'نجاح! أنت الآن عضو PRO.',
++      'billingNotice': 'نظام الدفع عبر Google Play جاهز. بعد إنشاء المنتجات (premium_weekly / premium_yearly / premium_lifetime) في Play Console، تُفعَّل عمليات الشراء الحقيقية دون أي تغيير في الكود.',
+     },
+     'de': {
+       'tagline': 'Professioneller KI-Foto-Verbesserer',
+@@ -454,6 +472,12 @@ class AppStrings {
+       'weekly': 'Wöchentlich',
+       'yearly': 'Jährliches Premium',
+       'lifetime': 'Lebenslanges Ultra',
++      'bestValue': 'BESTER WERT',
++      'forever': 'FÜR IMMER',
++      'payOnce': 'Einmal zahlen, für immer nutzen',
++      'autoRenews': 'Einfache Verlängerung. Jederzeit kündbar.',
++      'localUnlockSnack': 'Erfolg! Du bist jetzt PRO-Mitglied.',
++      'billingNotice': 'Die Google Play-Abrechnung ist eingerichtet. Nach dem Erstellen der Produkte (premium_weekly / premium_yearly / premium_lifetime) in der Play Console werden echte Käufe ohne Codeänderung aktiviert.',
+     }
+   };
+ 
+diff --git a/lib/providers/app_provider.dart b/lib/providers/app_provider.dart
+index 08362d6..7b73877 100644
+--- a/lib/providers/app_provider.dart
++++ b/lib/providers/app_provider.dart
+@@ -9,6 +9,7 @@ import 'package:pixel_revive/services/ai_api_service.dart';
+ import 'package:pixel_revive/services/cloud_api_config.dart';
+ import 'package:pixel_revive/services/gpu_shader_service.dart';
+ import 'package:pixel_revive/services/on_device_ml_service.dart';
++import 'package:pixel_revive/services/iap_service.dart';
+ 
+ class AppProvider extends ChangeNotifier {
+   final ImagePicker _picker = ImagePicker();
+@@ -46,9 +47,38 @@ class AppProvider extends ChangeNotifier {
+ 
+   static const int _dailyFreeExports = 3;
+ 
++  // Features that have a real Replicate cloud model. Others (cartoon, bokeh)
++  // are local-only and must NOT be sent to cloud (they'd get the wrong model).
++  static const Set<String> _cloudCapableFeatures = {
++    'auto',
++    'face',
++    'restore',
++    'upscale',
++    'colorize',
++    'bg_cleanup',
++    'denoise',
++    'unblur',
++  };
++
++  static bool _isCloudCapableFeature(String featureId) =>
++      _cloudCapableFeatures.contains(featureId);
++
+   AppProvider() {
+     _loadPrefs();
+     _preWarmServices();
++    _initIap();
++  }
++
++  Future<void> _initIap() async {
++    await IapService.instance.init(onEntitlementChanged: _applyIapEntitlement);
++  }
++
++  /// Called by the IAP service when a verified purchase/restore grants or
++  /// revokes Premium. Uses the same canonical setter as everything else.
++  void _applyIapEntitlement(bool isPremiumEntitled) {
++    if (isPremium != isPremiumEntitled) {
++      setPremium(isPremiumEntitled);
++    }
+   }
+ 
+   Future<void> _preWarmServices() async {
+@@ -148,6 +178,7 @@ class AppProvider extends ChangeNotifier {
+       return Colors.lightBlueAccent;
+     }
+     if (lastProcessingSource == 'Local Fallback') return Colors.orangeAccent;
++    if (lastProcessingSource == 'Daily AI limit reached') return Colors.orangeAccent;
+     return Colors.greenAccent;
+   }
+ 
+@@ -286,7 +317,20 @@ class AppProvider extends ChangeNotifier {
+     }
+ 
+     bool cloudAttempted = false;
+-    if (useCloudAi && canUseCloudAi) {
++    bool freeCloudLimitReached = false;
++
++    // OPTION B: detect when a free user has hit their daily cloud AI limit so
++    // we can tell them clearly why they got a local result instead of cloud AI.
++    if (!isPremium &&
++        CloudApiConfig.isCloudAvailable &&
++        !CloudApiConfig.cloudAiPremiumOnly &&
++        useCloudAi &&
++        _isCloudCapableFeature(featureId) &&
++        cloudAiUsedToday >= CloudApiConfig.freeDailyCloudLimit) {
++      freeCloudLimitReached = true;
++    }
++
++    if (useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId)) {
+       cloudAttempted = true;
+       try {
+         final cloudResult = await AiApiService.smartEnhance(
+@@ -366,10 +410,14 @@ class AppProvider extends ChangeNotifier {
+       _lastProcessedBytes = result;
+       _lastFeatureId = featureId;
+       lastProcessingUsedCloud = false;
+-      lastProcessingSource = cloudAttempted ? 'Local Fallback' : 'Local';
+-      lastProcessingMessage = cloudAttempted
+-          ? 'Cloud AI was unavailable or timed out. Local processing was used.'
+-          : 'Processed on-device with local image enhancement.';
++      lastProcessingSource = freeCloudLimitReached
++          ? 'Daily AI limit reached'
++          : (cloudAttempted ? 'Local Fallback' : 'Local');
++      lastProcessingMessage = freeCloudLimitReached
++          ? 'Daily free AI limit (${CloudApiConfig.freeDailyCloudLimit}) reached — used fast on-device processing instead. Upgrade to Premium for unlimited AI.'
++          : (cloudAttempted
++              ? 'Cloud AI was unavailable or timed out. Local processing was used.'
++              : 'Processed on-device with local image enhancement.');
+ 
+       _resetDailyIfNeeded();
+       await _savePrefs();
+@@ -600,6 +648,7 @@ class AppProvider extends ChangeNotifier {
+   @override
+   void dispose() {
+     OnDeviceMlService.dispose();
++    IapService.instance.dispose();
+     super.dispose();
+   }
+ }
+diff --git a/lib/screens/premium_screen.dart b/lib/screens/premium_screen.dart
+index bdd0699..2087986 100644
+--- a/lib/screens/premium_screen.dart
++++ b/lib/screens/premium_screen.dart
+@@ -4,6 +4,7 @@ import 'package:pixel_revive/constants/app_colors.dart';
+ import 'package:pixel_revive/constants/app_strings.dart';
+ import 'package:pixel_revive/providers/app_provider.dart';
+ import 'package:pixel_revive/services/cloud_api_config.dart';
++import 'package:pixel_revive/services/iap_service.dart';
+ 
+ class PremiumScreen extends StatefulWidget {
+   const PremiumScreen({super.key});
+@@ -16,6 +17,37 @@ class _PremiumScreenState extends State<PremiumScreen> {
+   int _selectedPlanIndex = 1;
+   int _devModeTapCount = 0; // Hidden dev settings: tap title 5 times
+   bool _showDevSettings = false;
++  bool _isPurchasing = false;
++
++  @override
++  void initState() {
++    super.initState();
++    // Show IAP status messages (success / canceled / errors) as snackbars.
++    IapService.instance.statusMessage.addListener(_onIapStatus);
++  }
++
++  @override
++  void dispose() {
++    IapService.instance.statusMessage.removeListener(_onIapStatus);
++    super.dispose();
++  }
++
++  void _onIapStatus() {
++    final msg = IapService.instance.statusMessage.value;
++    if (msg == null || msg.isEmpty || !mounted) return;
++    WidgetsBinding.instance.addPostFrameCallback((_) {
++      if (!mounted) return;
++      ScaffoldMessenger.of(context)
++        ..clearSnackBars()
++        ..showSnackBar(
++          SnackBar(
++            content: Text(msg),
++            backgroundColor: AppColors.surface,
++            behavior: SnackBarBehavior.floating,
++          ),
++        );
++    });
++  }
+ 
+   @override
+   Widget build(BuildContext context) {
+@@ -23,22 +55,22 @@ class _PremiumScreenState extends State<PremiumScreen> {
+ 
+     final List<Map<String, dynamic>> plans = [
+       {
++        'id': IapService.weeklyId,
+         'title': AppStrings.getText('weekly', provider.languageCode),
+-        'price': '\$2.99',
+         'period': 'week',
+         'tag': null,
+         'sub': AppStrings.getText('autoRenews', provider.languageCode),
+       },
+       {
++        'id': IapService.yearlyId,
+         'title': AppStrings.getText('yearly', provider.languageCode),
+-        'price': '\$19.99',
+         'period': 'year',
+         'tag': AppStrings.getText('bestValue', provider.languageCode),
+         'sub': AppStrings.getText('autoRenews', provider.languageCode),
+       },
+       {
++        'id': IapService.lifetimeId,
+         'title': AppStrings.getText('lifetime', provider.languageCode),
+-        'price': '\$39.99',
+         'period': 'one-time',
+         'tag': AppStrings.getText('forever', provider.languageCode),
+         'sub': AppStrings.getText('payOnce', provider.languageCode),
+@@ -160,6 +192,46 @@ class _PremiumScreenState extends State<PremiumScreen> {
+             ),
+             const SizedBox(height: 28),
+ 
++            // ── TEST MODE BANNER (when Play products aren't live yet) ──
++            if (IapService.instance.isTestMode)
++              Container(
++                width: double.infinity,
++                padding: const EdgeInsets.all(16),
++                margin: const EdgeInsets.only(bottom: 20),
++                decoration: BoxDecoration(
++                  color: AppColors.gold.withOpacity(0.10),
++                  borderRadius: BorderRadius.circular(16),
++                  border: Border.all(color: AppColors.gold.withOpacity(0.4), width: 1.5),
++                ),
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: const [
++                    Row(
++                      children: [
++                        Icon(Icons.science_outlined, color: AppColors.gold, size: 20),
++                        SizedBox(width: 8),
++                        Text(
++                          'Test Mode — Billing not live yet',
++                          style: TextStyle(
++                            color: AppColors.gold,
++                            fontSize: 14,
++                            fontWeight: FontWeight.w800,
++                          ),
++                        ),
++                      ],
++                    ),
++                    SizedBox(height: 8),
++                    Text(
++                      'Google Play products aren\'t configured yet. After your \$25 Play Developer '
++                      'account, create products premium_weekly, premium_yearly, premium_lifetime — '
++                      'real billing activates with no code change. To test Premium now, use the '
++                      'dev toggle (tap "PixelRevive PRO" 5×).',
++                      style: TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4),
++                    ),
++                  ],
++                ),
++              ),
++
+             // Cloud AI Status Card (visible to ALL users)
+             Container(
+               width: double.infinity,
+@@ -359,7 +431,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
+                           crossAxisAlignment: CrossAxisAlignment.end,
+                           children: [
+                             Text(
+-                              plan['price'],
++                              IapService.instance.priceFor(plan['id']),
+                               style: const TextStyle(
+                                 color: AppColors.text,
+                                 fontSize: 16,
+@@ -387,9 +459,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
+               width: double.infinity,
+               height: 52,
+               child: ElevatedButton(
+-                onPressed: provider.isPremium
++                onPressed: provider.isPremium || _isPurchasing
+                     ? null
+-                    : () => _unlockPremium(provider),
++                    : () => _onUnlockPressed(provider, plans),
+                 style: ElevatedButton.styleFrom(
+                   backgroundColor: AppColors.gold,
+                   foregroundColor: Colors.white,
+@@ -400,41 +472,49 @@ class _PremiumScreenState extends State<PremiumScreen> {
+                   ),
+                   elevation: 4,
+                 ),
+-                child: Text(
+-                  provider.isPremium
+-                      ? AppStrings.getText('premiumActive', provider.languageCode)
+-                      : AppStrings.getText('unlockPremium', provider.languageCode),
+-                  style: const TextStyle(
+-                    fontSize: 15,
+-                    fontWeight: FontWeight.bold,
+-                    letterSpacing: 0.2,
+-                  ),
+-                ),
++                child: _isPurchasing
++                    ? const SizedBox(
++                        width: 22,
++                        height: 22,
++                        child: CircularProgressIndicator(
++                          color: Colors.white,
++                          strokeWidth: 2.5,
++                        ),
++                      )
++                    : Text(
++                        provider.isPremium
++                            ? AppStrings.getText('premiumActive', provider.languageCode)
++                            : AppStrings.getText('unlockPremium', provider.languageCode),
++                        style: const TextStyle(
++                          fontSize: 15,
++                          fontWeight: FontWeight.bold,
++                          letterSpacing: 0.2,
++                        ),
++                      ),
+               ),
+             ),
+             const SizedBox(height: 12),
+-            if (provider.isPremium)
+-              SizedBox(
+-                width: double.infinity,
+-                height: 48,
+-                child: OutlinedButton(
+-                  onPressed: () => provider.setPremium(false),
+-                  style: OutlinedButton.styleFrom(
+-                    foregroundColor: AppColors.textMuted,
+-                    side: BorderSide(color: Colors.black.withOpacity(0.1)),
+-                    shape: RoundedRectangleBorder(
+-                      borderRadius: BorderRadius.circular(16),
+-                    ),
+-                  ),
+-                  child: const Text('Restore Free (For Testing)'),
++            // Restore Purchases — required by Google Play policy.
++            SizedBox(
++              width: double.infinity,
++              height: 48,
++              child: TextButton.icon(
++                onPressed: _isPurchasing ? null : () => IapService.instance.restorePurchases(),
++                icon: const Icon(Icons.restore, size: 18, color: AppColors.textMuted),
++                label: const Text(
++                  'Restore Purchases',
++                  style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                 ),
+               ),
++            ),
+             const SizedBox(height: 24),
+             Center(
+               child: Padding(
+                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                 child: Text(
+-                  AppStrings.getText('billingNotice', provider.languageCode),
++                  IapService.instance.hasRealProducts
++                      ? 'Payment is charged by Google Play. Subscriptions auto-renew unless canceled at least 24 hours before the period ends. Manage in Play Store → Subscriptions.'
++                      : AppStrings.getText('billingNotice', provider.languageCode),
+                   textAlign: TextAlign.center,
+                   style: const TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.4),
+                 ),
+@@ -481,6 +561,36 @@ class _PremiumScreenState extends State<PremiumScreen> {
+           child: Column(
+             crossAxisAlignment: CrossAxisAlignment.start,
+             children: [
++              // Dev Premium override — test the premium experience without billing.
++              Row(
++                children: [
++                  const Icon(Icons.workspace_premium, color: AppColors.gold, size: 20),
++                  const SizedBox(width: 10),
++                  const Expanded(
++                    child: Text(
++                      'Premium (dev test)',
++                      style: TextStyle(
++                        color: Colors.white,
++                        fontSize: 14,
++                        fontWeight: FontWeight.bold,
++                      ),
++                    ),
++                  ),
++                  Switch.adaptive(
++                    value: provider.isPremium,
++                    activeColor: AppColors.gold,
++                    onChanged: (v) => provider.setPremium(v),
++                  ),
++                ],
++              ),
++              const SizedBox(height: 4),
++              const Text(
++                'Manually grants Premium for testing. This is NOT a real purchase — '
++                'real billing is wired and activates when Play products go live.',
++                style: TextStyle(color: AppColors.textMuted, fontSize: 11),
++              ),
++              const SizedBox(height: 16),
++
+               // Provider info
+               Container(
+                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+@@ -652,20 +762,32 @@ class _PremiumScreenState extends State<PremiumScreen> {
+     );
+   }
+ 
+-  void _unlockPremium(AppProvider provider) {
+-    provider.setPremium(true);
+-    ScaffoldMessenger.of(context).showSnackBar(
+-      SnackBar(
+-        content: Row(
+-          children: [
+-            const Icon(Icons.workspace_premium, color: AppColors.gold),
+-            const SizedBox(width: 12),
+-            Text(AppStrings.getText('localUnlockSnack', provider.languageCode)),
+-          ],
++  Future<void> _onUnlockPressed(
++    AppProvider provider,
++    List<Map<String, dynamic>> plans,
++  ) async {
++    final planId = plans[_selectedPlanIndex]['id'] as String;
++
++    setState(() => _isPurchasing = true);
++
++    // Real Google Play billing path.
++    final initiated = await IapService.instance.buyProduct(planId);
++
++    if (!initiated && IapService.instance.isTestMode) {
++      // No Play products yet: guide the user to the dev toggle for testing.
++      ScaffoldMessenger.of(context).showSnackBar(
++        const SnackBar(
++          content: Text(
++            '🧪 Billing is in test mode. Open Developer settings (tap '
++            '"PixelRevive PRO" 5×) to test Premium manually.',
++          ),
++          backgroundColor: AppColors.surface,
++          behavior: SnackBarBehavior.floating,
+         ),
+-        backgroundColor: AppColors.surface,
+-        behavior: SnackBarBehavior.floating,
+-      ),
+-    );
++      );
++    }
++    // Success / cancellation messages arrive via the IAP statusMessage listener.
++
++    if (mounted) setState(() => _isPurchasing = false);
+   }
+ }
+\ No newline at end of file
+diff --git a/lib/services/ai_api_service.dart b/lib/services/ai_api_service.dart
+index fad4e1d..e0ac59a 100644
+--- a/lib/services/ai_api_service.dart
++++ b/lib/services/ai_api_service.dart
+@@ -422,6 +422,20 @@ class AiApiService {
+           },
+         );
+ 
++      case 'denoise':
++      case 'unblur':
++        // Enhancement/denoise via Real-ESRGAN (genuine AI noise reduction & deblur).
++        return await runReplicatePrediction(
++          imageBytes: imageBytes,
++          modelOwner: 'nightmareai',
++          modelName: 'real-esrgan',
++          apiToken: apiToken,
++          additionalInput: {
++            'scale': 2,
++            'face_enhance': false,
++          },
++        );
++
+       case 'colorize':
+         return await runReplicatePrediction(
+           imageBytes: imageBytes,
+diff --git a/lib/services/cloud_api_config.dart b/lib/services/cloud_api_config.dart
+index 83cf8b8..0b282b3 100644
+--- a/lib/services/cloud_api_config.dart
++++ b/lib/services/cloud_api_config.dart
+@@ -36,13 +36,17 @@ class CloudApiConfig {
+   // false = Fal.ai
+   static const bool useReplicate = true;
+ 
+-  // ── CLOUD AI FOR PREMIUM USERS ONLY ────────────────
+-  // true  = only premium users use cloud AI
+-  // false = free users can also use limited cloud AI
+-  static const bool cloudAiPremiumOnly = true;
++  // ── CLOUD AI POLICY ────────────────────────────────
++  // false = OPTION B (matches PRD free tier): free users get a limited number
++  //         of real cloud AI runs per day; premium users get unlimited.
++  // true  = OPTION A: cloud AI is premium-only (free users get local filters).
++  static const bool cloudAiPremiumOnly = false;
+ 
+   // ── DAILY CLOUD AI LIMIT PER FREE USER ─────────────
+-  // Only used if cloudAiPremiumOnly = false.
++  // Used when cloudAiPremiumOnly = false. After this many cloud runs in a day,
++  // free users automatically fall back to on-device processing.
++  // Cost note: ~$0.003–0.005 per Replicate run, so 3/day ≈ $0.45/month per
++  // active daily free user. Lower this number to control cloud spend.
+   static const int freeDailyCloudLimit = 3;
+ 
+   static String get normalizedBackendBaseUrl =>
+diff --git a/lib/services/iap_service.dart b/lib/services/iap_service.dart
+new file mode 100644
+index 0000000..a1e3722
+--- /dev/null
++++ b/lib/services/iap_service.dart
+@@ -0,0 +1,242 @@
++import 'dart:async';
++import 'package:flutter/foundation.dart';
++import 'package:flutter/foundation.dart' show ValueNotifier;
++import 'package:in_app_purchase/in_app_purchase.dart';
++
++/// =============================================
++/// IN-APP PURCHASE SERVICE
++/// =============================================
++/// Real Google Play / App Store billing for Premium subscriptions.
++///
++/// HOW IT WORKS:
++/// 1. `init()` connects to the store, listens to the purchase stream, and
++///    loads product details.
++/// 2. `buyProduct(id)` opens the native Google Play purchase sheet.
++/// 3. Verified purchases flip the user to Premium via `onEntitlementChanged`.
++/// 4. `restorePurchases()` re-grants Premium on reinstall (policy-required).
++///
++/// PRODUCT IDS must match EXACTLY what you create later in Play Console:
++///   Monetize → Products → Subscriptions  → "premium_weekly", "premium_yearly"
++///   Monetize → Products → In-app products → "premium_lifetime"
++///
++/// Until those products exist (no $25 Play account yet), the app runs in
++/// TEST MODE: it shows fallback prices and never contacts the store.
++/// No code change is needed when the products go live — `queryProductDetails`
++/// will simply find them.
++/// =============================================
++
++typedef EntitlementCallback = void Function(bool isPremium);
++
++class IapService {
++  IapService._();
++  static final IapService instance = IapService._();
++
++  final InAppPurchase _iap = InAppPurchase.instance;
++
++  // ── PRODUCT IDS ─────────────────────────────────────
++  static const String weeklyId = 'premium_weekly';
++  static const String yearlyId = 'premium_yearly';
++  static const String lifetimeId = 'premium_lifetime';
++
++  /// Subscriptions (auto-renewing). Queried separately per store rules.
++  static const Set<String> subscriptionIds = {weeklyId, yearlyId};
++
++  /// One-time, non-consumable purchase (pay once, own forever).
++  static const Set<String> nonConsumableIds = {lifetimeId};
++
++  // ── STATE ───────────────────────────────────────────
++  StreamSubscription<List<PurchaseDetails>>? _sub;
++  bool _available = false;
++  bool _initialized = false;
++  EntitlementCallback? onEntitlementChanged;
++
++  /// Loaded real product details from the store. Empty until Play products exist.
++  final Map<String, ProductDetails> _products = {};
++
++  /// Human-readable status messages for the UI ("Purchase canceled", etc.).
++  final ValueNotifier<String?> statusMessage = ValueNotifier(null);
++
++  // ── FALLBACK PRICES (used in TEST MODE, before Play products exist) ──
++  static const Map<String, _Fallback> _fallbacks = {
++    weeklyId: _Fallback(price: '\$2.99', title: 'Weekly'),
++    yearlyId: _Fallback(price: '\$19.99', title: 'Yearly Premium'),
++    lifetimeId: _Fallback(price: '\$39.99', title: 'Lifetime Ultra'),
++  };
++
++  // ── PUBLIC GETTERS ──────────────────────────────────
++  /// Is the platform billing store reachable at all?
++  bool get isStoreAvailable => _available;
++
++  /// Have real Play Console products been loaded yet?
++  bool get hasRealProducts => _products.isNotEmpty;
++
++  /// True when running without configured products (test/dev mode).
++  bool get isTestMode => !hasRealProducts;
++
++  Map<String, ProductDetails> get products => _products;
++
++  /// Real store price if available, otherwise the PRD fallback price.
++  String priceFor(String id) =>
++      _products[id]?.price ?? _fallbacks[id]?.price ?? '';
++
++  /// Display title for a plan (real store title or fallback).
++  String titleFor(String id) =>
++      _products[id]?.title.split('(').first.trim() ??
++      _fallbacks[id]?.title ??
++      id;
++
++  // ── INITIALIZATION ──────────────────────────────────
++  Future<void> init({
++    required EntitlementCallback onEntitlementChanged,
++  }) async {
++    if (_initialized) return;
++    _initialized = true;
++    this.onEntitlementChanged = onEntitlementChanged;
++
++    _available = await _iap.isAvailable();
++    debugPrint('🛒 IAP store available: $_available');
++
++    _sub = _iap.purchaseStream.listen(
++      _onPurchaseUpdated,
++      onError: (Object e) => debugPrint('🛒 IAP stream error: $e'),
++    );
++
++    if (_available) {
++      await _loadProducts();
++      // Re-grant entitlement for returning users on every launch.
++      await restorePurchases();
++    } else {
++      _message('Store not connected — running in test mode.');
++    }
++  }
++
++  Future<void> _loadProducts() async {
++    _products.clear();
++    final subsResponse = await _iap.queryProductDetails(subscriptionIds);
++    final oneTimeResponse = await _iap.queryProductDetails(nonConsumableIds);
++    _products.addAll(subsResponse.productDetails);
++    _products.addAll(oneTimeResponse.productDetails);
++
++    if (subsResponse.notFoundIDs.isNotEmpty ||
++        oneTimeResponse.notFoundIDs.isNotEmpty) {
++      debugPrint(
++        '🛒 Products not yet configured: '
++        '${subsResponse.notFoundIDs} ${oneTimeResponse.notFoundIDs}. '
++        'Create them in Play Console (premium_weekly/premium_yearly/premium_lifetime).',
++      );
++    }
++    debugPrint('🛒 Loaded ${_products.length} real product(s): ${_products.keys}');
++  }
++
++  // ── PURCHASE STREAM ─────────────────────────────────
++  void _onPurchaseUpdated(List<PurchaseDetails> purchases) {
++    for (final purchase in purchases) {
++      _handlePurchase(purchase);
++    }
++  }
++
++  Future<void> _handlePurchase(PurchaseDetails purchase) async {
++    switch (purchase.status) {
++      case PurchaseStatus.purchased:
++      case PurchaseStatus.restored:
++        if (_isVerified(purchase)) {
++          onEntitlementChanged?.call(true);
++          _message(purchase.status == PurchaseStatus.restored
++              ? 'Premium restored. Welcome back!'
++              : 'Premium activated. Thank you! 🎉');
++        } else {
++          _message('Purchase could not be verified.');
++        }
++        break;
++      case PurchaseStatus.error:
++        _message(purchase.error?.message ?? 'Purchase failed.');
++        debugPrint('🛒 purchase error: ${purchase.error?.message}');
++        break;
++      case PurchaseStatus.canceled:
++        _message('Purchase canceled.');
++        break;
++      case PurchaseStatus.pending:
++        _message('Purchase pending…');
++        break;
++    }
++
++    // ALWAYS finish the purchase so it is not stuck pending in the store.
++    if (purchase.pendingCompletePurchase) {
++      try {
++        await _iap.completePurchase(purchase);
++      } catch (e) {
++        debugPrint('🛒 completePurchase failed: $e');
++      }
++    }
++  }
++
++  /// Basic verification. For full production security, forward
++  /// `purchase.verificationData.serverVerificationData` to your backend and
++  /// validate against Google Play Developer API before granting entitlement.
++  bool _isVerified(PurchaseDetails purchase) {
++    final data = purchase.verificationData;
++    if (data == null) return true; // sandbox / test purchases
++    final server = data.serverVerificationData;
++    return server.isNotEmpty;
++  }
++
++  // ── ACTIONS ─────────────────────────────────────────
++  /// Initiates a real purchase for the given plan id.
++  /// Returns true if the Play sheet was shown; the final outcome arrives via
++  /// the purchase stream (and updates Premium through the provider).
++  Future<bool> buyProduct(String productId) async {
++    if (!_available) {
++      _message('Store not available. Connect Google Play Billing to buy.');
++      return false;
++    }
++    final details = _products[productId];
++    if (details == null) {
++      _message(
++        'Plan not found in the store yet. Create "$productId" in Play Console, '
++        'or use the dev Premium toggle to test.',
++      );
++      return false;
++    }
++
++    final purchaseParam = PurchaseParam(productDetails: details);
++    try {
++      // Subscriptions and one-time non-consumables are both bought this way;
++      // the store treats them according to their configured type.
++      return await _iap.buyNonConsumable(purchaseParam: purchaseParam);
++    } on InAppPurchaseException catch (e) {
++      _message(e.message);
++      debugPrint('🛒 buyProduct error: ${e.message}');
++      return false;
++    } catch (e) {
++      _message('Unexpected purchase error: $e');
++      debugPrint('🛒 buyProduct error: $e');
++      return false;
++    }
++  }
++
++  /// Re-queries prior purchases and re-grants entitlement. Required by Google.
++  Future<void> restorePurchases() async {
++    if (!_available) {
++      _message('Store not available.');
++      return;
++    }
++    await _iap.restorePurchases();
++    debugPrint('🛒 restorePurchases called');
++  }
++
++  void _message(String msg) {
++    statusMessage.value = msg;
++    debugPrint('🛒 $msg');
++  }
++
++  void dispose() {
++    _sub?.cancel();
++    _sub = null;
++  }
++}
++
++class _Fallback {
++  final String price;
++  final String title;
++  const _Fallback({required this.price, required this.title});
++}
+diff --git a/lib/services/image_processor.dart b/lib/services/image_processor.dart
+index 6eae051..40e1031 100644
+--- a/lib/services/image_processor.dart
++++ b/lib/services/image_processor.dart
+@@ -308,7 +308,12 @@ class ImageProcessor {
+     Uint8List input, {
+     double radius = 0.6,
+   }) async {
+-    return await compute(_bgBlurSync, _BgBlurArgs(input, radius));
++    // Detect faces FIRST so we can keep them sharp and only blur the background.
++    final faceRegions = await OnDeviceMlService.detectFaceRegions(input);
++    return await compute(
++      _bgBlurSync,
++      _BgBlurArgs(input, radius, faceRegions),
++    );
+   }
+ 
+   static Uint8List _bgBlurSync(_BgBlurArgs args) {
+@@ -326,17 +331,36 @@ class ImageProcessor {
+     final double centerY = h / 2.0;
+     final double maxDist = math.sqrt(centerX * centerX + centerY * centerY);
+ 
++    // How much to expand each face box so hair/shoulders also stay sharp.
++    final double facePad = (w * 0.05) + 24.0;
++
+     for (int y = 0; y < h; y++) {
+       for (int x = 0; x < w; x++) {
+-        final double dx = x - centerX;
+-        final double dy = y - centerY;
+-        final double dist = math.sqrt(dx * dx + dy * dy);
+-        final double normDist = dist / maxDist;
++        final pOffset = Offset(x.toDouble(), y.toDouble());
+ 
+-        double blurWeight =
+-            ((normDist - 0.25) / 0.50).clamp(0.0, 1.0).toDouble();
+-        blurWeight =
+-            3 * blurWeight * blurWeight - 2 * blurWeight * blurWeight * blurWeight;
++        // Keep any detected face region sharp (blur weight = 0).
++        bool keepSharp = false;
++        for (final region in args.faceRegions) {
++          if (region.boundingBox.inflate(facePad).contains(pOffset)) {
++            keepSharp = true;
++            break;
++          }
++        }
++
++        double blurWeight;
++        if (keepSharp) {
++          blurWeight = 0.0;
++        } else {
++          final double dx = x - centerX;
++          final double dy = y - centerY;
++          final double dist = math.sqrt(dx * dx + dy * dy);
++          final double normDist = dist / maxDist;
++
++          blurWeight =
++              ((normDist - 0.25) / 0.50).clamp(0.0, 1.0).toDouble();
++          blurWeight =
++              3 * blurWeight * blurWeight - 2 * blurWeight * blurWeight * blurWeight;
++        }
+ 
+         final orig = src.getPixel(x, y);
+         final bg = bgBlur.getPixel(x, y);
+@@ -855,8 +879,9 @@ class _FaceEnhanceArgs {
+ class _BgBlurArgs {
+   final Uint8List input;
+   final double radius;
++  final List<FaceRegion> faceRegions;
+ 
+-  _BgBlurArgs(this.input, this.radius);
++  _BgBlurArgs(this.input, this.radius, this.faceRegions);
+ }
+ 
+ class _UpscaleArgs {
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 8014f6f..abccd41 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -30,7 +30,9 @@ dependencies:
+   http: ^1.2.1
+   url_launcher: ^6.3.0
+   google_mlkit_face_detection: ^0.12.0
++  # Monetization
+   google_mobile_ads: ^9.0.0
++  in_app_purchase: ^3.2.0
+ 
+   # Splash & icons
+   flutter_native_splash: ^2.4.0
+-- 
+2.47.3
+

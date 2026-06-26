@@ -52,15 +52,15 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: const Text(
-          'Batch AI Studio',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        title: Text(
+          AppStrings.getText('batchStudio', provider.languageCode),
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
           if (provider.batchImages.isNotEmpty && !provider.isBatchProcessing)
             IconButton(
               icon: const Icon(Icons.refresh, color: AppColors.success),
-              tooltip: 'Clear Batch',
+              tooltip: AppStrings.getText('clearBatch', provider.languageCode),
               onPressed: () {
                 provider.clearBatch();
               },
@@ -96,19 +96,19 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Batch Photo Enhance',
-              style: TextStyle(
+            Text(
+              AppStrings.getText('batchEmptyTitle', provider.languageCode),
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 10),
-            const Text(
-              'Select multiple photos from your library to restore, upscale, or colorize them all in one single high-speed queue!',
+            Text(
+              AppStrings.getText('batchEmptySub', provider.languageCode),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: AppColors.textMuted,
                 fontSize: 14,
                 height: 1.45,
@@ -140,9 +140,9 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                   await provider.pickBatchImages();
                 },
                 icon: const Icon(Icons.add_photo_alternate, size: 20),
-                label: const Text(
-                  'Select Batch Photos',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                label: Text(
+                  AppStrings.getText('selectBatchPhotos', provider.languageCode),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
@@ -251,11 +251,11 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (!isCompleted) ...[
-                const Align(
+                Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Select AI Batch Action:',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    AppStrings.getText('selectBatchAction', provider.languageCode),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -276,7 +276,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                             color: isSelected ? Colors.black : AppColors.text,
                           ),
                           label: Text(
-                            item['title']!,
+                            AppStrings.getText('feat_${item['id']}_title', provider.languageCode),
                             style: TextStyle(
                               color: isSelected ? Colors.black : AppColors.text,
                               fontWeight: FontWeight.bold,
@@ -311,12 +311,12 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.check_circle_outline, color: AppColors.success, size: 22),
-                      SizedBox(width: 12),
+                      const Icon(Icons.check_circle_outline, color: AppColors.success, size: 22),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'All photos processed successfully! You can now save them to your device gallery in one tap.',
-                          style: TextStyle(color: Colors.white, fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w500),
+                          AppStrings.getText('batchDoneMsg', provider.languageCode),
+                          style: const TextStyle(color: Colors.white, fontSize: 12.5, height: 1.4, fontWeight: FontWeight.w500),
                         ),
                       ),
                     ],
@@ -339,7 +339,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                           onPressed: () => provider.processBatch(_selectedFeatureId),
                           icon: const Icon(Icons.rocket_launch, size: 20),
                           label: Text(
-                            'Process ${provider.batchImages.length} Images',
+                            '${AppStrings.getText('processNImages', provider.languageCode)} (${provider.batchImages.length})',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5),
                           ),
                           style: ElevatedButton.styleFrom(
@@ -359,8 +359,8 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                             final success = await provider.saveBatchToGallery();
                             if (mounted && success) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('🎉 All batch photos saved successfully to your gallery!'),
+                                SnackBar(
+                                  content: Text(AppStrings.getText('batchSavedSnack', provider.languageCode)),
                                   backgroundColor: AppColors.success,
                                 ),
                               );
@@ -368,9 +368,9 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
                             }
                           },
                           icon: const Icon(Icons.download_done_rounded, size: 20, color: Colors.black),
-                          label: const Text(
-                            'Save All to Gallery',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black),
+                          label: Text(
+                            AppStrings.getText('saveAllGallery', provider.languageCode),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.gold,
@@ -420,15 +420,15 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
             ),
             const SizedBox(height: 36),
             Text(
-              provider.batchStatusMessage ?? 'Processing queue...',
+              provider.batchStatusMessage ?? AppStrings.getText('processingQueue', provider.languageCode),
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Processing your queue. Cloud is used for Premium when available; otherwise local fallback is used. Please keep the app open.',
+            Text(
+              AppStrings.getText('batchKeepOpen', provider.languageCode),
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
           ],
         ),
@@ -437,25 +437,26 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
   }
 
   void _showPremiumLockedDialog(BuildContext context) {
+    final lang = context.read<AppProvider>().languageCode;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.workspace_premium, color: AppColors.gold, size: 24),
-            SizedBox(width: 10),
-            Text('Premium Feature', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const Icon(Icons.workspace_premium, color: AppColors.gold, size: 24),
+            const SizedBox(width: 10),
+            Text(AppStrings.getText('premiumFeature', lang), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
-        content: const Text(
-          'Batch AI Processing is a PRO exclusive feature. Upgrade to Premium to process multiple photos in one queue, save all results, and use cloud enhancement when available.',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.4),
+        content: Text(
+          AppStrings.getText('premiumBatchSub', lang),
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Maybe Later', style: TextStyle(color: AppColors.textMuted)),
+            child: Text(AppStrings.getText('maybeLater', lang), style: const TextStyle(color: AppColors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -469,7 +470,7 @@ class _BatchProcessScreenState extends State<BatchProcessScreen> {
               backgroundColor: AppColors.gold,
               foregroundColor: Colors.black,
             ),
-            child: const Text('Go Premium'),
+            child: Text(AppStrings.getText('goPremium', lang)),
           ),
         ],
       ),

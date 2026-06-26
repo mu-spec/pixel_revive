@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
+import 'package:pixel_revive/constants/app_strings.dart';
+import 'package:pixel_revive/providers/app_provider.dart';
 
 class ProcessingDialog extends StatefulWidget {
   const ProcessingDialog({super.key});
@@ -14,14 +17,15 @@ class _ProcessingDialogState extends State<ProcessingDialog>
   late Animation<double> _laserAnimation;
 
   int _textIndex = 0;
-  final List<String> _loadingPhrases = [
-    'Scanning image pixels...',
-    'Decompressing resolution...',
-    'Detecting facial structures...',
-    'Smoothing skin gradients...',
-    'Reconstructing high-frequency details...',
-    'Applying split-toning highlights...',
-    'Saving secure local export...',
+
+  List<String> _loadingPhrases(String lang) => [
+    AppStrings.getText('phrase1', lang),
+    AppStrings.getText('phrase2', lang),
+    AppStrings.getText('phrase3', lang),
+    AppStrings.getText('phrase4', lang),
+    AppStrings.getText('phrase5', lang),
+    AppStrings.getText('phrase6', lang),
+    AppStrings.getText('phrase7', lang),
   ];
 
   @override
@@ -46,7 +50,7 @@ class _ProcessingDialogState extends State<ProcessingDialog>
       await Future.delayed(const Duration(milliseconds: 1600));
       if (mounted) {
         setState(() {
-          _textIndex = (_textIndex + 1) % _loadingPhrases.length;
+          _textIndex = (_textIndex + 1) % 7;
         });
       }
     }
@@ -60,6 +64,8 @@ class _ProcessingDialogState extends State<ProcessingDialog>
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final phrases = _loadingPhrases(provider.languageCode);
     return WillPopScope(
       onWillPop: () async => false, // Prevent dismissing by back button
       child: Dialog(
@@ -154,9 +160,9 @@ class _ProcessingDialogState extends State<ProcessingDialog>
               ),
               const SizedBox(height: 28),
               // Main title
-              const Text(
-                'AI Processing...',
-                style: TextStyle(
+              Text(
+                AppStrings.getText('aiProcessing', provider.languageCode),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -176,7 +182,7 @@ class _ProcessingDialogState extends State<ProcessingDialog>
                     );
                   },
                   child: Text(
-                    _loadingPhrases[_textIndex],
+                    phrases[_textIndex],
                     key: ValueKey<int>(_textIndex),
                     style: const TextStyle(
                       color: AppColors.textMuted,

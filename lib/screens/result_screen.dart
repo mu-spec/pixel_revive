@@ -41,10 +41,10 @@ class ResultScreen extends StatelessWidget {
 
   Widget _buildSliderView(AppProvider provider) {
     if (provider.originalBytes == null || provider.processedBytes == null) {
-      return const Center(
+      return Center(
         child: Text(
-          'Image bytes missing. Please re-run process.',
-          style: TextStyle(color: AppColors.textMuted),
+          AppStrings.getText('imageMissing', provider.languageCode),
+          style: const TextStyle(color: AppColors.textMuted),
         ),
       );
     }
@@ -309,8 +309,8 @@ class ResultScreen extends StatelessWidget {
         _showSuccessDialog(context, provider);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to save to phone gallery. Please allow Photos/Gallery access.'),
+          SnackBar(
+            content: Text(AppStrings.getText('saveFailedSnack', provider.languageCode)),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -390,7 +390,7 @@ class ResultScreen extends StatelessWidget {
                           await StorageService.openGallery();
                         },
                         icon: const Icon(Icons.photo_library_outlined, size: 18),
-                        label: const Text('Open Gallery'),
+                        label: Text(AppStrings.getText('openGallery', provider.languageCode)),
                       ),
                     ),
                   ),

@@ -86,7 +86,7 @@ class AiLabTab extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    isCloudActive ? 'SECURE CLOUD AI PROCESSING ⚡' : 'ON-DEVICE AI PROCESSING',
+                    isCloudActive ? AppStrings.getText('cloudBadge', provider.languageCode) : AppStrings.getText('onDeviceBadge', provider.languageCode),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -97,8 +97,8 @@ class AiLabTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  isCloudActive 
-                      ? 'Ultra HD Facial Reconstruction\nPowered by Cloud GPUs' 
+                  isCloudActive
+                      ? AppStrings.getText('cloudHeadline', provider.languageCode)
                       : AppStrings.getText('subTagline', provider.languageCode),
                   style: const TextStyle(
                     color: Colors.white,
@@ -110,8 +110,8 @@ class AiLabTab extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   isCloudActive
-                      ? 'Running state-of-the-art CodeFormer models on high-speed servers for mind-blowing crystalline details.'
-                      : 'Breathe new life into pixelated, blurry, or black & white photos locally on your phone without uploading them anywhere.',
+                      ? AppStrings.getText('cloudDesc', provider.languageCode)
+                      : AppStrings.getText('onDeviceHeroDesc', provider.languageCode),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -169,28 +169,28 @@ class AiLabTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Text(
-                          'Batch AI Enhance',
-                          style: TextStyle(
+                          AppStrings.getText('batchTitle', provider.languageCode),
+                          style: const TextStyle(
                             color: AppColors.text,
                             fontSize: 16,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Icon(Icons.workspace_premium, color: AppColors.gold, size: 14),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.workspace_premium, color: AppColors.gold, size: 14),
                       ],
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      'Process multiple images in parallel instantly',
-                      style: TextStyle(
+                      AppStrings.getText('batchSub', provider.languageCode),
+                      style: const TextStyle(
                         color: AppColors.textMuted,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -214,22 +214,22 @@ class AiLabTab extends StatelessWidget {
   Widget _buildShowcaseGallery(BuildContext context, AppProvider provider) {
     final List<Map<String, String>> showcaseItems = [
       {
-        'title': 'Family Archivist',
-        'subtitle': 'Colorize and clear scratches',
+        'title': AppStrings.getText('showcase1Title', provider.languageCode),
+        'subtitle': AppStrings.getText('showcase1Sub', provider.languageCode),
         'type': 'restore',
-        'desc': 'Brings aged, faded sepia portraits back to life with vibrant, realistic color balance and crisp contrasts.',
+        'desc': AppStrings.getText('showcase1Desc', provider.languageCode),
       },
       {
-        'title': 'Crystalline Face',
-        'subtitle': 'HD upscaling & edge sharp',
+        'title': AppStrings.getText('showcase2Title', provider.languageCode),
+        'subtitle': AppStrings.getText('showcase2Sub', provider.languageCode),
         'type': 'upscale',
-        'desc': 'Increases blurry or pixelated details by 2x using advanced mathematical sub-pixel scaling and sharpening.',
+        'desc': AppStrings.getText('showcase2Desc', provider.languageCode),
       },
       {
-        'title': 'Bokeh Portrait',
-        'subtitle': 'DSLR vignette blur depth',
+        'title': AppStrings.getText('showcase3Title', provider.languageCode),
+        'subtitle': AppStrings.getText('showcase3Sub', provider.languageCode),
         'type': 'blur',
-        'desc': 'Keeps central facial subjects in perfect focus while smoothly feathering and blurring cluttered backgrounds.',
+        'desc': AppStrings.getText('showcase3Desc', provider.languageCode),
       },
     ];
 
@@ -239,9 +239,9 @@ class AiLabTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Interactive Showcase',
-              style: TextStyle(
+            Text(
+              AppStrings.getText('showcaseTitle', provider.languageCode),
+              style: const TextStyle(
                 color: AppColors.text,
                 fontSize: 18,
                 fontWeight: FontWeight.w900,

@@ -63,14 +63,14 @@ class _EditorScreenState extends State<EditorScreen> {
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: const Text(
-          'AI Photo Studio',
-          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19),
+        title: Text(
+          AppStrings.getText('aiStudio', provider.languageCode),
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 19),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.crop_rotate, color: AppColors.success),
-            tooltip: 'Crop & Rotate',
+            tooltip: AppStrings.getText('cropRotate', provider.languageCode),
             onPressed: () {
               Navigator.push(
                 context,
@@ -97,8 +97,11 @@ class _EditorScreenState extends State<EditorScreen> {
   Widget _buildImagePreview(AppProvider provider) {
     final imageToShow = provider.displayBytes ?? provider.originalBytes;
     if (imageToShow == null) {
-      return const Center(
-        child: Text('No image selected', style: TextStyle(color: AppColors.textMuted)),
+      return Center(
+        child: Text(
+          AppStrings.getText('noImageSelected', provider.languageCode),
+          style: const TextStyle(color: AppColors.textMuted),
+        ),
       );
     }
 
@@ -212,7 +215,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     if (id == 'auto') {
       return _sliderCard(
-        title: 'Enhance Strength',
+        title: AppStrings.getText('enhanceStrength', provider.languageCode),
         value: provider.enhanceStrength,
         onChanged: (v) {
           provider.setEnhanceStrength(v);
@@ -227,7 +230,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return Column(
         children: [
           _sliderCard(
-            title: 'Face Enhance Strength',
+            title: AppStrings.getText('faceStrength', provider.languageCode),
             value: provider.enhanceStrength,
             onChanged: (v) {
               provider.setEnhanceStrength(v);
@@ -237,7 +240,7 @@ class _EditorScreenState extends State<EditorScreen> {
             activeColor: AppColors.success,
           ),
           _sliderCard(
-            title: 'Skin Smoothness',
+            title: AppStrings.getText('skinSmoothness', provider.languageCode),
             value: provider.skinSmoothness,
             onChanged: (v) {
               provider.setSkinSmoothness(v);
@@ -250,7 +253,7 @@ class _EditorScreenState extends State<EditorScreen> {
       );
     } else if (id == 'bg') {
       return _sliderCard(
-        title: 'Background Bokeh Depth',
+        title: AppStrings.getText('bokehDepth', provider.languageCode),
         value: provider.bokehBlur,
         onChanged: (v) {
           provider.setBokehBlur(v);
@@ -307,9 +310,9 @@ class _EditorScreenState extends State<EditorScreen> {
             children: [
               const Icon(Icons.hd, color: AppColors.gold, size: 18),
               const SizedBox(width: 8),
-              const Text(
-                'Upscale Size',
-                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              Text(
+                AppStrings.getText('upscaleSize', provider.languageCode),
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const Spacer(),
               Text(
@@ -321,15 +324,15 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _scaleOption(provider, 2, '2x', 'Fast HD'),
+              _scaleOption(provider, 2, '2x', AppStrings.getText('fastHd', provider.languageCode)),
               const SizedBox(width: 10),
-              _scaleOption(provider, 4, '4x', 'Ultra HD'),
+              _scaleOption(provider, 4, '4x', AppStrings.getText('ultraHd', provider.languageCode)),
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            '4x creates larger files and may take longer, especially on-device.',
-            style: TextStyle(color: AppColors.textMuted, fontSize: 10.5, height: 1.3),
+          Text(
+            AppStrings.getText('upscaleNote', provider.languageCode),
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 10.5, height: 1.3),
           ),
         ],
       ),
@@ -450,7 +453,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       children: [
                         Icon(feature.icon, color: isSelected ? Colors.white : feature.color, size: 24),
                         const SizedBox(height: 8),
-                        Text(feature.title, textAlign: TextAlign.center, style: TextStyle(color: isSelected ? Colors.white : AppColors.text, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.1), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(AppStrings.getText('feat_${feature.id}_title', provider.languageCode), textAlign: TextAlign.center, style: TextStyle(color: isSelected ? Colors.white : AppColors.text, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.1), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
@@ -501,7 +504,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     child: ElevatedButton.icon(
                       onPressed: provider.isProcessing ? null : _process,
                       icon: provider.isProcessing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.auto_fix_high, size: 20),
-                      label: Text(provider.isProcessing ? 'Processing...' : AppStrings.getText('enhance', provider.languageCode), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
+                      label: Text(provider.isProcessing ? AppStrings.getText('processingLabel', provider.languageCode) : AppStrings.getText('enhance', provider.languageCode), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, foregroundColor: Colors.white, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     ),
                   ),
