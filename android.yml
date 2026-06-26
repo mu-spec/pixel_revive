@@ -1,0 +1,50 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: flutter-action/setup-flutter@v3
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+
+      - name: Generate launcher icons
+        run: |
+          flutter pub run flutter_launcher_icons:main
+
+      - name: Build debug APK
+        run: |
+          flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixelRevive-APK
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Build release APK
+        run: |
+          flutter build apk --release
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixelRevive-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
