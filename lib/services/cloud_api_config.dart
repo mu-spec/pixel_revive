@@ -36,13 +36,17 @@ class CloudApiConfig {
   // false = Fal.ai
   static const bool useReplicate = true;
 
-  // ── CLOUD AI FOR PREMIUM USERS ONLY ────────────────
-  // true  = only premium users use cloud AI
-  // false = free users can also use limited cloud AI
-  static const bool cloudAiPremiumOnly = true;
+  // ── CLOUD AI POLICY ────────────────────────────────
+  // false = OPTION B (matches PRD free tier): free users get a limited number
+  //         of real cloud AI runs per day; premium users get unlimited.
+  // true  = OPTION A: cloud AI is premium-only (free users get local filters).
+  static const bool cloudAiPremiumOnly = false;
 
   // ── DAILY CLOUD AI LIMIT PER FREE USER ─────────────
-  // Only used if cloudAiPremiumOnly = false.
+  // Used when cloudAiPremiumOnly = false. After this many cloud runs in a day,
+  // free users automatically fall back to on-device processing.
+  // Cost note: ~$0.003–0.005 per Replicate run, so 3/day ≈ $0.45/month per
+  // active daily free user. Lower this number to control cloud spend.
   static const int freeDailyCloudLimit = 3;
 
   static String get normalizedBackendBaseUrl =>

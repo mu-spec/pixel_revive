@@ -422,6 +422,20 @@ class AiApiService {
           },
         );
 
+      case 'denoise':
+      case 'unblur':
+        // Enhancement/denoise via Real-ESRGAN (genuine AI noise reduction & deblur).
+        return await runReplicatePrediction(
+          imageBytes: imageBytes,
+          modelOwner: 'nightmareai',
+          modelName: 'real-esrgan',
+          apiToken: apiToken,
+          additionalInput: {
+            'scale': 2,
+            'face_enhance': false,
+          },
+        );
+
       case 'colorize':
         return await runReplicatePrediction(
           imageBytes: imageBytes,

@@ -308,7 +308,12 @@ class ImageProcessor {
     Uint8List input, {
     double radius = 0.6,
   }) async {
-    return await compute(_bgBlurSync, _BgBlurArgs(input, radius));
+    // Detect faces FIRST so we can keep them sharp and only blur the background.
+    final faceRegions = await OnDeviceMlService.detectFaceRegions(input);
+    return await compute(
+      _bgBlurSync,
+      _BgBlurArgs(input, radius, faceRegions),
+    );
   }
 
   static Uint8List _bgBlurSync(_BgBlurArgs args) {
@@ -326,17 +331,36 @@ class ImageProcessor {
     final double centerY = h / 2.0;
     final double maxDist = math.sqrt(centerX * centerX + centerY * centerY);
 
+    // How much to expand each face box so hair/shoulders also stay sharp.
+    final double facePad = (w * 0.05) + 24.0;
+
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
-        final double dx = x - centerX;
-        final double dy = y - centerY;
-        final double dist = math.sqrt(dx * dx + dy * dy);
-        final double normDist = dist / maxDist;
+        final pOffset = Offset(x.toDouble(), y.toDouble());
 
-        double blurWeight =
-            ((normDist - 0.25) / 0.50).clamp(0.0, 1.0).toDouble();
-        blurWeight =
-            3 * blurWeight * blurWeight - 2 * blurWeight * blurWeight * blurWeight;
+        // Keep any detected face region sharp (blur weight = 0).
+        bool keepSharp = false;
+        for (final region in args.faceRegions) {
+          if (region.boundingBox.inflate(facePad).contains(pOffset)) {
+            keepSharp = true;
+            break;
+          }
+        }
+
+        double blurWeight;
+        if (keepSharp) {
+          blurWeight = 0.0;
+        } else {
+          final double dx = x - centerX;
+          final double dy = y - centerY;
+          final double dist = math.sqrt(dx * dx + dy * dy);
+          final double normDist = dist / maxDist;
+
+          blurWeight =
+              ((normDist - 0.25) / 0.50).clamp(0.0, 1.0).toDouble();
+          blurWeight =
+              3 * blurWeight * blurWeight - 2 * blurWeight * blurWeight * blurWeight;
+        }
 
         final orig = src.getPixel(x, y);
         final bg = bgBlur.getPixel(x, y);
@@ -855,8 +879,9 @@ class _FaceEnhanceArgs {
 class _BgBlurArgs {
   final Uint8List input;
   final double radius;
+  final List<FaceRegion> faceRegions;
 
-  _BgBlurArgs(this.input, this.radius);
+  _BgBlurArgs(this.input, this.radius, this.faceRegions);
 }
 
 class _UpscaleArgs {

@@ -43,7 +43,7 @@ class AppStrings {
       'desc_colorize': 'Colorize B&W adds a warm color treatment to monochrome photos locally. Dedicated historical AI colorization can be added later through the backend model pipeline.',
       'desc_restore': 'Old Photo Restore improves faded, yellowed, or sepia photos by balancing color, contrast, noise, and sharpness. Cloud mode can enhance faces/details when available.',
       'desc_cartoon': 'Cartoon Effect processes the image with color quantization and edge tracing, turning normal photos into hand-drawn digital cel-shaded pop art.',
-      'desc_bg': 'Background Blur simulates premium lens bokeh. It centers focus around the central photographic subject and gently softens the background.',
+      'desc_bg': 'Background Blur simulates premium lens bokeh. It detects faces with on-device ML and keeps them sharp while smoothly softening the surrounding background.',
       'desc_bg_cleanup': 'BG Cleanup uses cloud remove-background when available. If cloud is unavailable, the local fallback reduces background distractions with center-focus cleanup.',
 
       // Result Screen
@@ -73,7 +73,7 @@ class AppStrings {
       'payOnce': 'Pay once, use forever',
       'autoRenews': 'Auto-renews easily. Cancel anytime.',
       'localUnlockSnack': 'Success! You are now a PRO member.',
-      'billingNotice': 'Real Google Play / Apple App Store Billing will be connected in next step. Clicking the unlock button simulates billing completion locally for sandbox testing.',
+      'billingNotice': 'Google Play Billing is wired and ready. After your Play Developer account is set up and products (premium_weekly / premium_yearly / premium_lifetime) are created, real purchases activate with no code change.',
 
       // Feature Card Titles & Subtitles
       'feat_auto_title': 'Auto Enhance',
@@ -167,7 +167,7 @@ class AppStrings {
       'payOnce': 'Paga una vez, usa para siempre',
       'autoRenews': 'Se renueva fácilmente. Cancela en cualquier momento.',
       'localUnlockSnack': '¡Éxito! Ahora eres miembro PRO.',
-      'billingNotice': 'La facturación real se conectará en el siguiente paso. Al hacer clic en desbloquear se simula la compra en el entorno de pruebas.',
+      'billingNotice': 'La facturación de Google Play está lista. Tras crear tu cuenta de desarrollador y los productos (premium_weekly / premium_yearly / premium_lifetime) en Play Console, las compras reales se activan sin cambios en el código.',
 
       // Feature Card Titles & Subtitles
       'feat_auto_title': 'Mejora Automática',
@@ -255,6 +255,11 @@ class AppStrings {
       'yearly': 'Premium Annuel',
       'lifetime': 'Ultra à vie',
       'bestValue': 'MEILLEURE VALEUR',
+      'forever': 'POUR TOUJOURS',
+      'payOnce': 'Payez une fois, utilisez pour toujours',
+      'autoRenews': 'Renouvellement facile. Annulez à tout moment.',
+      'localUnlockSnack': 'Succès ! Vous êtes maintenant membre PRO.',
+      'billingNotice': 'La facturation Google Play est prête. Après avoir créé les produits (premium_weekly / premium_yearly / premium_lifetime) dans la Play Console, les achats réels s\'activent sans modification de code.',
     },
     'ur': {
       'tagline': 'AI فوٹو اینہانسر',
@@ -320,6 +325,13 @@ class AppStrings {
       'selectPlan': 'ایک پلان منتخب کریں',
       'weekly': 'ہفتہ وار',
       'yearly': 'سالانہ پریمیم',
+      'lifetime': 'لائف ٹائم الٹرا',
+      'bestValue': 'بہترین قیمت',
+      'forever': 'ہمیشہ کے لیے',
+      'payOnce': 'ایک بار ادا کریں، ہمیشہ استعمال کریں',
+      'autoRenews': 'آسانی سے تجدید ہوتی ہے۔ کبھی بھی منسوخ کریں۔',
+      'localUnlockSnack': 'کامیابی! آپ اب PRO ممبر ہیں۔',
+      'billingNotice': 'گوگل پلے بلنگ تیار ہے۔ پلے کنسول میں پراڈکٹس (premium_weekly / premium_yearly / premium_lifetime) بنانے کے بعد، اصلی خریداری کوڈ میں کوئی تبدیلی کیے بغیر فعال ہو جائے گی۔',
     },
     'ar': {
       'tagline': 'محسن صور احترافي بالذكاء الاصطناعي',
@@ -387,6 +399,12 @@ class AppStrings {
       'weekly': 'أسبوعي',
       'yearly': 'مميز سنوي',
       'lifetime': 'عضوية مدى الحياة',
+      'bestValue': 'أفضل قيمة',
+      'forever': 'للأبد',
+      'payOnce': 'ادفع مرة واحدة، واستخدم للأبد',
+      'autoRenews': 'يتجدد بسهولة. ألغِ في أي وقت.',
+      'localUnlockSnack': 'نجاح! أنت الآن عضو PRO.',
+      'billingNotice': 'نظام الدفع عبر Google Play جاهز. بعد إنشاء المنتجات (premium_weekly / premium_yearly / premium_lifetime) في Play Console، تُفعَّل عمليات الشراء الحقيقية دون أي تغيير في الكود.',
     },
     'de': {
       'tagline': 'Professioneller KI-Foto-Verbesserer',
@@ -454,6 +472,12 @@ class AppStrings {
       'weekly': 'Wöchentlich',
       'yearly': 'Jährliches Premium',
       'lifetime': 'Lebenslanges Ultra',
+      'bestValue': 'BESTER WERT',
+      'forever': 'FÜR IMMER',
+      'payOnce': 'Einmal zahlen, für immer nutzen',
+      'autoRenews': 'Einfache Verlängerung. Jederzeit kündbar.',
+      'localUnlockSnack': 'Erfolg! Du bist jetzt PRO-Mitglied.',
+      'billingNotice': 'Die Google Play-Abrechnung ist eingerichtet. Nach dem Erstellen der Produkte (premium_weekly / premium_yearly / premium_lifetime) in der Play Console werden echte Käufe ohne Codeänderung aktiviert.',
     }
   };
 

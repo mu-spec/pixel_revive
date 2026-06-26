@@ -9,6 +9,7 @@ import 'package:pixel_revive/services/ai_api_service.dart';
 import 'package:pixel_revive/services/cloud_api_config.dart';
 import 'package:pixel_revive/services/gpu_shader_service.dart';
 import 'package:pixel_revive/services/on_device_ml_service.dart';
+import 'package:pixel_revive/services/iap_service.dart';
 
 class AppProvider extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
@@ -46,9 +47,38 @@ class AppProvider extends ChangeNotifier {
 
   static const int _dailyFreeExports = 3;
 
+  // Features that have a real Replicate cloud model. Others (cartoon, bokeh)
+  // are local-only and must NOT be sent to cloud (they'd get the wrong model).
+  static const Set<String> _cloudCapableFeatures = {
+    'auto',
+    'face',
+    'restore',
+    'upscale',
+    'colorize',
+    'bg_cleanup',
+    'denoise',
+    'unblur',
+  };
+
+  static bool _isCloudCapableFeature(String featureId) =>
+      _cloudCapableFeatures.contains(featureId);
+
   AppProvider() {
     _loadPrefs();
     _preWarmServices();
+    _initIap();
+  }
+
+  Future<void> _initIap() async {
+    await IapService.instance.init(onEntitlementChanged: _applyIapEntitlement);
+  }
+
+  /// Called by the IAP service when a verified purchase/restore grants or
+  /// revokes Premium. Uses the same canonical setter as everything else.
+  void _applyIapEntitlement(bool isPremiumEntitled) {
+    if (isPremium != isPremiumEntitled) {
+      setPremium(isPremiumEntitled);
+    }
   }
 
   Future<void> _preWarmServices() async {
@@ -148,6 +178,7 @@ class AppProvider extends ChangeNotifier {
       return Colors.lightBlueAccent;
     }
     if (lastProcessingSource == 'Local Fallback') return Colors.orangeAccent;
+    if (lastProcessingSource == 'Daily AI limit reached') return Colors.orangeAccent;
     return Colors.greenAccent;
   }
 
@@ -286,7 +317,20 @@ class AppProvider extends ChangeNotifier {
     }
 
     bool cloudAttempted = false;
-    if (useCloudAi && canUseCloudAi) {
+    bool freeCloudLimitReached = false;
+
+    // OPTION B: detect when a free user has hit their daily cloud AI limit so
+    // we can tell them clearly why they got a local result instead of cloud AI.
+    if (!isPremium &&
+        CloudApiConfig.isCloudAvailable &&
+        !CloudApiConfig.cloudAiPremiumOnly &&
+        useCloudAi &&
+        _isCloudCapableFeature(featureId) &&
+        cloudAiUsedToday >= CloudApiConfig.freeDailyCloudLimit) {
+      freeCloudLimitReached = true;
+    }
+
+    if (useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId)) {
       cloudAttempted = true;
       try {
         final cloudResult = await AiApiService.smartEnhance(
@@ -366,10 +410,14 @@ class AppProvider extends ChangeNotifier {
       _lastProcessedBytes = result;
       _lastFeatureId = featureId;
       lastProcessingUsedCloud = false;
-      lastProcessingSource = cloudAttempted ? 'Local Fallback' : 'Local';
-      lastProcessingMessage = cloudAttempted
-          ? 'Cloud AI was unavailable or timed out. Local processing was used.'
-          : 'Processed on-device with local image enhancement.';
+      lastProcessingSource = freeCloudLimitReached
+          ? 'Daily AI limit reached'
+          : (cloudAttempted ? 'Local Fallback' : 'Local');
+      lastProcessingMessage = freeCloudLimitReached
+          ? 'Daily free AI limit (${CloudApiConfig.freeDailyCloudLimit}) reached — used fast on-device processing instead. Upgrade to Premium for unlimited AI.'
+          : (cloudAttempted
+              ? 'Cloud AI was unavailable or timed out. Local processing was used.'
+              : 'Processed on-device with local image enhancement.');
 
       _resetDailyIfNeeded();
       await _savePrefs();
@@ -600,6 +648,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     OnDeviceMlService.dispose();
+    IapService.instance.dispose();
     super.dispose();
   }
 }

@@ -84,6 +84,14 @@ function envModel(name, fallback) {
 }
 
 function replicateConfigForFeature(featureId, dataUri) {
+  // GFPGAN is NOT an "official" Replicate model, so the model-level endpoint
+  // (/v1/models/{owner}/{name}/predictions) returns 404. It MUST be called via
+  // the version-pinned endpoint (/v1/predictions with {version}). Any model
+  // string containing ':' below is automatically routed to that endpoint.
+  // Source: https://replicate.com/tencentarc/gfpgan/api (current version hash).
+  const GFPGAN_VERSION =
+    'tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c';
+
   switch (featureId) {
     case 'upscale':
       return {
@@ -130,7 +138,7 @@ function replicateConfigForFeature(featureId, dataUri) {
 
     case 'face':
       return {
-        model: envModel('REPLICATE_FACE_MODEL', 'tencentarc/gfpgan'),
+        model: envModel('REPLICATE_FACE_MODEL', GFPGAN_VERSION),
         input: {
           img: dataUri,
           version: 'v1.4',
@@ -138,10 +146,23 @@ function replicateConfigForFeature(featureId, dataUri) {
         },
       };
 
+    case 'denoise':
+    case 'unblur':
+      // Real-ESRGAN is an enhancement/denoise/super-res model — genuine AI
+      // for noise reduction and deblurring (no extra resolution gain needed).
+      return {
+        model: envModel('REPLICATE_ENHANCE_MODEL', 'nightmareai/real-esrgan'),
+        input: {
+          image: dataUri,
+          scale: 2,
+          face_enhance: false,
+        },
+      };
+
     case 'auto':
     default:
       return {
-        model: envModel('REPLICATE_AUTO_MODEL', 'tencentarc/gfpgan'),
+        model: envModel('REPLICATE_AUTO_MODEL', GFPGAN_VERSION),
         input: {
           img: dataUri,
           version: 'v1.4',

@@ -4,6 +4,7 @@ import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/services/cloud_api_config.dart';
+import 'package:pixel_revive/services/iap_service.dart';
 
 class PremiumScreen extends StatefulWidget {
   const PremiumScreen({super.key});
@@ -16,6 +17,37 @@ class _PremiumScreenState extends State<PremiumScreen> {
   int _selectedPlanIndex = 1;
   int _devModeTapCount = 0; // Hidden dev settings: tap title 5 times
   bool _showDevSettings = false;
+  bool _isPurchasing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Show IAP status messages (success / canceled / errors) as snackbars.
+    IapService.instance.statusMessage.addListener(_onIapStatus);
+  }
+
+  @override
+  void dispose() {
+    IapService.instance.statusMessage.removeListener(_onIapStatus);
+    super.dispose();
+  }
+
+  void _onIapStatus() {
+    final msg = IapService.instance.statusMessage.value;
+    if (msg == null || msg.isEmpty || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: AppColors.surface,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,22 +55,22 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
     final List<Map<String, dynamic>> plans = [
       {
+        'id': IapService.weeklyId,
         'title': AppStrings.getText('weekly', provider.languageCode),
-        'price': '\$2.99',
         'period': 'week',
         'tag': null,
         'sub': AppStrings.getText('autoRenews', provider.languageCode),
       },
       {
+        'id': IapService.yearlyId,
         'title': AppStrings.getText('yearly', provider.languageCode),
-        'price': '\$19.99',
         'period': 'year',
         'tag': AppStrings.getText('bestValue', provider.languageCode),
         'sub': AppStrings.getText('autoRenews', provider.languageCode),
       },
       {
+        'id': IapService.lifetimeId,
         'title': AppStrings.getText('lifetime', provider.languageCode),
-        'price': '\$39.99',
         'period': 'one-time',
         'tag': AppStrings.getText('forever', provider.languageCode),
         'sub': AppStrings.getText('payOnce', provider.languageCode),
@@ -159,6 +191,46 @@ class _PremiumScreenState extends State<PremiumScreen> {
               ),
             ),
             const SizedBox(height: 28),
+
+            // ── TEST MODE BANNER (when Play products aren't live yet) ──
+            if (IapService.instance.isTestMode)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.gold.withOpacity(0.4), width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Row(
+                      children: [
+                        Icon(Icons.science_outlined, color: AppColors.gold, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Test Mode — Billing not live yet',
+                          style: TextStyle(
+                            color: AppColors.gold,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Google Play products aren\'t configured yet. After your \$25 Play Developer '
+                      'account, create products premium_weekly, premium_yearly, premium_lifetime — '
+                      'real billing activates with no code change. To test Premium now, use the '
+                      'dev toggle (tap "PixelRevive PRO" 5×).',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
 
             // Cloud AI Status Card (visible to ALL users)
             Container(
@@ -359,7 +431,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              plan['price'],
+                              IapService.instance.priceFor(plan['id']),
                               style: const TextStyle(
                                 color: AppColors.text,
                                 fontSize: 16,
@@ -387,9 +459,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: provider.isPremium
+                onPressed: provider.isPremium || _isPurchasing
                     ? null
-                    : () => _unlockPremium(provider),
+                    : () => _onUnlockPressed(provider, plans),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.gold,
                   foregroundColor: Colors.white,
@@ -400,41 +472,49 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   ),
                   elevation: 4,
                 ),
-                child: Text(
-                  provider.isPremium
-                      ? AppStrings.getText('premiumActive', provider.languageCode)
-                      : AppStrings.getText('unlockPremium', provider.languageCode),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.2,
-                  ),
-                ),
+                child: _isPurchasing
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Text(
+                        provider.isPremium
+                            ? AppStrings.getText('premiumActive', provider.languageCode)
+                            : AppStrings.getText('unlockPremium', provider.languageCode),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 12),
-            if (provider.isPremium)
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: () => provider.setPremium(false),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textMuted,
-                    side: BorderSide(color: Colors.black.withOpacity(0.1)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Text('Restore Free (For Testing)'),
+            // Restore Purchases — required by Google Play policy.
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: TextButton.icon(
+                onPressed: _isPurchasing ? null : () => IapService.instance.restorePurchases(),
+                icon: const Icon(Icons.restore, size: 18, color: AppColors.textMuted),
+                label: const Text(
+                  'Restore Purchases',
+                  style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600),
                 ),
               ),
+            ),
             const SizedBox(height: 24),
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Text(
-                  AppStrings.getText('billingNotice', provider.languageCode),
+                  IapService.instance.hasRealProducts
+                      ? 'Payment is charged by Google Play. Subscriptions auto-renew unless canceled at least 24 hours before the period ends. Manage in Play Store → Subscriptions.'
+                      : AppStrings.getText('billingNotice', provider.languageCode),
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.4),
                 ),
@@ -481,6 +561,36 @@ class _PremiumScreenState extends State<PremiumScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Dev Premium override — test the premium experience without billing.
+              Row(
+                children: [
+                  const Icon(Icons.workspace_premium, color: AppColors.gold, size: 20),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Premium (dev test)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: provider.isPremium,
+                    activeColor: AppColors.gold,
+                    onChanged: (v) => provider.setPremium(v),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Manually grants Premium for testing. This is NOT a real purchase — '
+                'real billing is wired and activates when Play products go live.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+              ),
+              const SizedBox(height: 16),
+
               // Provider info
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -652,20 +762,32 @@ class _PremiumScreenState extends State<PremiumScreen> {
     );
   }
 
-  void _unlockPremium(AppProvider provider) {
-    provider.setPremium(true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.workspace_premium, color: AppColors.gold),
-            const SizedBox(width: 12),
-            Text(AppStrings.getText('localUnlockSnack', provider.languageCode)),
-          ],
+  Future<void> _onUnlockPressed(
+    AppProvider provider,
+    List<Map<String, dynamic>> plans,
+  ) async {
+    final planId = plans[_selectedPlanIndex]['id'] as String;
+
+    setState(() => _isPurchasing = true);
+
+    // Real Google Play billing path.
+    final initiated = await IapService.instance.buyProduct(planId);
+
+    if (!initiated && IapService.instance.isTestMode) {
+      // No Play products yet: guide the user to the dev toggle for testing.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '🧪 Billing is in test mode. Open Developer settings (tap '
+            '"PixelRevive PRO" 5×) to test Premium manually.',
+          ),
+          backgroundColor: AppColors.surface,
+          behavior: SnackBarBehavior.floating,
         ),
-        backgroundColor: AppColors.surface,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    }
+    // Success / cancellation messages arrive via the IAP statusMessage listener.
+
+    if (mounted) setState(() => _isPurchasing = false);
   }
 }
