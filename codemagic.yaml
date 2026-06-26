@@ -16,8 +16,8 @@ workflows:
       - name: Build Android Release APK - Universal Single APK
         script: |
           set -e
-          # Build ONE universal fat APK - no ABI splits
-          flutter build apk --release --no-split-per-abi --target-platform android-arm,android-arm64,android-x64
+          # Build ONE universal APK (all ABIs in one file)
+          flutter build apk --release
           
           echo "Searching for generated APK files..."
           find build -name "*.apk" -type f -print || true
@@ -42,4 +42,4 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - saaddkhan99@gmail.com
