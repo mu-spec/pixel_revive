@@ -15,16 +15,25 @@ workflows:
           flutter pub run flutter_launcher_icons:main
       - name: Build Android APK
         script: |
-          flutter build apk --release
+          flutter build apk --release 2>&1
           
           echo "=========================================="
-          echo "BUILD COMPLETED!"
+          echo "Checking for APK files..."
           echo "=========================================="
           
-          echo "Listing APK files:"
-          find build -name "*.apk" -type f 2>/dev/null || ls -la build/app/outputs/flutter-apk/
+          find . -name "*.apk" -type f 2>/dev/null
+          
+          echo "=========================================="
+          echo "Checking build directory..."
+          echo "=========================================="
+          
+          ls -la build/ 2>/dev/null || echo "No build directory"
+          ls -la build/app/ 2>/dev/null || echo "No build/app directory"
+          ls -la build/app/outputs/ 2>/dev/null || echo "No build/app/outputs directory"
+          ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "No flutter-apk directory"
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
+      - build/**/*.apk
     publishing:
       email:
         recipients:
