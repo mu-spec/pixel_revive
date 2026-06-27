@@ -13,9 +13,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlin {
-    jvmTarget = "17"
-  }
+  
 
     defaultConfig {
         applicationId = "com.app.revivememories"
