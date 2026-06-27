@@ -39,7 +39,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - saaddkhan99@gmail.com
+          - m94769568@gmail.com
         notify:
           success: true
           failure: true
