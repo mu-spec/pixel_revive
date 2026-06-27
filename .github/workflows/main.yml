@@ -1,50 +1,45 @@
-name: Build Android APK
-
-on:
-  push:
-    branches:
-      - main
-      - master
-  pull_request:
-    branches:
-      - main
-      - master
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: flutter-action/setup-flutter@v3
-
-      - name: Install dependencies
-        run: |
+workflows:
+  android-workflow:
+    name: PixelRevive Android APK
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      java: 17
+    triggering:
+      events:
+        - push
+        - tag
+        - pull_request
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+        - pattern: 'master'
+          include: true
+    scripts:
+      - name: Get Flutter dependencies
+        script: |
+          flutter clean
           flutter pub get
-
-      - name: Generate launcher icons
-        run: |
+      - name: Generate Android launcher icons
+        script: |
           flutter pub run flutter_launcher_icons:main
-
-      - name: Build debug APK
-        run: |
-          flutter build apk --debug
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: PixelRevive-Debug-APK
-          path: build/app/outputs/flutter-apk/app-debug.apk
-
-      - name: Build release APK
-        run: |
+      - name: Build Android APK
+        script: |
           flutter build apk --release
 
-      - name: Upload release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: PixelRevive-Release-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          echo "=========================================="
+          echo "BUILD COMPLETED!"
+          echo "=========================================="
+
+          ls -la build/app/outputs/flutter-apk/
+
+          echo "APK Size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+    publishing:
+      email:
+        recipients:
+          - saaddkhan99@gmail.com
+        notify:
+          success: true
+          failure: true
