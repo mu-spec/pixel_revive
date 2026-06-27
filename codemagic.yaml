@@ -26,16 +26,16 @@ workflows:
       - name: Build Android APK
         script: |
           flutter build apk --release
-
+          
           echo "=========================================="
           echo "BUILD COMPLETED!"
           echo "=========================================="
-
+          
           ls -la build/app/outputs/flutter-apk/
-
-          echo "APK Size: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)"
+          
+          echo "APK Size: $(du -h build/app/outputs/flutter-apk/app-release-unsigned.apk 2>/dev/null || du -h build/app/outputs/flutter-apk/app-release.apk 2>/dev/null || echo 'APK not found')"
     artifacts:
-      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/flutter-apk/*.apk
     publishing:
       email:
         recipients:
