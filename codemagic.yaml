@@ -5,45 +5,26 @@ workflows:
     environment:
       flutter: stable
       java: 17
-    triggering:
-      events:
-        - push
-        - tag
-        - pull_request
-      branch_patterns:
-        - pattern: 'main'
-          include: true
-        - pattern: 'master'
-          include: true
     scripts:
       - name: Get Flutter dependencies
         script: |
           flutter clean
-          rm -rf ~/.gradle/caches/ build/ android/.gradle/
           flutter pub get
-      - name: Generate Android launcher icons
-        script: |
-          flutter pub run flutter_launcher_icons:main
-      - name: Build Android Debug APK with verbose output
+      - name: Build Android Debug APK
         script: |
           cd android
           ./gradlew clean
           cd ..
-          flutter build apk --debug -v
-          
-          echo "=========================================="
-          echo "Searching for APK files..."
-          echo "=========================================="
-          find . -name "*.apk" -type f 2>/dev/null
-          ls -laR build/app/outputs/ 2>/dev/null || echo "No outputs directory"
+          flutter build apk --debug
+          cp build/app/outputs/flutter-apk/app-debug.apk ./pixel_revive_debug.apk
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
-      - build/app/outputs/apk/**/*.apk
-      - "*.apk"
+      - pixel_revive_debug.apk
     publishing:
       email:
         recipients:
           - ju8877521@gmail.com
+        attach_files: 
+          - pixel_revive_debug.apk
         notify:
           success: true
           failure: true
