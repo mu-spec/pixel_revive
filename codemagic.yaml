@@ -23,8 +23,6 @@ workflows:
       email:
         recipients:
           - ju8877521@gmail.com
-        attach_files: 
-          - pixel_revive_debug.apk
         notify:
           success: true
           failure: true
