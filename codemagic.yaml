@@ -5,15 +5,41 @@ workflows:
     environment:
       flutter: stable
       java: 17
+    triggering:
+      events:
+        - push
+        - tag
+        - pull_request
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+        - pattern: 'master'
+          include: true
     scripts:
       - name: Get Flutter dependencies
         script: |
+          flutter clean
+          rm -rf ~/.gradle/caches/ build/ android/.gradle/
           flutter pub get
-      - name: Build Android Debug APK
+      - name: Generate Android launcher icons
         script: |
-          flutter build apk --debug
+          flutter pub run flutter_launcher_icons:main
+      - name: Build Android Debug APK with verbose output
+        script: |
+          cd android
+          ./gradlew clean
+          cd ..
+          flutter build apk --debug -v
+          
+          echo "=========================================="
+          echo "Searching for APK files..."
+          echo "=========================================="
+          find . -name "*.apk" -type f 2>/dev/null
+          ls -laR build/app/outputs/ 2>/dev/null || echo "No outputs directory"
     artifacts:
-      - build/app/outputs/flutter-apk/app-debug.apk
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/apk/**/*.apk
+      - "*.apk"
     publishing:
       email:
         recipients:
