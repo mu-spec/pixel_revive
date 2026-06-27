@@ -8,16 +8,12 @@ workflows:
     scripts:
       - name: Get Flutter dependencies
         script: |
-          flutter clean
           flutter pub get
-      - name: Generate Android launcher icons
+      - name: Build Android Debug APK
         script: |
-          flutter pub run flutter_launcher_icons:main
-      - name: Build Android APK
-        script: |
-          flutter build apk --release
+          flutter build apk --debug
     artifacts:
-      - build/app/outputs/flutter-apk/app-release-unsigned.apk
+      - build/app/outputs/flutter-apk/app-debug.apk
     publishing:
       email:
         recipients:
