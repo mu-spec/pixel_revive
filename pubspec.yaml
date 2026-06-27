@@ -31,7 +31,7 @@ dependencies:
   url_launcher: ^6.3.0
   google_mlkit_face_detection: ^0.12.0
   # Monetization
-  google_mobile_ads: ^9.0.0
+  google_mobile_ads: ^5.3.1
   in_app_purchase: ^3.2.0
 
   # Splash & icons
