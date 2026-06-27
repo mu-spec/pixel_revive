@@ -5,16 +5,6 @@ workflows:
     environment:
       flutter: stable
       java: 17
-    triggering:
-      events:
-        - push
-        - tag
-        - pull_request
-      branch_patterns:
-        - pattern: 'main'
-          include: true
-        - pattern: 'master'
-          include: true
     scripts:
       - name: Get Flutter dependencies
         script: |
@@ -31,9 +21,8 @@ workflows:
           echo "BUILD COMPLETED!"
           echo "=========================================="
           
-          ls -la build/app/outputs/flutter-apk/
-          
-          echo "APK Size: $(du -h build/app/outputs/flutter-apk/app-release-unsigned.apk 2>/dev/null || du -h build/app/outputs/flutter-apk/app-release.apk 2>/dev/null || echo 'APK not found')"
+          echo "Listing APK files:"
+          find build -name "*.apk" -type f 2>/dev/null || ls -la build/app/outputs/flutter-apk/
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
     publishing:
