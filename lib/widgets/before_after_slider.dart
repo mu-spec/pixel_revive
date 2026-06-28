@@ -1,6 +1,9 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
+import 'package:pixel_revive/constants/app_strings.dart';
+import 'package:pixel_revive/providers/app_provider.dart';
 
 class BeforeAfterSlider extends StatefulWidget {
   final Uint8List beforeImage;
@@ -22,6 +25,7 @@ class _BeforeAfterSliderState extends State<BeforeAfterSlider> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.read<AppProvider>().languageCode;
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -133,12 +137,12 @@ class _BeforeAfterSliderState extends State<BeforeAfterSlider> {
                 Positioned(
                   left: 16,
                   top: 16,
-                  child: _label('ORIGINAL', AppColors.textMuted),
+                  child: _label(AppStrings.getText('labelOriginal', lang), AppColors.textMuted),
                 ),
                 Positioned(
                   right: 16,
                   top: 16,
-                  child: _label('ENHANCED', AppColors.success),
+                  child: _label(AppStrings.getText('labelEnhanced', lang), AppColors.success),
                 ),
               ],
             ),

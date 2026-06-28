@@ -207,6 +207,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildSlideVisual(String type) {
+    final lang = context.read<AppProvider>().languageCode;
     return Container(
       width: double.infinity,
       height: 260,
@@ -335,14 +336,14 @@ class _InteractiveDemoSliderState extends State<_InteractiveDemoSlider> {
               Positioned(
                 left: 14,
                 bottom: 14,
-                child: _buildLabel('AI ACTIVE', AppColors.success),
+                child: _buildLabel(AppStrings.getText('labelAiActive', lang), AppColors.success),
               ),
 
               // 6. Right Label "BEFORE"
               Positioned(
                 right: 14,
                 bottom: 14,
-                child: _buildLabel('ORIGINAL', AppColors.textMuted),
+                child: _buildLabel(AppStrings.getText('labelOriginal', lang), AppColors.textMuted),
               ),
             ],
           ),

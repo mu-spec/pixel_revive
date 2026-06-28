@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
+import 'package:pixel_revive/constants/app_strings.dart';
+import 'package:pixel_revive/providers/app_provider.dart';
 
 class DemoComparisonScreen extends StatefulWidget {
   final String type;
@@ -34,6 +37,7 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.read<AppProvider>().languageCode;
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
@@ -219,9 +223,9 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                           color: AppColors.accent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text(
-                          'INTERACTIVE DEMO',
-                          style: TextStyle(
+                        child: Text(
+                          AppStrings.getText('interactiveDemo', lang),
+                          style: const TextStyle(
                             color: AppColors.accent,
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -233,9 +237,9 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                       const Icon(Icons.swap_horiz_rounded,
                           color: AppColors.textMuted, size: 18),
                       const SizedBox(width: 6),
-                      const Text(
-                        'Drag to compare',
-                        style: TextStyle(
+                      Text(
+                        AppStrings.getText('dragToCompare', lang),
+                        style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 12,
                             fontWeight: FontWeight.w600),
