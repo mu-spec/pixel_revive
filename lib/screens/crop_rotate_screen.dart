@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
+import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/services/image_processor.dart';
 import 'package:pixel_revive/widgets/processing_dialog.dart';
@@ -403,14 +404,14 @@ class _CropRotateScreenState extends State<CropRotateScreen> {
         Navigator.pop(context); // Pop processing dialog
         Navigator.pop(context); // Pop Crop & Rotate screen
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image changes applied!')),
+          SnackBar(content: Text(AppStrings.getText('imageChangesApplied', provider.languageCode))),
         );
       }
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Pop processing dialog
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error applying changes: $e')),
+          SnackBar(content: Text('${AppStrings.getText('errorApplyingChanges', provider.languageCode)}: $e')),
         );
       }
     }
@@ -423,18 +424,18 @@ class _CropRotateScreenState extends State<CropRotateScreen> {
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: const Text('Crop & Rotate'),
+        title: Text(AppStrings.getText('cropRotateTitle', provider.languageCode)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Reset',
+            tooltip: AppStrings.getText('reset', provider.languageCode),
             onPressed: _reset,
           ),
           TextButton(
             onPressed: _isLoading ? null : _applyAndSave,
-            child: const Text(
-              'Apply',
-              style: TextStyle(
+            child: Text(
+              AppStrings.getText('apply', provider.languageCode),
+              style: const TextStyle(
                 color: AppColors.success,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -545,6 +546,7 @@ class _CropRotateScreenState extends State<CropRotateScreen> {
   }
 
   Widget _buildEditingControls() {
+    final lang = context.read<AppProvider>().languageCode;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       decoration: const BoxDecoration(
@@ -560,22 +562,22 @@ class _CropRotateScreenState extends State<CropRotateScreen> {
             children: [
               _controlBtn(
                 icon: Icons.rotate_left,
-                label: 'Rotate L',
+                label: AppStrings.getText('rotateLeft', lang),
                 onTap: _rotateCounterClockwise,
               ),
               _controlBtn(
                 icon: Icons.rotate_right,
-                label: 'Rotate R',
+                label: AppStrings.getText('rotateRight', lang),
                 onTap: _rotateClockwise,
               ),
               _controlBtn(
                 icon: Icons.flip,
-                label: 'Flip H',
+                label: AppStrings.getText('flipH', lang),
                 onTap: _flipHoriz,
               ),
               _controlBtn(
                 icon: Icons.swap_vert,
-                label: 'Flip V',
+                label: AppStrings.getText('flipV', lang),
                 onTap: _flipVert,
               ),
             ],

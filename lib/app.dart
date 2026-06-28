@@ -8,6 +8,9 @@ import 'package:pixel_revive/screens/splash_screen.dart';
 class PixelReviveApp extends StatelessWidget {
   const PixelReviveApp({super.key});
 
+  /// Languages that should display in right-to-left layout.
+  static const Set<String> _rtlLanguages = {'ur', 'ar'};
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
@@ -15,6 +18,17 @@ class PixelReviveApp extends StatelessWidget {
       child: MaterialApp(
         title: AppStrings.appName,
         debugShowCheckedModeBanner: false,
+        // Wrap the entire app in a Directionality that flips to RTL for
+        // Urdu/Arabic. Consumer rebuilds the whole tree whenever the user
+        // changes the language, so layout direction updates live.
+        builder: (context, child) {
+          final langCode = context.watch<AppProvider>().languageCode;
+          final isRtl = _rtlLanguages.contains(langCode);
+          return Directionality(
+            textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         theme: ThemeData.dark().copyWith(
           scaffoldBackgroundColor: AppColors.primary,
           colorScheme: const ColorScheme.dark(

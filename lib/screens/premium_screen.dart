@@ -147,17 +147,17 @@ class _PremiumScreenState extends State<PremiumScreen> {
                                   _showDevSettings = true;
                                 });
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('🔓 Developer settings unlocked!'),
+                                  SnackBar(
+                                    content: Text(AppStrings.getText('devUnlocked', provider.languageCode)),
                                     backgroundColor: AppColors.accent,
-                                    duration: Duration(seconds: 2),
+                                    duration: const Duration(seconds: 2),
                                   ),
                                 );
                               } else if (_devModeTapCount > 2) {
                                 ScaffoldMessenger.of(context).clearSnackBars();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('🔒 ${5 - _devModeTapCount} more taps for dev settings'),
+                                    content: Text('🔒 ${5 - _devModeTapCount} ${AppStrings.getText('devMoreTaps', provider.languageCode)}'),
                                     duration: const Duration(milliseconds: 600),
                                   ),
                                 );
@@ -205,14 +205,14 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Row(
                       children: [
-                        Icon(Icons.science_outlined, color: AppColors.gold, size: 20),
-                        SizedBox(width: 8),
+                        const Icon(Icons.science_outlined, color: AppColors.gold, size: 20),
+                        const SizedBox(width: 8),
                         Text(
-                          'Test Mode — Billing not live yet',
-                          style: TextStyle(
+                          AppStrings.getText('testModeBilling', provider.languageCode),
+                          style: const TextStyle(
                             color: AppColors.gold,
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
@@ -220,8 +220,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                         ),
                       ],
                     ),
-                    SizedBox(height: 8),
-                    Text(
+                    const SizedBox(height: 8),
+                    const Text(
                       'Google Play products aren\'t configured yet. After your \$25 Play Developer '
                       'account, create products premium_weekly, premium_yearly, premium_lifetime — '
                       'real billing activates with no code change. To test Premium now, use the '
@@ -260,8 +260,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       Expanded(
                         child: Text(
                           CloudApiConfig.isCloudAvailable
-                              ? '☁️ Cloud AI Connected'
-                              : '📱 On-Device Processing',
+                              ? AppStrings.getText('cloudAiConnected', provider.languageCode)
+                              : AppStrings.getText('onDeviceProcessing', provider.languageCode),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -501,9 +501,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
               child: TextButton.icon(
                 onPressed: _isPurchasing ? null : () => IapService.instance.restorePurchases(),
                 icon: const Icon(Icons.restore, size: 18, color: AppColors.textMuted),
-                label: const Text(
-                  'Restore Purchases',
-                  style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                label: Text(
+                  AppStrings.getText('restorePurchases', provider.languageCode),
+                  style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -513,7 +513,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Text(
                   IapService.instance.hasRealProducts
-                      ? 'Payment is charged by Google Play. Subscriptions auto-renew unless canceled at least 24 hours before the period ends. Manage in Play Store → Subscriptions.'
+                      ? AppStrings.getText('paymentTerms', provider.languageCode)
                       : AppStrings.getText('billingNotice', provider.languageCode),
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.4),
@@ -670,8 +670,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     onChanged: (v) {
                       if (v && !CloudApiConfig.isCloudAvailable && provider.devOverrideToken.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('No backend proxy/API token configured. Deploy backend proxy first or paste a dev token for testing.'),
+                          SnackBar(
+                            content: Text(AppStrings.getText('noBackendConfigured', provider.languageCode)),
                             backgroundColor: Colors.redAccent,
                           ),
                         );
