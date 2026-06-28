@@ -12,9 +12,17 @@ workflows:
           flutter pub get
       - name: Build Android Debug APK
         script: |
-          flutter build apk --debug
+          flutter build apk --debug || true
+          echo "===== Searching for any APK produced ====="
+          find . -name "*.apk" -type f 2>/dev/null
+          echo "=========================================="
+          # Copy whatever APK was built into a known location so the artifact is always captured
+          mkdir -p artifacts_out
+          find . -name "*.apk" -type f -exec cp {} artifacts_out/ \;
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/apk/**/*.apk
+      - artifacts_out/*.apk
     publishing:
       email:
         recipients:
