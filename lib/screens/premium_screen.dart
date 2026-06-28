@@ -65,7 +65,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
         'id': IapService.yearlyId,
         'title': AppStrings.getText('yearly', provider.languageCode),
         'period': 'year',
-        'tag': AppStrings.getText('bestValue', provider.languageCode),
+        'tag': null,
         'sub': AppStrings.getText('autoRenews', provider.languageCode),
       },
       {
@@ -304,6 +304,61 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       ),
                     ),
                   ],
+
+                  // ── USER-FACING PROCESSING MODE SELECTOR ──────────────
+                  // Lets every user clearly choose Offline (on-device) or
+                  // Cloud AI. If cloud isn't configured, only offline applies.
+                  const SizedBox(height: 16),
+                  const Divider(color: Colors.white12, height: 1),
+                  const SizedBox(height: 14),
+                  Text(
+                    AppStrings.getText('processingMode', provider.languageCode),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      // Offline option
+                      Expanded(
+                        child: _modeOption(
+                          context: context,
+                          icon: Icons.phone_android_rounded,
+                          title: AppStrings.getText('useOffline', provider.languageCode),
+                          subtitle: AppStrings.getText('offlineModeDesc', provider.languageCode),
+                          selected: !provider.useCloudAi,
+                          onTap: () => provider.setUseCloudAi(false),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Cloud option
+                      Expanded(
+                        child: _modeOption(
+                          context: context,
+                          icon: Icons.cloud_done_rounded,
+                          title: AppStrings.getText('useCloudAi', provider.languageCode),
+                          subtitle: AppStrings.getText('cloudModeDesc', provider.languageCode),
+                          selected: provider.useCloudAi,
+                          enabled: CloudApiConfig.isCloudAvailable || provider.devOverrideToken.isNotEmpty,
+                          onTap: () {
+                            if (!CloudApiConfig.isCloudAvailable && provider.devOverrideToken.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(AppStrings.getText('cloudNotAvailable', provider.languageCode)),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                              return;
+                            }
+                            provider.setUseCloudAi(true);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -730,6 +785,69 @@ class _PremiumScreenState extends State<PremiumScreen> {
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  /// A tappable card used in the Processing Mode selector (Offline vs Cloud).
+  Widget _modeOption({
+    required BuildContext context,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool selected,
+    required VoidCallback onTap,
+    bool enabled = true,
+  }) {
+    final Color accent = selected ? AppColors.success : Colors.white24;
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.5,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.success.withOpacity(0.12)
+                : Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: accent, width: selected ? 2 : 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon,
+                      color: selected ? AppColors.success : Colors.white54,
+                      size: 20),
+                  const Spacer(),
+                  if (selected)
+                    const Icon(Icons.check_circle,
+                        color: AppColors.success, size: 18),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 10.5,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
