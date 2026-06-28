@@ -3,7 +3,7 @@ workflows:
     name: PixelRevive Android APK
     max_build_duration: 60
     environment:
-      flutter: stable
+      flutter: 3.32.0
       java: 17
     scripts:
       - name: Get Flutter dependencies
