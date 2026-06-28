@@ -323,6 +323,92 @@ async function runReplicate(featureId, dataUri) {
   return outputToBase64(prediction.output);
 }
 
+// =============================================================
+// FIRE-AND-POLL (async) Replicate flow — works on free Vercel.
+//
+// Instead of one long synchronous request (which Vercel kills at 60s),
+// we split it into two fast requests:
+//   1) startReplicate(): creates the prediction, returns its id immediately.
+//   2) checkReplicate(): polls a single time and returns status/image.
+// The Flutter app calls (2) repeatedly until the prediction succeeds.
+// Each call finishes in a couple of seconds, so the 60s cap is never hit.
+// =============================================================
+async function startReplicate(featureId, dataUri) {
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
+
+  const { model, input } = replicateConfigForFeature(featureId, dataUri);
+
+  let createUrl;
+  let body;
+  if (model.includes(':')) {
+    createUrl = 'https://api.replicate.com/v1/predictions';
+    body = { version: model, input };
+  } else {
+    const [owner, name] = model.split('/');
+    if (!owner || !name) throw new Error(`Invalid Replicate model slug: ${model}`);
+    createUrl = `https://api.replicate.com/v1/models/${owner}/${name}/predictions`;
+    body = { input };
+  }
+
+  const createResponse = await fetchWithTimeout(createUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const createText = await createResponse.text();
+  let prediction;
+  try {
+    prediction = JSON.parse(createText);
+  } catch (_) {
+    throw new Error(`Replicate returned non-JSON response: ${createText.slice(0, 200)}`);
+  }
+  if (!createResponse.ok) {
+    throw new Error(`Replicate create failed: HTTP ${createResponse.status} ${createText}`);
+  }
+
+  return { id: prediction.id, status: prediction.status };
+}
+
+async function checkReplicate(predictionId) {
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
+
+  const pollUrl = `https://api.replicate.com/v1/predictions/${predictionId}`;
+  const pollResponse = await fetchWithTimeout(pollUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const pollText = await pollResponse.text();
+  let prediction;
+  try {
+    prediction = JSON.parse(pollText);
+  } catch (_) {
+    throw new Error(`Replicate poll returned non-JSON response: ${pollText.slice(0, 200)}`);
+  }
+  if (!pollResponse.ok) {
+    throw new Error(`Replicate poll failed: HTTP ${pollResponse.status} ${pollText}`);
+  }
+
+  const status = prediction.status;
+
+  if (status === 'succeeded') {
+    const result = await outputToBase64(prediction.output);
+    return { status, ...result };
+  }
+
+  if (status === 'failed' || status === 'canceled') {
+    throw new Error(`Replicate prediction ${status}. Error: ${prediction.error || 'unknown'}`);
+  }
+
+  // still processing
+  return { status };
+}
+
 async function runFal(featureId, dataUri) {
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
@@ -361,6 +447,59 @@ app.get('/health', (_req, res) => {
     replicateConfigured: Boolean(process.env.REPLICATE_API_TOKEN),
     falConfigured: Boolean(process.env.FAL_API_KEY),
   });
+});
+
+// ── ASYNC FIRE-AND-POLL ROUTES (free-Vercel friendly) ──────────────
+// Step 1: start a Replicate prediction and return its id fast (~2s).
+app.post('/enhance/start', requireClientSecret, async (req, res) => {
+  try {
+    const featureId = String(req.body.featureId || 'auto');
+    const provider = String(req.body.provider || DEFAULT_AI_PROVIDER).toLowerCase();
+
+    if (!allowedFeatures.has(featureId)) {
+      return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
+    }
+    // Async flow currently supports Replicate (Fal.ai is fast/synchronous via /enhance).
+    if (provider !== 'replicate') {
+      return res.status(400).json({ success: false, error: 'Async start supports replicate only' });
+    }
+
+    const normalized = normalizeImageInput(req.body.imageBase64, req.body.mimeType || 'image/jpeg');
+    const started = await startReplicate(featureId, normalized.dataUri);
+
+    res.json({ success: true, predictionId: started.id, status: started.status });
+  } catch (error) {
+    console.error('[enhance/start] error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to start prediction' });
+  }
+});
+
+// Step 2: check status; returns image when done. Each call is fast.
+app.get('/enhance/status/:id', requireClientSecret, async (req, res) => {
+  try {
+    const predictionId = String(req.params.id || '');
+    if (!predictionId) {
+      return res.status(400).json({ success: false, error: 'Missing prediction id' });
+    }
+
+    const result = await checkReplicate(predictionId);
+
+    if (result.status === 'succeeded') {
+      return res.json({
+        success: true,
+        done: true,
+        status: result.status,
+        mimeType: result.mimeType,
+        imageBase64: result.imageBase64,
+      });
+    }
+
+    // Still running (starting / processing)
+    return res.json({ success: true, done: false, status: result.status });
+  } catch (error) {
+    console.error('[enhance/status] error:', error);
+    res.status(500).json({ success: false, done: true, error: error.message || 'Status check failed' });
+  }
 });
 
 app.post('/enhance', requireClientSecret, async (req, res) => {

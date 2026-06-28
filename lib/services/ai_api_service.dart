@@ -89,6 +89,112 @@ class AiApiService {
     }
   }
 
+  /// FIRE-AND-POLL backend call (works on free Vercel — no 60s timeout).
+  ///
+  /// Step 1: POST /enhance/start -> returns a predictionId quickly.
+  /// Step 2: GET /enhance/status/:id repeatedly until done.
+  /// Each request is short, so Vercel's 60-second function cap is never hit.
+  static Future<Uint8List?> runBackendAsyncPrediction({
+    required Uint8List imageBytes,
+    required String featureId,
+  }) async {
+    final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
+    if (baseUrl.isEmpty) return null;
+
+    final client = http.Client();
+    try {
+      // Compress/resize the upload to keep the request small & fast.
+      var uploadBytes = imageBytes;
+      var decoded = img.decodeImage(uploadBytes);
+      if (decoded != null) {
+        if (decoded.width > 2048 || decoded.height > 2048) {
+          decoded = img.copyResize(
+            decoded,
+            width: decoded.width > decoded.height ? 2048 : null,
+            height: decoded.height >= decoded.width ? 2048 : null,
+          );
+        }
+        uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 92));
+      }
+
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (CloudApiConfig.backendClientSecret.isNotEmpty) {
+        headers['x-pixelrevive-client'] = CloudApiConfig.backendClientSecret;
+      }
+
+      // ── Step 1: START ──────────────────────────────
+      final startResponse = await client
+          .post(
+            Uri.parse('$baseUrl/enhance/start'),
+            headers: headers,
+            body: jsonEncode({
+              'provider': 'replicate',
+              'featureId': featureId,
+              'mimeType': 'image/jpeg',
+              'imageBase64': base64Encode(uploadBytes),
+            }),
+          )
+          .timeout(const Duration(seconds: 55));
+
+      if (startResponse.statusCode != 200) {
+        debugPrint('Async start error ${startResponse.statusCode}: ${startResponse.body}');
+        return null;
+      }
+
+      final startData = jsonDecode(startResponse.body);
+      if (startData['success'] != true || startData['predictionId'] == null) {
+        debugPrint('Async start returned no predictionId: ${startResponse.body}');
+        return null;
+      }
+
+      final String predictionId = startData['predictionId'].toString();
+      debugPrint('Async prediction started: $predictionId');
+
+      // ── Step 2: POLL status until done ─────────────
+      const maxAttempts = 90; // 90 * 2s = up to 3 minutes total
+      for (int attempt = 0; attempt < maxAttempts; attempt++) {
+        await Future.delayed(const Duration(seconds: 2));
+
+        final statusResponse = await client
+            .get(
+              Uri.parse('$baseUrl/enhance/status/$predictionId'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 30));
+
+        if (statusResponse.statusCode != 200) {
+          debugPrint('Async status error ${statusResponse.statusCode}: ${statusResponse.body}');
+          // transient error — keep trying a few times
+          continue;
+        }
+
+        final statusData = jsonDecode(statusResponse.body);
+
+        if (statusData['done'] == true && statusData['imageBase64'] != null) {
+          final imageBase64 = statusData['imageBase64'].toString();
+          final cleaned = imageBase64.contains(',') ? imageBase64.split(',').last : imageBase64;
+          debugPrint('Async prediction succeeded after ${attempt + 1} polls');
+          return Uint8List.fromList(base64Decode(cleaned));
+        }
+
+        if (statusData['success'] == false || statusData['error'] != null) {
+          debugPrint('Async prediction failed: ${statusData['error']}');
+          return null;
+        }
+
+        debugPrint('Async status: ${statusData['status']} (poll ${attempt + 1})');
+      }
+
+      debugPrint('Async prediction timed out after polling.');
+      return null;
+    } catch (e) {
+      debugPrint('Async backend error: $e');
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
   static Future<Uint8List?> runFalPrediction({
     required Uint8List imageBytes,
     required String modelName,
@@ -363,6 +469,18 @@ class AiApiService {
   }) async {
     // Preferred secure route: Flutter -> your backend proxy -> Replicate/Fal.ai.
     if (CloudApiConfig.useBackendProxy) {
+      // For Replicate, use the async fire-and-poll flow so slow models
+      // (e.g. HD upscale) don't hit Vercel's 60-second function timeout.
+      if (isReplicate) {
+        final asyncResult = await runBackendAsyncPrediction(
+          imageBytes: imageBytes,
+          featureId: featureId,
+        );
+        if (asyncResult != null) return asyncResult;
+        debugPrint('Async backend flow failed; trying synchronous proxy as fallback.');
+      }
+
+      // Fal.ai (fast/synchronous) and Replicate fallback use the legacy proxy.
       final backendResult = await runBackendProxyPrediction(
         imageBytes: imageBytes,
         featureId: featureId,
