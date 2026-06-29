@@ -256,6 +256,8 @@ class _InteractiveDemoSliderState extends State<_InteractiveDemoSlider> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<AppProvider>().languageCode;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
