@@ -29,42 +29,53 @@ class PixelReviveApp extends StatelessWidget {
             child: child ?? const SizedBox.shrink(),
           );
         },
-        theme: ThemeData.dark().copyWith(
+        theme: ThemeData.dark(useMaterial3: true).copyWith(
           scaffoldBackgroundColor: AppColors.primary,
           colorScheme: const ColorScheme.dark(
             primary: AppColors.accent,
-            secondary: AppColors.success,
+            secondary: AppColors.cyan,
             surface: AppColors.surface,
           ),
+          textTheme: ThemeData.dark().textTheme.apply(
+                fontFamily: 'Roboto',
+                bodyColor: AppColors.text,
+                displayColor: AppColors.text,
+              ),
           appBarTheme: const AppBarTheme(
-            backgroundColor: AppColors.primary,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
             iconTheme: IconThemeData(color: AppColors.text),
             titleTextStyle: TextStyle(
               color: AppColors.text,
-              fontSize: 20,
+              fontSize: 21,
               fontWeight: FontWeight.w900,
-              letterSpacing: -0.3,
+              letterSpacing: -0.4,
             ),
           ),
           cardTheme: CardThemeData(
             color: AppColors.card,
-            elevation: 8,
-            shadowColor: Colors.black54,
+            elevation: 0,
+            shadowColor: Colors.black87,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(26),
             ),
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
               ),
-              textStyle: const TextStyle(fontWeight: FontWeight.w700),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.1,
+              ),
             ),
           ),
           outlinedButtonTheme: OutlinedButtonThemeData(

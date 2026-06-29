@@ -1,25 +1,52 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // PREMIUM SLEEK MODERN DARK CYBER THEME
-  static const Color primary = Color(0xFF090A0F); // Obsidian Cyber Midnight
-  static const Color accent = Color(0xFF6366F1); // Modern Electric Indigo
-  static const Color accentLight = Color(0xFF8B5CF6); // Cyber Violet
-  static const Color surface = Color(0xFF161A29); // Rich Glass Slate
-  static const Color card = Color(0xFF1E2336); // Elevated Container
-  static const Color text = Color(0xFFFFFFFF); // Pure Crisp White Text
-  static const Color textMuted = Color(0xFF94A3B8); // Metallic Silver Gray
-  static const Color success = Color(0xFF10B981); // Neon Emerald Green
-  static const Color gold = Color(0xFFF59E0B); // Radiant Amber Gold
-  
-  // Custom Modern Gradients
+  // Modern premium dark theme
+  static const Color primary = Color(0xFF070814);
+  static const Color backgroundEnd = Color(0xFF101528);
+  static const Color accent = Color(0xFF7C3AED);
+  static const Color accentLight = Color(0xFFA78BFA);
+  static const Color cyan = Color(0xFF22D3EE);
+  static const Color rose = Color(0xFFEC4899);
+  static const Color surface = Color(0xFF121827);
+  static const Color card = Color(0xFF182033);
+  static const Color glass = Color(0xB31B2438);
+  static const Color stroke = Color(0x1FFFFFFF);
+  static const Color text = Color(0xFFF8FAFC);
+  static const Color textMuted = Color(0xFF9CA3AF);
+  static const Color textSoft = Color(0xFFCBD5E1);
+  static const Color success = Color(0xFF10B981);
+  static const Color gold = Color(0xFFF59E0B);
+  static const Color danger = Color(0xFFEF4444);
+
   static const List<Color> brandGradient = [
-    Color(0xFF6366F1), // Electric Indigo
-    Color(0xFFEC4899), // Cyber Rose
+    Color(0xFF7C3AED),
+    Color(0xFFEC4899),
+    Color(0xFF22D3EE),
+  ];
+
+  static const List<Color> purpleGradient = [
+    Color(0xFF7C3AED),
+    Color(0xFF4F46E5),
   ];
 
   static const List<Color> goldGradient = [
-    Color(0xFFF59E0B), // Radiant Amber
-    Color(0xFFEA580C), // Electric Orange
+    Color(0xFFF59E0B),
+    Color(0xFFEF4444),
   ];
+
+  static LinearGradient get appBackgroundGradient => const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [primary, Color(0xFF0B1020), backgroundEnd],
+      );
+
+  static LinearGradient get cardGradient => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withOpacity(0.075),
+          Colors.white.withOpacity(0.025),
+        ],
+      );
 }

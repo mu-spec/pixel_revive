@@ -81,15 +81,18 @@ class _EditorScreenState extends State<EditorScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(flex: 4, child: _buildImagePreview(provider)),
-          _buildDescriptionBox(provider),
-          _buildAdjustmentSliders(provider),
-          _buildFeatureSelector(provider),
-          const AdBanner(margin: EdgeInsets.fromLTRB(20, 0, 20, 8)),
-          _buildActionBar(provider),
-        ],
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: Column(
+          children: [
+            Expanded(flex: 4, child: _buildImagePreview(provider)),
+            _buildDescriptionBox(provider),
+            _buildAdjustmentSliders(provider),
+            _buildFeatureSelector(provider),
+            const AdBanner(margin: EdgeInsets.fromLTRB(20, 0, 20, 8)),
+            _buildActionBar(provider),
+          ],
+        ),
       ),
     );
   }
@@ -108,15 +111,15 @@ class _EditorScreenState extends State<EditorScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.06), width: 1.5),
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withOpacity(0.11), width: 1),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withOpacity(0.34), blurRadius: 28, offset: const Offset(0, 14)),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         child: Stack(
           children: [
             Positioned.fill(
@@ -171,7 +174,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(28),
                   ),
                   child: const Center(
                     child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 3),

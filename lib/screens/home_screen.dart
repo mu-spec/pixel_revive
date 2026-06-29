@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final provider = context.watch<AppProvider>();
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: AppColors.primary,
       appBar: _currentIndex == 0
           ? AppBar(
@@ -127,36 +128,46 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             )
           : null, // Saved Images and Settings Tabs hold their own individual appbars!
-      body: SafeArea(
-        child: IndexedStack(
-          index: _currentIndex,
-          children: _tabs,
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: SafeArea(
+          child: IndexedStack(
+            index: _currentIndex,
+            children: _tabs,
+          ),
         ),
       ),
       bottomNavigationBar: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         decoration: BoxDecoration(
+          color: AppColors.glass,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white.withOpacity(0.10)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, -4),
+              color: Colors.black.withOpacity(0.32),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
             )
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          backgroundColor: AppColors.surface,
-          selectedItemColor: AppColors.accent,
-          unselectedItemColor: AppColors.textMuted,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-          type: BottomNavigationBarType.fixed,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          items: [
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            backgroundColor: Colors.transparent,
+            selectedItemColor: AppColors.cyan,
+            unselectedItemColor: AppColors.textMuted,
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+            type: BottomNavigationBarType.fixed,
+            elevation: 0,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            items: [
             BottomNavigationBarItem(
               icon: const Icon(Icons.auto_fix_high_outlined),
               activeIcon: const Icon(Icons.auto_fix_high),
@@ -173,6 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
               label: AppStrings.getText('tabSettings', provider.languageCode),
             ),
           ],
+          ),
         ),
       ),
     );

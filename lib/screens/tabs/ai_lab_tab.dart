@@ -21,7 +21,7 @@ class AiLabTab extends StatelessWidget {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 110),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -54,12 +54,13 @@ class AiLabTab extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: isCloudActive ? AppColors.goldGradient : AppColors.brandGradient,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withOpacity(0.12)),
         boxShadow: [
           BoxShadow(
-            color: (isCloudActive ? AppColors.gold : AppColors.accent).withOpacity(0.18),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: (isCloudActive ? AppColors.gold : AppColors.accent).withOpacity(0.26),
+            blurRadius: 30,
+            offset: const Offset(0, 16),
           ),
         ],
       ),
@@ -75,7 +76,7 @@ class AiLabTab extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(22.0),
+            padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -102,9 +103,10 @@ class AiLabTab extends StatelessWidget {
                       : AppStrings.getText('subTagline', provider.languageCode),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    height: 1.35,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.55,
+                    height: 1.18,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -114,8 +116,9 @@ class AiLabTab extends StatelessWidget {
                       : AppStrings.getText('onDeviceHeroDesc', provider.languageCode),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
-                    height: 1.4,
+                    fontSize: 13.2,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -626,9 +629,9 @@ class AiLabTab extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.72,
+        mainAxisSpacing: 18,
+        crossAxisSpacing: 18,
+        childAspectRatio: 0.82,
       ),
       itemCount: allFeatures.length,
       itemBuilder: (context, index) {
