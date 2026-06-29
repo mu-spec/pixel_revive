@@ -60,9 +60,11 @@ flutter_launcher_icons:
 
 flutter_native_splash:
   color: "#090A0F"
-  image: "assets/images/splash.png"
+  # Use the app icon for the native Android splash.
+  # This removes the large man/girl/camera picture before the Flutter splash.
+  image: "assets/images/icon.png"
   android: true
   ios: false
   android_12:
-    image: "assets/images/splash.png"
+    image: "assets/images/icon.png"
     color: "#090A0F"
