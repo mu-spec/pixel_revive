@@ -184,18 +184,26 @@ class AppProvider extends ChangeNotifier {
 
   bool get _canUseCache => _lastProcessedBytes != null && _lastFeatureId != null && originalBytes != null;
 
+  void _clearProcessingCache() {
+    _lastProcessedBytes = null;
+    _lastFeatureId = null;
+  }
+
   void setEnhanceStrength(double value) {
     enhanceStrength = value;
+    _clearProcessingCache();
     notifyListeners();
   }
 
   void setSkinSmoothness(double value) {
     skinSmoothness = value;
+    _clearProcessingCache();
     notifyListeners();
   }
 
   void setBokehBlur(double value) {
     bokehBlur = value;
+    _clearProcessingCache();
     notifyListeners();
   }
 
@@ -559,7 +567,13 @@ class AppProvider extends ChangeNotifier {
         final Uint8List input = batchOriginalBytes[i];
         Uint8List result;
 
-        if (useCloudAi && isPremium && isCloudAiAvailable) {
+        // Batch: only send features that truly have a cloud model to Cloud AI.
+        // Local-only tools like Cartoon and Background Blur must stay offline,
+        // otherwise the backend would run the wrong AI model.
+        if (useCloudAi &&
+            isPremium &&
+            isCloudAiAvailable &&
+            _isCloudCapableFeature(featureId)) {
           Uint8List? cloudResult = await AiApiService.smartEnhance(
             imageBytes: input,
             featureId: featureId,
