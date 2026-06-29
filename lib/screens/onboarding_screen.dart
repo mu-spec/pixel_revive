@@ -52,9 +52,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.primary,
-      body: SafeArea(
-        child: Column(
-          children: [
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
             // Top Skip Button
             Align(
               alignment: Alignment.topRight,
@@ -201,6 +203,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

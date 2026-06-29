@@ -90,9 +90,11 @@ class _LanguageScreenState extends State<LanguageScreen> {
         elevation: 0,
         automaticallyImplyLeading: widget.isFromSettings,
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
             // Search Input Bar
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -251,6 +253,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );

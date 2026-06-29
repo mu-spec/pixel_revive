@@ -86,10 +86,12 @@ class _PremiumScreenState extends State<PremiumScreen> {
         ),
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-        child: Column(
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(22, 10, 22, 30),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero card
@@ -432,16 +434,21 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.surface
-                          : AppColors.surface.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(20),
+                      gradient: isSelected ? const LinearGradient(colors: [Color(0x3322D3EE), Color(0x227C3AED)]) : AppColors.cardGradient,
+                      borderRadius: BorderRadius.circular(22),
                       border: Border.all(
                         color: isSelected
                             ? AppColors.gold
-                            : Colors.black.withOpacity(0.06),
+                            : Colors.white.withOpacity(0.10),
                         width: isSelected ? 2 : 1,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isSelected ? AppColors.gold.withOpacity(0.18) : Colors.black.withOpacity(0.18),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
@@ -596,6 +603,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ),
             const SizedBox(height: 32),
           ],
+          ),
         ),
       ),
     );

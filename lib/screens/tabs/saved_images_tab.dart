@@ -146,9 +146,12 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
                   ),
               ],
             ),
-      body: provider.creationHistory.isEmpty
-          ? _buildEmptyState()
-          : _buildCreationsGrid(provider),
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: provider.creationHistory.isEmpty
+            ? _buildEmptyState()
+            : _buildCreationsGrid(provider),
+      ),
     );
   }
 
@@ -224,19 +227,19 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
           },
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
+              gradient: AppColors.cardGradient,
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: isSelected
-                    ? AppColors.accent
-                    : Colors.black.withOpacity(0.05),
+                    ? AppColors.cyan
+                    : Colors.white.withOpacity(0.10),
                 width: isSelected ? 2.5 : 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withOpacity(0.24),
+                  blurRadius: 18,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),

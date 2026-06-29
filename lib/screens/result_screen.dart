@@ -24,17 +24,20 @@ class ResultScreen extends StatelessWidget {
         ),
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            flex: 6,
-            child: _buildSliderView(provider),
-          ),
-          _buildProcessingSourcePanel(provider),
-          _buildInfoPanel(context, provider),
-          const AdBanner(margin: EdgeInsets.fromLTRB(20, 4, 20, 8)),
-          _buildActionPanel(context, provider),
-        ],
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: Column(
+          children: [
+            Expanded(
+              flex: 6,
+              child: _buildSliderView(provider),
+            ),
+            _buildProcessingSourcePanel(provider),
+            _buildInfoPanel(context, provider),
+            const AdBanner(margin: EdgeInsets.fromLTRB(20, 4, 20, 8)),
+            _buildActionPanel(context, provider),
+          ],
+        ),
       ),
     );
   }
@@ -52,22 +55,22 @@ class ResultScreen extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: Colors.black.withOpacity(0.06),
-          width: 1.5,
+          color: Colors.white.withOpacity(0.11),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.30),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
         child: Stack(
           children: [
             Positioned.fill(

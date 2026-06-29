@@ -32,10 +32,12 @@ class SettingsTab extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        child: Column(
+      body: Container(
+        decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
+          child: Column(
           children: [
             // 1. Language Row
             _buildSettingsRow(
@@ -135,6 +137,7 @@ class SettingsTab extends StatelessWidget {
             ),
             const SizedBox(height: 32),
           ],
+          ),
         ),
       ),
     );
@@ -150,17 +153,14 @@ class SettingsTab extends StatelessWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.black.withOpacity(0.04),
-          width: 1,
-        ),
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withOpacity(0.10), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.01),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.24),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
