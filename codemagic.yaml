@@ -10,6 +10,12 @@ workflows:
         script: |
           flutter clean
           flutter pub get
+      - name: Generate app icon and native splash screen
+        script: |
+          # Regenerate the launcher icon from assets/images/icon.png
+          dart run flutter_launcher_icons || true
+          # Regenerate the native (pre-Flutter) splash screen
+          dart run flutter_native_splash:create || true
       - name: Build Android Debug APK
         script: |
           flutter build apk --debug || true

@@ -20,10 +20,11 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    // Setup loading bar animation (1.5 seconds — reduced from 3.2s)
+    // Setup loading bar animation (2.6s — long enough that the user
+    // actually SEES the "please wait" loading bar before routing away)
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 2600),
     );
     _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOutQuart),
@@ -34,8 +35,8 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _routeToNext() async {
-    // Wait until the loading animation fully completes (1.6s — reduced from 3.3s)
-    await Future.delayed(const Duration(milliseconds: 1600));
+    // Wait until the loading animation fully completes before routing away
+    await Future.delayed(const Duration(milliseconds: 2800));
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -96,18 +97,13 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Animated floating logo container
+                // Animated floating logo container (uses the real app icon)
                 Hero(
                   tag: 'app_logo',
                   child: Container(
                     width: 130,
                     height: 130,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: AppColors.brandGradient,
-                      ),
                       borderRadius: BorderRadius.circular(32),
                       boxShadow: [
                         BoxShadow(
@@ -117,10 +113,14 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.auto_fix_high,
-                      size: 68,
-                      color: Colors.white,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(32),
+                      child: Image.asset(
+                        'assets/images/icon.png',
+                        width: 130,
+                        height: 130,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
@@ -202,19 +202,35 @@ class _SplashScreenState extends State<SplashScreen>
                     },
                   ),
                 ),
-                const SizedBox(height: 18),
-                // Micro percentage indicator
+                const SizedBox(height: 20),
+                // "Please wait" row with spinner + live percentage
                 AnimatedBuilder(
                   animation: _animation,
                   builder: (context, child) {
-                    return Text(
-                      'ALGORITHMS LOADING... ${(_animation.value * 100).round()}%',
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.accent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'PLEASE WAIT...  ${(_animation.value * 100).round()}%',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
