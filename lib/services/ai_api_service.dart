@@ -7,6 +7,13 @@ import 'package:pixel_revive/services/image_processor.dart';
 import 'package:pixel_revive/services/cloud_api_config.dart';
 
 class AiApiService {
+  static String? lastErrorMessage;
+
+  static void _rememberError(String message) {
+    lastErrorMessage = message;
+    debugPrint(message);
+  }
+
 
   /// =============================================
   /// FAL.AI API (original)
@@ -103,18 +110,19 @@ class AiApiService {
 
     final client = http.Client();
     try {
-      // Compress/resize the upload to keep the request small & fast.
+      // SPEED MODE: smaller cloud upload = faster upload, faster queue start,
+      // lower Vercel/Replicate timeout risk, and better phone performance.
       var uploadBytes = imageBytes;
       var decoded = img.decodeImage(uploadBytes);
       if (decoded != null) {
-        if (decoded.width > 2048 || decoded.height > 2048) {
+        if (decoded.width > 1280 || decoded.height > 1280) {
           decoded = img.copyResize(
             decoded,
-            width: decoded.width > decoded.height ? 2048 : null,
-            height: decoded.height >= decoded.width ? 2048 : null,
+            width: decoded.width > decoded.height ? 1280 : null,
+            height: decoded.height >= decoded.width ? 1280 : null,
           );
         }
-        uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 92));
+        uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 84));
       }
 
       final headers = <String, String>{'Content-Type': 'application/json'};
@@ -137,13 +145,13 @@ class AiApiService {
           .timeout(const Duration(seconds: 55));
 
       if (startResponse.statusCode != 200) {
-        debugPrint('Async start error ${startResponse.statusCode}: ${startResponse.body}');
+        _rememberError('Cloud AI start error ${startResponse.statusCode}: ${startResponse.body}');
         return null;
       }
 
       final startData = jsonDecode(startResponse.body);
       if (startData['success'] != true || startData['predictionId'] == null) {
-        debugPrint('Async start returned no predictionId: ${startResponse.body}');
+        _rememberError('Cloud AI start returned no predictionId: ${startResponse.body}');
         return null;
       }
 
@@ -178,17 +186,17 @@ class AiApiService {
         }
 
         if (statusData['success'] == false || statusData['error'] != null) {
-          debugPrint('Async prediction failed: ${statusData['error']}');
+          _rememberError('Cloud AI prediction failed: ${statusData['error']}');
           return null;
         }
 
         debugPrint('Async status: ${statusData['status']} (poll ${attempt + 1})');
       }
 
-      debugPrint('Async prediction timed out after polling.');
+      _rememberError('Cloud AI timed out after polling.');
       return null;
     } catch (e) {
-      debugPrint('Async backend error: $e');
+      _rememberError('Cloud AI backend error: $e');
       return null;
     } finally {
       client.close();
@@ -467,6 +475,7 @@ class AiApiService {
     required String apiToken,
     required bool isReplicate,
   }) async {
+    lastErrorMessage = null;
     // Preferred secure route: Flutter -> your backend proxy -> Replicate/Fal.ai.
     if (CloudApiConfig.useBackendProxy) {
       // For Replicate, use the async fire-and-poll flow so slow models

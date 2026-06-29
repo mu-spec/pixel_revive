@@ -20,11 +20,10 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    // Setup loading bar animation (2.6s — long enough that the user
-    // actually SEES the "please wait" loading bar before routing away)
+    // Fast splash: show the brand/loading screen briefly, then enter the app.
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2600),
+      duration: const Duration(milliseconds: 900),
     );
     _animation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOutQuart),
@@ -35,8 +34,8 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _routeToNext() async {
-    // Wait until the loading animation fully completes before routing away
-    await Future.delayed(const Duration(milliseconds: 2800));
+    // Keep splash short so the app feels fast.
+    await Future.delayed(const Duration(milliseconds: 950));
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();

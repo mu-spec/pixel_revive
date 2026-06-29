@@ -20,13 +20,13 @@ workflows:
           echo "Generating native splash screen..."
           dart run flutter_native_splash:create || true
 
-      - name: Build Android Debug APK
+      - name: Build Android Release APK
         script: |
-          echo "Building debug APK..."
+          echo "Building RELEASE split APKs (much faster than debug on phone)..."
 
-          # Flutter sometimes builds the APK but fails to find it.
-          # So we allow this command to continue, then we search for the APK manually.
-          flutter build apk --debug || true
+          # Release is much faster/smaller than debug. Split per ABI creates
+          # smaller APKs. Most modern Android phones use arm64-v8a.
+          flutter build apk --release --split-per-abi || true
 
           echo "===== Searching for APK files ====="
           find . -name "*.apk" -type f 2>/dev/null
@@ -38,15 +38,10 @@ workflows:
 
           if [ "$APK_COUNT" = "0" ]; then
             echo "No APK found after flutter build. Trying Gradle directly..."
-
             chmod +x android/gradlew
             cd android
-            ./gradlew :app:assembleDebug
+            ./gradlew :app:assembleRelease
             cd ..
-
-            echo "===== Searching again for APK files ====="
-            find . -name "*.apk" -type f 2>/dev/null
-            echo "========================================="
           fi
 
           APK_COUNT=$(find . -name "*.apk" -type f 2>/dev/null | wc -l | tr -d ' ')
@@ -60,7 +55,7 @@ workflows:
           find . -name "*.apk" -type f -exec cp {} artifacts_out/ \;
 
           echo "===== APK files ready for download ====="
-          ls -la artifacts_out
+          ls -lh artifacts_out
           echo "========================================"
 
     artifacts:

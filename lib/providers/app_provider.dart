@@ -65,8 +65,10 @@ class AppProvider extends ChangeNotifier {
 
   AppProvider() {
     _loadPrefs();
-    _preWarmServices();
     _initIap();
+    // Do not run heavy ML/GPU initialization immediately on app open.
+    // Delaying it makes splash/main UI much faster on low-memory phones.
+    Future.delayed(const Duration(seconds: 3), _preWarmServices);
   }
 
   Future<void> _initIap() async {
@@ -268,9 +270,10 @@ class AppProvider extends ChangeNotifier {
     try {
       final picked = await _picker.pickImage(
         source: source,
-        maxWidth: 1920,
-        maxHeight: 1920,
-        imageQuality: 92,
+        // Smaller import = faster preview, faster offline processing, faster cloud upload.
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 85,
       );
       if (picked == null) return;
 
@@ -287,11 +290,8 @@ class AppProvider extends ChangeNotifier {
       
       notifyListeners();
 
-      GpuShaderService.initialize();
-      
-      if (originalBytes != null) {
-        OnDeviceMlService.detectFaces(originalBytes!, forceRefresh: true);
-      }
+      // Keep photo selection instant. Heavy ML/GPU work is lazy-loaded only
+      // when a feature needs it, instead of blocking the first tap experience.
     } catch (e) {
       debugPrint('pickImage error: $e');
     }
@@ -421,10 +421,15 @@ class AppProvider extends ChangeNotifier {
       lastProcessingSource = freeCloudLimitReached
           ? 'Daily AI limit reached'
           : (cloudAttempted ? 'Local Fallback' : 'Local');
+      final cloudError = AiApiService.lastErrorMessage ?? '';
+      final bool replicateCreditError = cloudError.contains('Insufficient credit') || cloudError.contains('HTTP 402');
+
       lastProcessingMessage = freeCloudLimitReached
           ? 'Daily free AI limit (${CloudApiConfig.freeDailyCloudLimit}) reached — used fast on-device processing instead. Upgrade to Premium for unlimited AI.'
           : (cloudAttempted
-              ? 'Cloud AI was unavailable or timed out. Local processing was used.'
+              ? (replicateCreditError
+                  ? 'Cloud AI could not run because Replicate has insufficient credit. Local processing was used.'
+                  : 'Cloud AI was unavailable or timed out. Local processing was used.')
               : 'Processed on-device with local image enhancement.');
 
       _resetDailyIfNeeded();
@@ -529,9 +534,9 @@ class AppProvider extends ChangeNotifier {
   Future<void> pickBatchImages() async {
     try {
       final List<XFile> pickedList = await _picker.pickMultiImage(
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 90,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 84,
       );
       if (pickedList.isEmpty) return;
 
