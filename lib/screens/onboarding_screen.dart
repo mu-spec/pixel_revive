@@ -300,39 +300,57 @@ class _InteractiveDemoSliderState extends State<_InteractiveDemoSlider> {
                 ),
               ),
 
-              // 3. Sliding bar divider
+              // 3. Professional vertical compare divider
               Positioned(
-                left: dividerX - 1,
+                left: dividerX - 1.25,
                 top: 0,
                 bottom: 0,
                 child: Container(
                   width: 2.5,
-                  color: Colors.white,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.white,
+                        AppColors.cyan,
+                        Colors.white,
+                        Colors.transparent,
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(color: AppColors.cyan.withOpacity(0.35), blurRadius: 10),
+                    ],
+                  ),
                 ),
               ),
 
-              // 4. Slide handle button
+              // 4. Professional compare handle
               Positioned(
-                left: dividerX - 16,
-                top: h / 2 - 16,
+                left: dividerX - 22,
+                top: h / 2 - 22,
                 child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [AppColors.cyan, AppColors.accent]),
                     shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black38,
-                        blurRadius: 6,
-                        offset: Offset(0, 2),
+                        color: Colors.black.withOpacity(0.35),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.unfold_more,
-                    color: AppColors.primary,
-                    size: 18,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                      Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                    ],
                   ),
                 ),
               ),

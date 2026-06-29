@@ -92,19 +92,29 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                             ),
                           ),
 
-                          // Divider line
+                          // Professional vertical compare divider
                           Positioned(
-                            left: dividerX - 1.5,
+                            left: dividerX - 1.25,
                             top: 0,
                             bottom: 0,
                             child: Container(
-                              width: 3,
+                              width: 2.5,
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.white,
+                                    AppColors.cyan,
+                                    Colors.white,
+                                    Colors.transparent,
+                                  ],
+                                ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.35),
-                                    blurRadius: 8,
+                                    color: AppColors.cyan.withOpacity(0.4),
+                                    blurRadius: 12,
                                   ),
                                 ],
                               ),
@@ -128,27 +138,33 @@ class _DemoComparisonScreenState extends State<DemoComparisonScreen> {
                                 width: 56,
                                 height: 56,
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [AppColors.cyan, AppColors.accent],
+                                  ),
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.25),
-                                      blurRadius: 16,
+                                      color: AppColors.cyan.withOpacity(0.35),
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.35),
+                                      blurRadius: 14,
                                       offset: const Offset(0, 4),
                                     ),
                                   ],
-                                  border: Border.all(
-                                    color: AppColors.accent.withOpacity(0.2),
-                                    width: 2,
-                                  ),
+                                  border: Border.all(color: Colors.white, width: 2),
                                 ),
                                 child: const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(Icons.chevron_left_rounded,
-                                        size: 22, color: AppColors.textMuted),
+                                        size: 24, color: Colors.white),
                                     Icon(Icons.chevron_right_rounded,
-                                        size: 22, color: AppColors.textMuted),
+                                        size: 24, color: Colors.white),
                                   ],
                                 ),
                               ),
