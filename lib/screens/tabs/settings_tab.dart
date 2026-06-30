@@ -90,7 +90,7 @@ class SettingsTab extends StatelessWidget {
               iconColor: Colors.blueAccent,
               title: AppStrings.getText('terms', lang),
               subtitle: AppStrings.getText('termsSub', lang),
-              onTap: () => _launchURL('https://clinquant-bombolone-e37a29.netlify.app/'),
+              onTap: () => _launchURL('https://stately-bienenstitch-ece6f1.netlify.app/'),
             ),
             const SizedBox(height: 14),
 
@@ -101,7 +101,7 @@ class SettingsTab extends StatelessWidget {
               iconColor: Colors.purpleAccent,
               title: AppStrings.getText('privacy', lang),
               subtitle: AppStrings.getText('privacySub', lang),
-              onTap: () => _launchURL('https://earnest-liger-072f0b.netlify.app/'),
+              onTap: () => _launchURL('https://luminous-daifuku-28d714.netlify.app/'),
             ),
             if (UmpConsentService.privacyOptionsRequired) ...[
               const SizedBox(height: 14),
