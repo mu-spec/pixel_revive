@@ -246,15 +246,15 @@ class _InteractiveDemoSliderState extends State<_InteractiveDemoSlider> {
   double _dragPosition = 0.5;
 
   String _getBeforePath() {
-    if (widget.type == 'restore') return 'assets/images/demo_restore_before.png';
-    if (widget.type == 'upscale') return 'assets/images/demo_upscale_before.png';
-    return 'assets/images/demo_blur_before.png';
+    if (widget.type == 'restore') return 'assets/images/demo_restore_before.webp';
+    if (widget.type == 'upscale') return 'assets/images/demo_upscale_before.webp';
+    return 'assets/images/demo_blur_before.webp';
   }
 
   String _getAfterPath() {
-    if (widget.type == 'restore') return 'assets/images/demo_restore_after.png';
-    if (widget.type == 'upscale') return 'assets/images/demo_upscale_after.png';
-    return 'assets/images/demo_blur_after.png';
+    if (widget.type == 'restore') return 'assets/images/demo_restore_after.webp';
+    if (widget.type == 'upscale') return 'assets/images/demo_upscale_after.webp';
+    return 'assets/images/demo_blur_after.webp';
   }
 
   @override
