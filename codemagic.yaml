@@ -85,12 +85,21 @@ workflows:
           echo "===== APK artifact sizes =====" | tee -a size_reports/asset_size_summary.txt
           find . -name "*.apk" -type f -exec ls -lh {} \; 2>/dev/null | tee -a size_reports/asset_size_summary.txt
 
+          echo "Creating easy-download size report artifacts..."
+          mkdir -p artifacts_out
+          cp size_reports/asset_size_summary.txt artifacts_out/asset_size_summary.txt 2>/dev/null || true
+          zip -r artifacts_out/size_reports.zip size_reports >/dev/null 2>&1 || true
+
           echo "===== Size reports ready for download ====="
           ls -lh size_reports || true
+          echo "===== artifacts_out now contains APKs and reports ====="
+          ls -lh artifacts_out || true
           echo "==========================================="
 
     artifacts:
       - artifacts_out/*.apk
+      - artifacts_out/*.txt
+      - artifacts_out/*.zip
       - build/app/outputs/flutter-apk/*.apk
       - build/app/outputs/apk/**/*.apk
       - size_reports/*
