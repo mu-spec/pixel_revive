@@ -387,33 +387,38 @@ class ResultScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              Row(
+              Column(
                 children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await StorageService.openGallery();
-                        },
-                        icon: const Icon(Icons.photo_library_outlined, size: 18),
-                        label: Text(AppStrings.getText('openGallery', provider.languageCode)),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context); // Pop dialog
+                        Navigator.pop(context); // Pop result screen to go back to editor
+                      },
+                      child: Text(
+                        AppStrings.getText('excellent', provider.languageCode),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context); // Pop dialog
-                          Navigator.pop(context); // Pop result screen to go back to editor
-                        },
-                        child: Text(
-                          AppStrings.getText('excellent', provider.languageCode),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await StorageService.openGallery();
+                      },
+                      icon: const Icon(Icons.photo_library_outlined, size: 18),
+                      label: Text(
+                        AppStrings.getText('openGallery', provider.languageCode),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
