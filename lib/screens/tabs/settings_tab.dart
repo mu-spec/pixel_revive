@@ -6,6 +6,7 @@ import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/language_screen.dart';
+import 'package:pixel_revive/services/ump_consent_service.dart';
 
 class SettingsTab extends StatelessWidget {
   const SettingsTab({super.key});
@@ -102,6 +103,29 @@ class SettingsTab extends StatelessWidget {
               subtitle: AppStrings.getText('privacySub', lang),
               onTap: () => _launchURL('https://earnest-liger-072f0b.netlify.app/'),
             ),
+            if (UmpConsentService.privacyOptionsRequired) ...[
+              const SizedBox(height: 14),
+              _buildSettingsRow(
+                context: context,
+                icon: Icons.admin_panel_settings_outlined,
+                iconColor: AppColors.success,
+                title: 'Ad privacy choices',
+                subtitle: 'Manage personalized ads consent',
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final success = await UmpConsentService.showPrivacyOptionsForm();
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success
+                            ? 'Ad privacy choices updated'
+                            : 'Ad privacy choices are not available right now',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
             
             const SizedBox(height: 60),
 

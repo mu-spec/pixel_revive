@@ -3,6 +3,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/services/ad_mob_service.dart';
+import 'package:pixel_revive/services/ump_consent_service.dart';
 
 class AdBanner extends StatefulWidget {
   final EdgeInsetsGeometry margin;
@@ -40,7 +41,7 @@ class _AdBannerState extends State<AdBanner> {
   }
 
   void _loadAd() {
-    if (!AdMobService.adsEnabled) return;
+    if (!AdMobService.adsEnabled || !UmpConsentService.canRequestAds) return;
 
     final ad = BannerAd(
       adUnitId: AdMobService.bannerAdUnitId,
@@ -78,8 +79,8 @@ class _AdBannerState extends State<AdBanner> {
     // 1) Never show ads to premium users.
     if (provider.isPremium) return true;
 
-    // 2) Hide when ads are disabled globally.
-    if (!AdMobService.adsEnabled) return true;
+    // 2) Hide when ads are disabled globally or UMP consent is not ready.
+    if (!AdMobService.adsEnabled || !UmpConsentService.canRequestAds) return true;
 
     // 3) Hide while the app is processing/enhancing a photo.
     if (widget.hideWhileProcessing && provider.isProcessing) return true;
