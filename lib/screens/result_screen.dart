@@ -7,6 +7,7 @@ import 'package:pixel_revive/screens/premium_screen.dart';
 import 'package:pixel_revive/services/storage_service.dart';
 import 'package:pixel_revive/widgets/before_after_slider.dart';
 import 'package:pixel_revive/widgets/ad_banner.dart';
+import 'package:pixel_revive/services/ad_mob_service.dart';
 
 class ResultScreen extends StatelessWidget {
   const ResultScreen({super.key});
@@ -309,6 +310,9 @@ class ResultScreen extends StatelessWidget {
     final path = await provider.saveToGallery();
     if (context.mounted) {
       if (path != null) {
+        // Free users see an interstitial only after every few successful saves.
+        // Premium users never see ads.
+        AdMobService.maybeShowInterstitialAfterSave(isPremium: provider.isPremium);
         _showSuccessDialog(context, provider);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
