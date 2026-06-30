@@ -85,9 +85,45 @@ workflows:
           echo "===== APK artifact sizes =====" | tee -a size_reports/asset_size_summary.txt
           find . -name "*.apk" -type f -exec ls -lh {} \; 2>/dev/null | tee -a size_reports/asset_size_summary.txt
 
+          echo "" | tee size_reports/apk_breakdown_report.txt
+          echo "===== PixelRevive ARM64 APK Breakdown =====" | tee -a size_reports/apk_breakdown_report.txt
+          ARM64_APK=$(find . -name "app-arm64-v8a-release.apk" -type f | head -1)
+          echo "APK file: $ARM64_APK" | tee -a size_reports/apk_breakdown_report.txt
+          if [ -n "$ARM64_APK" ]; then
+            rm -rf size_reports/apk_unzipped
+            mkdir -p size_reports/apk_unzipped
+            unzip -q "$ARM64_APK" -d size_reports/apk_unzipped
+
+            echo "" | tee -a size_reports/apk_breakdown_report.txt
+            echo "Compressed APK size:" | tee -a size_reports/apk_breakdown_report.txt
+            ls -lh "$ARM64_APK" | tee -a size_reports/apk_breakdown_report.txt
+
+            echo "" | tee -a size_reports/apk_breakdown_report.txt
+            echo "Uncompressed category sizes inside APK:" | tee -a size_reports/apk_breakdown_report.txt
+            du -sh size_reports/apk_unzipped/lib 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+            du -sh size_reports/apk_unzipped/assets 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+            du -sh size_reports/apk_unzipped/res 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+            du -sh size_reports/apk_unzipped/kotlin 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+            du -sh size_reports/apk_unzipped/META-INF 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+            du -sh size_reports/apk_unzipped/classes*.dex 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+            du -sh size_reports/apk_unzipped/AndroidManifest.xml 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+            du -sh size_reports/apk_unzipped/resources.arsc 2>/dev/null | sed 's|size_reports/apk_unzipped/||' | tee -a size_reports/apk_breakdown_report.txt || true
+
+            echo "" | tee -a size_reports/apk_breakdown_report.txt
+            echo "Native libraries inside APK:" | tee -a size_reports/apk_breakdown_report.txt
+            find size_reports/apk_unzipped/lib -type f -exec ls -lh {} \; 2>/dev/null | sort -k5 -hr | tee -a size_reports/apk_breakdown_report.txt || true
+
+            echo "" | tee -a size_reports/apk_breakdown_report.txt
+            echo "Largest files inside APK:" | tee -a size_reports/apk_breakdown_report.txt
+            find size_reports/apk_unzipped -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -60 | tee -a size_reports/apk_breakdown_report.txt || true
+          else
+            echo "ARM64 APK not found, cannot create APK breakdown." | tee -a size_reports/apk_breakdown_report.txt
+          fi
+
           echo "Creating easy-download size report artifacts..."
           mkdir -p artifacts_out
           cp size_reports/asset_size_summary.txt artifacts_out/asset_size_summary.txt 2>/dev/null || true
+          cp size_reports/apk_breakdown_report.txt artifacts_out/apk_breakdown_report.txt 2>/dev/null || true
           zip -r artifacts_out/size_reports.zip size_reports >/dev/null 2>&1 || true
 
           echo "===== Size reports ready for download ====="
