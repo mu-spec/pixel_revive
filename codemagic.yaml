@@ -58,10 +58,43 @@ workflows:
           ls -lh artifacts_out
           echo "========================================"
 
+      - name: Generate APK size analysis report
+        script: |
+          echo "Generating Flutter APK size analysis for android-arm64..."
+          mkdir -p size_reports
+
+          # This build creates Flutter size analysis JSON files.
+          # It may print a detailed size summary in the Codemagic log.
+          flutter build apk --release --target-platform android-arm64 --analyze-size || true
+
+          echo "===== Searching for Flutter size analysis files ====="
+          find build -path "*flutter_size*" -type f 2>/dev/null || true
+          find build -name "*.json" -type f 2>/dev/null | grep -E "flutter_size|snapshot|analysis" || true
+          echo "===================================================="
+
+          echo "Copying size analysis files to size_reports..."
+          find build -path "*flutter_size*" -type f -exec cp {} size_reports/ \; 2>/dev/null || true
+          find build -name "*.json" -type f 2>/dev/null | grep -E "flutter_size|snapshot|analysis" | while read file; do cp "$file" size_reports/ || true; done
+
+          echo "===== Project asset size summary =====" | tee size_reports/asset_size_summary.txt
+          du -h -d 2 assets 2>/dev/null | sort -h | tee -a size_reports/asset_size_summary.txt
+          echo "" | tee -a size_reports/asset_size_summary.txt
+          echo "===== Largest asset files =====" | tee -a size_reports/asset_size_summary.txt
+          find assets -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -40 | tee -a size_reports/asset_size_summary.txt
+          echo "" | tee -a size_reports/asset_size_summary.txt
+          echo "===== APK artifact sizes =====" | tee -a size_reports/asset_size_summary.txt
+          find . -name "*.apk" -type f -exec ls -lh {} \; 2>/dev/null | tee -a size_reports/asset_size_summary.txt
+
+          echo "===== Size reports ready for download ====="
+          ls -lh size_reports || true
+          echo "==========================================="
+
     artifacts:
       - artifacts_out/*.apk
       - build/app/outputs/flutter-apk/*.apk
       - build/app/outputs/apk/**/*.apk
+      - size_reports/*
+      - build/**/flutter_size_*/*
 
     publishing:
       email:
