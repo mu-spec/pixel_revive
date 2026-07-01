@@ -45,7 +45,8 @@ class AppProvider extends ChangeNotifier {
   String? _lastFeatureId;
   bool _mlServicePreWarmed = false;
 
-  static const int _dailyFreeExports = 3;
+// Line 48:
+static const int _dailyFreeExports = 1;
 
   // Features that have a real Replicate cloud model. Others (cartoon, bokeh)
   // are local-only and must NOT be sent to cloud (they'd get the wrong model).

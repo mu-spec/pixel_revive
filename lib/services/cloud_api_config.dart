@@ -34,7 +34,7 @@ class CloudApiConfig {
   // ── WHICH PROVIDER TO USE THROUGH BACKEND ──────────
   // true  = Replicate
   // false = Fal.ai
-  static const bool useReplicate = true;
+ static const bool useReplicate = false;
 
   // ── CLOUD AI POLICY ────────────────────────────────
   // false = OPTION B (matches PRD free tier): free users get a limited number
@@ -45,9 +45,9 @@ class CloudApiConfig {
   // ── DAILY CLOUD AI LIMIT PER FREE USER ─────────────
   // Used when cloudAiPremiumOnly = false. After this many cloud runs in a day,
   // free users automatically fall back to on-device processing.
-  // Cost note: ~$0.003–0.005 per Replicate run, so 3/day ≈ $0.45/month per
+  // Cost note: ~$0.002–0.005 per fal.ai run, so 1/day ≈ $0.15/month per
   // active daily free user. Lower this number to control cloud spend.
-  static const int freeDailyCloudLimit = 3;
+ static const int freeDailyCloudLimit = 1;
 
   static String get normalizedBackendBaseUrl =>
       backendBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
@@ -67,21 +67,12 @@ class CloudApiConfig {
   // ── HELPER: Is Cloud AI available? ─────────────────
   static bool get isCloudAvailable {
     if (useBackendProxy) return true;
-
-    if (useReplicate) {
-      return replicateToken.isNotEmpty;
-    } else {
-      return falToken.isNotEmpty;
-    }
+    if (useReplicate) { return replicateToken.isNotEmpty; } else { return falToken.isNotEmpty; }
   }
 
   // ── HELPER: Get direct token fallback ──────────────
   // This should stay empty in production when backend proxy is used.
   static String get activeToken {
-    if (useReplicate) {
-      return replicateToken;
-    } else {
-      return falToken;
-    }
+    if (useReplicate) { return replicateToken; } else { return falToken; }
   }
 }
