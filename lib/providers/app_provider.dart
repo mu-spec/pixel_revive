@@ -342,13 +342,13 @@ static const int _dailyFreeExports = 3;
     if (useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId)) {
       cloudAttempted = true;
       try {
-       final cloudResult = await AiApiService.smartEnhance(
-  imageBytes: originalBytes!,
-  featureId: featureId,
-  apiToken: _activeApiToken,
-  isReplicate: CloudApiConfig.useReplicate,
-  scale: featureId == 'upscale' ? upscaleScale : null,  // ← ADD THIS LINE
-); 
+        final cloudResult = await AiApiService.smartEnhance(
+          imageBytes: originalBytes!,
+          featureId: featureId,
+          apiToken: _activeApiToken,
+          isReplicate: CloudApiConfig.useReplicate,
+          scale: featureId == 'upscale' ? upscaleScale : null,
+        );
 
         if (cloudResult != null) {
           processedBytes = cloudResult;
@@ -582,12 +582,12 @@ static const int _dailyFreeExports = 3;
             isCloudAiAvailable &&
             _isCloudCapableFeature(featureId)) {
           Uint8List? cloudResult = await AiApiService.smartEnhance(
-  imageBytes: input,
-  featureId: featureId,
-  apiToken: _activeApiToken,
-  isReplicate: CloudApiConfig.useReplicate,
-  scale: featureId == 'upscale' ? upscaleScale : null,  // ← ADD THIS LINE
-);
+            imageBytes: input,
+            featureId: featureId,
+            apiToken: _activeApiToken,
+            isReplicate: CloudApiConfig.useReplicate,
+            scale: featureId == 'upscale' ? upscaleScale : null,
+          );
           result = cloudResult ?? await _processLocalFeatureSync(input, featureId);
         } else {
           result = await _processLocalFeatureSync(input, featureId);

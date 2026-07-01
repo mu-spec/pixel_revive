@@ -64,10 +64,17 @@ function normalizeImageInput(imageBase64, mimeType = 'image/jpeg') {
 
 function envModel(name, fallback) { return process.env[name] || fallback; }
 
-function replicateConfigForFeature(featureId, dataUri) {
+function normalizeScale(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 2;
+  return Math.min(4, Math.max(2, Math.round(n)));
+}
+
+function replicateConfigForFeature(featureId, dataUri, scale = 2) {
+  const upscaleScale = normalizeScale(scale);
   const GFPGAN_VERSION = 'tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c';
   switch (featureId) {
-    case 'upscale': return { model: envModel('REPLICATE_UPSCALE_MODEL', 'nightmareai/real-esrgan'), input: { image: dataUri, scale: 2, face_enhance: false } };
+    case 'upscale': return { model: envModel('REPLICATE_UPSCALE_MODEL', 'nightmareai/real-esrgan'), input: { image: dataUri, scale: upscaleScale, face_enhance: false } };
     case 'bg_cleanup': return { model: envModel('REPLICATE_BG_CLEANUP_MODEL', 'lucataco/remove-bg'), input: { image: dataUri } };
     case 'colorize': return { model: envModel('REPLICATE_COLORIZE_MODEL', 'piddnad/ddcolor:ca494ba129e44e45f661d6ece83c4c98a9a7c774309beca01429b58fce8aa695'), input: { image: dataUri, model_size: process.env.REPLICATE_COLORIZE_MODEL_SIZE || 'large' } };
     case 'restore': return { model: envModel('REPLICATE_RESTORE_MODEL', 'microsoft/bringing-old-photos-back-to-life:c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799'), input: { image: dataUri, HR: false, with_scratch: true } };
@@ -77,10 +84,11 @@ function replicateConfigForFeature(featureId, dataUri) {
   }
 }
 
-function falConfigForFeature(featureId, dataUri) {
+function falConfigForFeature(featureId, dataUri, scale = 2) {
+  const upscaleScale = normalizeScale(scale);
   const getEnv = (name, fallback) => process.env[name] || fallback;
   switch (featureId) {
-    case 'upscale': return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: 2, model: 'RealESRGAN_x4plus', output_format: 'png' } };
+    case 'upscale': return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, upscaling: upscaleScale, model: 'RealESRGAN_x4plus', output_format: 'png' } };
     case 'bg_cleanup': return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
     case 'face': case 'auto': return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 2, face_upscale: true } };
     case 'restore': return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-apps-v2/photo-restoration'), input: { image_url: dataUri, enhance_resolution: true, fix_colors: true, remove_scratches: true } };
@@ -121,10 +129,10 @@ async function outputToBase64(output) {
   return { mimeType, imageBase64 };
 }
 
-async function runReplicate(featureId, dataUri) {
+async function runReplicate(featureId, dataUri, scale = 2) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
-  const { model, input } = replicateConfigForFeature(featureId, dataUri);
+  const { model, input } = replicateConfigForFeature(featureId, dataUri, scale);
   let createUrl, body;
   if (model.includes(':')) { createUrl = 'https://api.replicate.com/v1/predictions'; body = { version: model, input }; }
   else { const [owner, name] = model.split('/'); if (!owner || !name) throw new Error(`Invalid Replicate model slug: ${model}`); createUrl = `https://api.replicate.com/v1/models/${owner}/${name}/predictions`; body = { input }; }
@@ -146,10 +154,10 @@ async function runReplicate(featureId, dataUri) {
   return outputToBase64(prediction.output);
 }
 
-async function startReplicate(featureId, dataUri) {
+async function startReplicate(featureId, dataUri, scale = 2) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
-  const { model, input } = replicateConfigForFeature(featureId, dataUri);
+  const { model, input } = replicateConfigForFeature(featureId, dataUri, scale);
   let createUrl, body;
   if (model.includes(':')) { createUrl = 'https://api.replicate.com/v1/predictions'; body = { version: model, input }; }
   else { const [owner, name] = model.split('/'); if (!owner || !name) throw new Error(`Invalid Replicate model slug: ${model}`); createUrl = `https://api.replicate.com/v1/models/${owner}/${name}/predictions`; body = { input }; }
@@ -174,10 +182,10 @@ async function checkReplicate(predictionId) {
   return { status };
 }
 
-async function runFal(featureId, dataUri) {
+async function runFal(featureId, dataUri, scale = 2) {
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
-  const { model, input } = falConfigForFeature(featureId, dataUri);
+  const { model, input } = falConfigForFeature(featureId, dataUri, scale);
   const response = await fetchWithTimeout(`https://fal.run/${model}`, { method: 'POST', headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   const text = await response.text();
   let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal.ai returned non-JSON response: ${text.slice(0, 200)}`); }
@@ -197,7 +205,7 @@ app.post('/enhance/start', requireClientSecret, async (req, res) => {
     if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
     if (provider !== 'replicate') return res.status(400).json({ success: false, error: 'Async start supports replicate only' });
     const normalized = normalizeImageInput(req.body.imageBase64, req.body.mimeType || 'image/jpeg');
-    const started = await startReplicate(featureId, normalized.dataUri);
+    const started = await startReplicate(featureId, normalized.dataUri, req.body.scale);
     res.json({ success: true, predictionId: started.id, status: started.status });
   } catch (error) { console.error('[enhance/start] error:', error); res.status(500).json({ success: false, error: error.message || 'Failed to start prediction' }); }
 });
@@ -220,7 +228,7 @@ app.post('/enhance', requireClientSecret, async (req, res) => {
     if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeImageInput(req.body.imageBase64, req.body.mimeType || 'image/jpeg');
-    const result = provider === 'fal' ? await runFal(featureId, normalized.dataUri) : await runReplicate(featureId, normalized.dataUri);
+    const result = provider === 'fal' ? await runFal(featureId, normalized.dataUri, req.body.scale) : await runReplicate(featureId, normalized.dataUri, req.body.scale);
     res.json({ success: true, provider, featureId, mimeType: result.mimeType, imageBase64: result.imageBase64, elapsedMs: Date.now() - startedAt });
   } catch (error) { console.error('[enhance] error:', error); res.status(500).json({ success: false, error: error.message || 'Cloud enhancement failed', elapsedMs: Date.now() - startedAt }); }
 });

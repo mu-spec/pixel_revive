@@ -31,6 +31,7 @@ class AiApiService {
     required Uint8List imageBytes,
     required String featureId,
     required bool isReplicate,
+    int? scale,
   }) async {
     final baseUrl = CloudApiConfig.backendBaseUrl.trim();
     if (baseUrl.isEmpty) return null;
@@ -68,6 +69,7 @@ class AiApiService {
             body: jsonEncode({
               'provider': isReplicate ? 'replicate' : 'fal',
               'featureId': featureId,
+              if (scale != null) 'scale': scale,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -104,6 +106,7 @@ class AiApiService {
   static Future<Uint8List?> runBackendAsyncPrediction({
     required Uint8List imageBytes,
     required String featureId,
+    int? scale,
   }) async {
     final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
     if (baseUrl.isEmpty) return null;
@@ -138,6 +141,7 @@ class AiApiService {
             body: jsonEncode({
               'provider': 'replicate',
               'featureId': featureId,
+              if (scale != null) 'scale': scale,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -474,6 +478,7 @@ class AiApiService {
     required String featureId,
     required String apiToken,
     required bool isReplicate,
+    int? scale,
   }) async {
     lastErrorMessage = null;
     // Preferred secure route: Flutter -> your backend proxy -> Replicate/Fal.ai.
@@ -484,6 +489,7 @@ class AiApiService {
         final asyncResult = await runBackendAsyncPrediction(
           imageBytes: imageBytes,
           featureId: featureId,
+          scale: scale,
         );
         if (asyncResult != null) return asyncResult;
         debugPrint('Async backend flow failed; trying synchronous proxy as fallback.');
@@ -494,6 +500,7 @@ class AiApiService {
         imageBytes: imageBytes,
         featureId: featureId,
         isReplicate: isReplicate,
+        scale: scale,
       );
       if (backendResult != null) return backendResult;
       debugPrint('Backend proxy failed; falling back if a direct dev token exists.');
@@ -507,12 +514,14 @@ class AiApiService {
         imageBytes: imageBytes,
         featureId: featureId,
         apiToken: apiToken,
+        scale: scale,
       );
     } else {
       return _runFalFeature(
         imageBytes: imageBytes,
         featureId: featureId,
         apiToken: apiToken,
+        scale: scale,
       );
     }
   }
@@ -521,6 +530,7 @@ class AiApiService {
     required Uint8List imageBytes,
     required String featureId,
     required String apiToken,
+    int? scale,
   }) async {
     switch (featureId) {
       case 'auto':
@@ -544,7 +554,7 @@ class AiApiService {
           modelName: 'real-esrgan',
           apiToken: apiToken,
           additionalInput: {
-            'scale': 2,
+            'scale': (scale ?? 2).clamp(2, 4).toInt(),
             'face_enhance': false,
           },
         );
@@ -597,6 +607,7 @@ class AiApiService {
     required Uint8List imageBytes,
     required String featureId,
     required String apiToken,
+    int? scale,
   }) async {
     switch (featureId) {
       case 'face':
@@ -612,7 +623,7 @@ class AiApiService {
           imageBytes: imageBytes,
           modelName: 'fal-ai/esrgan',
           apiToken: apiToken,
-          additionalInput: {'upscaling': 2},
+          additionalInput: {'upscaling': (scale ?? 2).clamp(2, 4).toInt()},
         );
 
       case 'colorize':
