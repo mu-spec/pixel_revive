@@ -9,9 +9,15 @@ const PORT = Number(process.env.PORT || 8080);
 const MAX_JSON_MB = Number(process.env.MAX_JSON_MB || 25);
 const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 8);
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 55000);
-// CHANGE THIS LINE:
 const DEFAULT_AI_PROVIDER = (process.env.DEFAULT_AI_PROVIDER || 'fal').toLowerCase();
 const CLIENT_SHARED_SECRET = process.env.CLIENT_SHARED_SECRET || '';
+
+// Fast mode defaults:
+// 1) Use provider queue endpoints for long jobs, especially Fal.ai.
+// 2) Return provider image URLs to the app instead of downloading + base64 re-encoding
+//    inside Vercel. This removes one full image download/upload hop.
+const FAL_QUEUE_ENABLED = String(process.env.FAL_QUEUE_ENABLED || 'true').toLowerCase() !== 'false';
+const RETURN_IMAGE_URL = String(process.env.RETURN_IMAGE_URL || 'true').toLowerCase() !== 'false';
 
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -70,6 +76,20 @@ function normalizeScale(value) {
   return Math.min(4, Math.max(2, Math.round(n)));
 }
 
+function encodeJobToken(job) {
+  return Buffer.from(JSON.stringify(job)).toString('base64url');
+}
+
+function decodeJobToken(token) {
+  try {
+    const text = Buffer.from(String(token), 'base64url').toString('utf8');
+    const job = JSON.parse(text);
+    return job && typeof job === 'object' ? job : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function replicateConfigForFeature(featureId, dataUri, scale = 2) {
   const upscaleScale = normalizeScale(scale);
   const GFPGAN_VERSION = 'tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c';
@@ -88,13 +108,24 @@ function falConfigForFeature(featureId, dataUri, scale = 2) {
   const upscaleScale = normalizeScale(scale);
   const getEnv = (name, fallback) => process.env[name] || fallback;
   switch (featureId) {
-    case 'upscale': return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, upscaling: upscaleScale, model: 'RealESRGAN_x4plus', output_format: 'png' } };
-    case 'bg_cleanup': return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
-    case 'face': case 'auto': return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 2, face_upscale: true } };
-    case 'restore': return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-apps-v2/photo-restoration'), input: { image_url: dataUri, enhance_resolution: true, fix_colors: true, remove_scratches: true } };
-    case 'colorize': return { model: getEnv('FAL_COLORIZE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
-    case 'denoise': case 'unblur': return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.5, upscaling: 1, face_upscale: false } };
-    default: return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 2, face_upscale: true } };
+    case 'upscale':
+      return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, upscaling: upscaleScale, model: 'RealESRGAN_x4plus', output_format: 'png' } };
+    case 'bg_cleanup':
+      return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
+    case 'face':
+      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: true } };
+    case 'auto':
+      // Fast auto-enhance: keep face/detail restoration but avoid automatic 2x upscaling.
+      // Users can choose HD Upscale separately when they want a larger output.
+      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: false } };
+    case 'restore':
+      return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-apps-v2/photo-restoration'), input: { image_url: dataUri, enhance_resolution: false, fix_colors: true, remove_scratches: true } };
+    case 'colorize':
+      return { model: getEnv('FAL_COLORIZE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
+    case 'denoise': case 'unblur':
+      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.5, upscaling: 1, face_upscale: false } };
+    default:
+      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: false } };
   }
 }
 
@@ -109,18 +140,26 @@ function extractOutputUrl(output) {
   if (!output) return null;
   if (typeof output === 'string') return output;
   if (Array.isArray(output) && output.length > 0) return extractOutputUrl(output[0]);
-  if (typeof output === 'object') return output.url || output.file || output.image || output.output || null;
+  if (typeof output === 'object') {
+    return output.url || output.file || output.image?.url || output.image || output.output?.url || output.output || output.images?.[0]?.url || null;
+  }
   return null;
 }
 
-async function outputToBase64(output) {
+async function outputToResult(output, preferImageUrl = RETURN_IMAGE_URL) {
   const urlOrData = extractOutputUrl(output);
   if (!urlOrData) throw new Error('Provider returned no image output');
+
   if (typeof urlOrData === 'string' && urlOrData.startsWith('data:')) {
     const match = urlOrData.match(/^data:([^;]+);base64,(.+)$/);
     if (!match) throw new Error('Invalid data URI output');
     return { mimeType: match[1], imageBase64: match[2] };
   }
+
+  if (preferImageUrl) {
+    return { mimeType: 'image/png', imageUrl: String(urlOrData) };
+  }
+
   const response = await fetchWithTimeout(urlOrData, {}, REQUEST_TIMEOUT_MS);
   if (!response.ok) throw new Error(`Failed to download provider output: HTTP ${response.status}`);
   const mimeType = response.headers.get('content-type') || 'image/png';
@@ -151,7 +190,7 @@ async function runReplicate(featureId, dataUri, scale = 2) {
     status = prediction.status;
   }
   if (status !== 'succeeded') throw new Error(`Replicate prediction did not succeed. Status: ${status}. Error: ${prediction.error || 'unknown'}`);
-  return outputToBase64(prediction.output);
+  return outputToResult(prediction.output, RETURN_IMAGE_URL);
 }
 
 async function startReplicate(featureId, dataUri, scale = 2) {
@@ -165,19 +204,21 @@ async function startReplicate(featureId, dataUri, scale = 2) {
   const createText = await createResponse.text();
   let prediction; try { prediction = JSON.parse(createText); } catch (_) { throw new Error(`Replicate returned non-JSON response: ${createText.slice(0, 200)}`); }
   if (!createResponse.ok) throw new Error(`Replicate create failed: HTTP ${createResponse.status} ${createText}`);
-  return { id: prediction.id, status: prediction.status };
+  return { id: encodeJobToken({ provider: 'replicate', id: prediction.id }), status: prediction.status };
 }
 
 async function checkReplicate(predictionId) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
-  const pollUrl = `https://api.replicate.com/v1/predictions/${predictionId}`;
+  const job = decodeJobToken(predictionId);
+  const rawPredictionId = job?.provider === 'replicate' ? job.id : predictionId;
+  const pollUrl = `https://api.replicate.com/v1/predictions/${rawPredictionId}`;
   const pollResponse = await fetchWithTimeout(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
   const pollText = await pollResponse.text();
   let prediction; try { prediction = JSON.parse(pollText); } catch (_) { throw new Error(`Replicate poll returned non-JSON response: ${pollText.slice(0, 200)}`); }
   if (!pollResponse.ok) throw new Error(`Replicate poll failed: HTTP ${pollResponse.status} ${pollText}`);
   const status = prediction.status;
-  if (status === 'succeeded') { const result = await outputToBase64(prediction.output); return { status, ...result }; }
+  if (status === 'succeeded') { const result = await outputToResult(prediction.output, RETURN_IMAGE_URL); return { status, ...result }; }
   if (status === 'failed' || status === 'canceled') throw new Error(`Replicate prediction ${status}. Error: ${prediction.error || 'unknown'}`);
   return { status };
 }
@@ -191,11 +232,69 @@ async function runFal(featureId, dataUri, scale = 2) {
   let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal.ai returned non-JSON response: ${text.slice(0, 200)}`); }
   if (!response.ok) throw new Error(`Fal.ai failed: HTTP ${response.status} ${text}`);
   const output = data.image?.url || data.images?.[0]?.url || data.output || data.url || data;
-  return outputToBase64(output);
+  return outputToResult(output, RETURN_IMAGE_URL);
+}
+
+async function startFal(featureId, dataUri, scale = 2) {
+  if (!FAL_QUEUE_ENABLED) throw new Error('Fal queue is disabled');
+  const token = process.env.FAL_API_KEY;
+  if (!token) throw new Error('FAL_API_KEY is not configured');
+  const { model, input } = falConfigForFeature(featureId, dataUri, scale);
+  const response = await fetchWithTimeout(`https://queue.fal.run/${model}`, {
+    method: 'POST',
+    headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const text = await response.text();
+  let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal queue returned non-JSON response: ${text.slice(0, 200)}`); }
+  if (!response.ok) throw new Error(`Fal queue submit failed: HTTP ${response.status} ${text}`);
+  const requestId = data.request_id || data.requestId || data.id;
+  if (!requestId) throw new Error(`Fal queue returned no request_id: ${text}`);
+  return { id: encodeJobToken({ provider: 'fal', model, id: requestId }), status: data.status || 'IN_QUEUE' };
+}
+
+async function checkFal(job) {
+  const token = process.env.FAL_API_KEY;
+  if (!token) throw new Error('FAL_API_KEY is not configured');
+  const model = job.model;
+  const requestId = job.id;
+  if (!model || !requestId) throw new Error('Invalid Fal job token');
+
+  const statusUrl = `https://queue.fal.run/${model}/requests/${requestId}/status`;
+  const statusResponse = await fetchWithTimeout(statusUrl, { headers: { Authorization: `Key ${token}` } }, 30000);
+  const statusText = await statusResponse.text();
+  let statusData; try { statusData = JSON.parse(statusText); } catch (_) { throw new Error(`Fal status returned non-JSON response: ${statusText.slice(0, 200)}`); }
+  if (!statusResponse.ok) throw new Error(`Fal status failed: HTTP ${statusResponse.status} ${statusText}`);
+
+  const rawStatus = String(statusData.status || statusData.state || '').toUpperCase();
+  if (['COMPLETED', 'SUCCEEDED', 'SUCCESS'].includes(rawStatus)) {
+    const resultUrl = statusData.response_url || `https://queue.fal.run/${model}/requests/${requestId}`;
+    const resultResponse = await fetchWithTimeout(resultUrl, { headers: { Authorization: `Key ${token}` } }, REQUEST_TIMEOUT_MS);
+    const resultText = await resultResponse.text();
+    let resultData; try { resultData = JSON.parse(resultText); } catch (_) { throw new Error(`Fal result returned non-JSON response: ${resultText.slice(0, 200)}`); }
+    if (!resultResponse.ok) throw new Error(`Fal result failed: HTTP ${resultResponse.status} ${resultText}`);
+    const output = resultData.image?.url || resultData.images?.[0]?.url || resultData.output || resultData.url || resultData;
+    const result = await outputToResult(output, RETURN_IMAGE_URL);
+    return { status: rawStatus, ...result };
+  }
+
+  if (['FAILED', 'ERROR', 'CANCELED', 'CANCELLED'].includes(rawStatus)) {
+    throw new Error(`Fal prediction ${rawStatus}. Error: ${statusData.error || statusData.message || 'unknown'}`);
+  }
+
+  return { status: rawStatus || 'IN_PROGRESS' };
 }
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'pixel-revive-backend', defaultProvider: DEFAULT_AI_PROVIDER, replicateConfigured: Boolean(process.env.REPLICATE_API_TOKEN), falConfigured: Boolean(process.env.FAL_API_KEY) });
+  res.json({
+    ok: true,
+    service: 'pixel-revive-backend',
+    defaultProvider: DEFAULT_AI_PROVIDER,
+    replicateConfigured: Boolean(process.env.REPLICATE_API_TOKEN),
+    falConfigured: Boolean(process.env.FAL_API_KEY),
+    falQueueEnabled: FAL_QUEUE_ENABLED,
+    returnImageUrl: RETURN_IMAGE_URL,
+  });
 });
 
 app.post('/enhance/start', requireClientSecret, async (req, res) => {
@@ -203,21 +302,39 @@ app.post('/enhance/start', requireClientSecret, async (req, res) => {
     const featureId = String(req.body.featureId || 'auto');
     const provider = String(req.body.provider || DEFAULT_AI_PROVIDER).toLowerCase();
     if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
-    if (provider !== 'replicate') return res.status(400).json({ success: false, error: 'Async start supports replicate only' });
+    if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeImageInput(req.body.imageBase64, req.body.mimeType || 'image/jpeg');
-    const started = await startReplicate(featureId, normalized.dataUri, req.body.scale);
-    res.json({ success: true, predictionId: started.id, status: started.status });
-  } catch (error) { console.error('[enhance/start] error:', error); res.status(500).json({ success: false, error: error.message || 'Failed to start prediction' }); }
+    const started = provider === 'fal'
+      ? await startFal(featureId, normalized.dataUri, req.body.scale)
+      : await startReplicate(featureId, normalized.dataUri, req.body.scale);
+    res.json({ success: true, provider, predictionId: started.id, status: started.status });
+  } catch (error) {
+    console.error('[enhance/start] error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to start prediction' });
+  }
 });
 
 app.get('/enhance/status/:id', requireClientSecret, async (req, res) => {
   try {
     const predictionId = String(req.params.id || '');
     if (!predictionId) return res.status(400).json({ success: false, error: 'Missing prediction id' });
-    const result = await checkReplicate(predictionId);
-    if (result.status === 'succeeded') return res.json({ success: true, done: true, status: result.status, mimeType: result.mimeType, imageBase64: result.imageBase64 });
+    const job = decodeJobToken(predictionId);
+    const result = job?.provider === 'fal' ? await checkFal(job) : await checkReplicate(predictionId);
+    if (result.imageBase64 || result.imageUrl) {
+      return res.json({
+        success: true,
+        done: true,
+        status: result.status,
+        mimeType: result.mimeType || 'image/png',
+        imageBase64: result.imageBase64,
+        imageUrl: result.imageUrl,
+      });
+    }
     return res.json({ success: true, done: false, status: result.status });
-  } catch (error) { console.error('[enhance/status] error:', error); res.status(500).json({ success: false, done: true, error: error.message || 'Status check failed' }); }
+  } catch (error) {
+    console.error('[enhance/status] error:', error);
+    res.status(500).json({ success: false, done: true, error: error.message || 'Status check failed' });
+  }
 });
 
 app.post('/enhance', requireClientSecret, async (req, res) => {
@@ -228,9 +345,22 @@ app.post('/enhance', requireClientSecret, async (req, res) => {
     if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeImageInput(req.body.imageBase64, req.body.mimeType || 'image/jpeg');
-    const result = provider === 'fal' ? await runFal(featureId, normalized.dataUri, req.body.scale) : await runReplicate(featureId, normalized.dataUri, req.body.scale);
-    res.json({ success: true, provider, featureId, mimeType: result.mimeType, imageBase64: result.imageBase64, elapsedMs: Date.now() - startedAt });
-  } catch (error) { console.error('[enhance] error:', error); res.status(500).json({ success: false, error: error.message || 'Cloud enhancement failed', elapsedMs: Date.now() - startedAt }); }
+    const result = provider === 'fal'
+      ? await runFal(featureId, normalized.dataUri, req.body.scale)
+      : await runReplicate(featureId, normalized.dataUri, req.body.scale);
+    res.json({
+      success: true,
+      provider,
+      featureId,
+      mimeType: result.mimeType || 'image/png',
+      imageBase64: result.imageBase64,
+      imageUrl: result.imageUrl,
+      elapsedMs: Date.now() - startedAt,
+    });
+  } catch (error) {
+    console.error('[enhance] error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Cloud enhancement failed', elapsedMs: Date.now() - startedAt });
+  }
 });
 
 app.use((_req, res) => { res.status(404).json({ success: false, error: 'Not found' }); });

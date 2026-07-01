@@ -15,6 +15,54 @@ class AiApiService {
   }
 
 
+  static Uint8List _prepareCloudUpload(
+    Uint8List imageBytes, {
+    int maxDimension = 1280,
+    int quality = 82,
+  }) {
+    var uploadBytes = imageBytes;
+    var decoded = img.decodeImage(uploadBytes);
+    if (decoded != null) {
+      if (decoded.width > maxDimension || decoded.height > maxDimension) {
+        decoded = img.copyResize(
+          decoded,
+          width: decoded.width > decoded.height ? maxDimension : null,
+          height: decoded.height >= decoded.width ? maxDimension : null,
+        );
+      }
+      uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: quality));
+    }
+    return uploadBytes;
+  }
+
+  static Future<Uint8List?> _readBackendImage(
+    Map<String, dynamic> data,
+    http.Client client,
+  ) async {
+    final imageBase64 = data['imageBase64'];
+    if (imageBase64 != null && imageBase64.toString().isNotEmpty) {
+      final raw = imageBase64.toString();
+      final cleaned = raw.contains(',') ? raw.split(',').last : raw;
+      return Uint8List.fromList(base64Decode(cleaned));
+    }
+
+    final imageUrl = data['imageUrl'];
+    if (imageUrl != null && imageUrl.toString().isNotEmpty) {
+      final url = imageUrl.toString();
+      debugPrint('Downloading cloud result directly: $url');
+      final response = await client
+          .get(Uri.parse(url))
+          .timeout(const Duration(minutes: 3));
+      if (response.statusCode == 200) {
+        return response.bodyBytes;
+      }
+      _rememberError('Cloud result download failed: HTTP ${response.statusCode}');
+      return null;
+    }
+
+    return null;
+  }
+
   /// =============================================
   /// FAL.AI API (original)
   /// =============================================
@@ -27,6 +75,7 @@ class AiApiService {
 
 
   /// Secure backend proxy call. This keeps Replicate/Fal.ai keys out of the APK.
+  /// Fast mode: smaller upload + backend may return imageUrl instead of base64.
   static Future<Uint8List?> runBackendProxyPrediction({
     required Uint8List imageBytes,
     required String featureId,
@@ -38,18 +87,7 @@ class AiApiService {
 
     final client = http.Client();
     try {
-      var uploadBytes = imageBytes;
-      var decoded = img.decodeImage(uploadBytes);
-      if (decoded != null) {
-        if (decoded.width > 2048 || decoded.height > 2048) {
-          decoded = img.copyResize(
-            decoded,
-            width: decoded.width > decoded.height ? 2048 : null,
-            height: decoded.height >= decoded.width ? 2048 : null,
-          );
-        }
-        uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 92));
-      }
+      final uploadBytes = _prepareCloudUpload(imageBytes);
 
       final uri = CloudApiConfig.backendEnhanceUri;
       final headers = <String, String>{
@@ -81,15 +119,17 @@ class AiApiService {
         return null;
       }
 
-      final data = jsonDecode(response.body);
-      if (data['success'] != true || data['imageBase64'] == null) {
-        debugPrint('Backend proxy returned no image: ${response.body}');
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['success'] != true) {
+        debugPrint('Backend proxy failed: ${response.body}');
         return null;
       }
 
-      final imageBase64 = data['imageBase64'].toString();
-      final cleaned = imageBase64.contains(',') ? imageBase64.split(',').last : imageBase64;
-      return Uint8List.fromList(base64Decode(cleaned));
+      final bytes = await _readBackendImage(data, client);
+      if (bytes == null) {
+        debugPrint('Backend proxy returned no image: ${response.body}');
+      }
+      return bytes;
     } catch (e) {
       debugPrint('Backend proxy error: $e');
       return null;
@@ -103,9 +143,11 @@ class AiApiService {
   /// Step 1: POST /enhance/start -> returns a predictionId quickly.
   /// Step 2: GET /enhance/status/:id repeatedly until done.
   /// Each request is short, so Vercel's 60-second function cap is never hit.
+  /// Fast mode supports both Fal.ai queue and Replicate async jobs.
   static Future<Uint8List?> runBackendAsyncPrediction({
     required Uint8List imageBytes,
     required String featureId,
+    required bool isReplicate,
     int? scale,
   }) async {
     final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
@@ -114,19 +156,8 @@ class AiApiService {
     final client = http.Client();
     try {
       // SPEED MODE: smaller cloud upload = faster upload, faster queue start,
-      // lower Vercel/Replicate timeout risk, and better phone performance.
-      var uploadBytes = imageBytes;
-      var decoded = img.decodeImage(uploadBytes);
-      if (decoded != null) {
-        if (decoded.width > 1280 || decoded.height > 1280) {
-          decoded = img.copyResize(
-            decoded,
-            width: decoded.width > decoded.height ? 1280 : null,
-            height: decoded.height >= decoded.width ? 1280 : null,
-          );
-        }
-        uploadBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 84));
-      }
+      // lower backend timeout risk, and better phone performance.
+      final uploadBytes = _prepareCloudUpload(imageBytes);
 
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (CloudApiConfig.backendClientSecret.isNotEmpty) {
@@ -139,7 +170,7 @@ class AiApiService {
             Uri.parse('$baseUrl/enhance/start'),
             headers: headers,
             body: jsonEncode({
-              'provider': 'replicate',
+              'provider': isReplicate ? 'replicate' : 'fal',
               'featureId': featureId,
               if (scale != null) 'scale': scale,
               'mimeType': 'image/jpeg',
@@ -159,7 +190,7 @@ class AiApiService {
         return null;
       }
 
-      final String predictionId = startData['predictionId'].toString();
+      final String predictionId = Uri.encodeComponent(startData['predictionId'].toString());
       debugPrint('Async prediction started: $predictionId');
 
       // ── Step 2: POLL status until done ─────────────
@@ -180,13 +211,16 @@ class AiApiService {
           continue;
         }
 
-        final statusData = jsonDecode(statusResponse.body);
+        final statusData = jsonDecode(statusResponse.body) as Map<String, dynamic>;
 
-        if (statusData['done'] == true && statusData['imageBase64'] != null) {
-          final imageBase64 = statusData['imageBase64'].toString();
-          final cleaned = imageBase64.contains(',') ? imageBase64.split(',').last : imageBase64;
-          debugPrint('Async prediction succeeded after ${attempt + 1} polls');
-          return Uint8List.fromList(base64Decode(cleaned));
+        if (statusData['done'] == true) {
+          final bytes = await _readBackendImage(statusData, client);
+          if (bytes != null) {
+            debugPrint('Async prediction succeeded after ${attempt + 1} polls');
+            return bytes;
+          }
+          _rememberError('Cloud AI finished but returned no image: ${statusResponse.body}');
+          return null;
         }
 
         if (statusData['success'] == false || statusData['error'] != null) {
@@ -483,19 +517,18 @@ class AiApiService {
     lastErrorMessage = null;
     // Preferred secure route: Flutter -> your backend proxy -> Replicate/Fal.ai.
     if (CloudApiConfig.useBackendProxy) {
-      // For Replicate, use the async fire-and-poll flow so slow models
-      // (e.g. HD upscale) don't hit Vercel's 60-second function timeout.
-      if (isReplicate) {
-        final asyncResult = await runBackendAsyncPrediction(
-          imageBytes: imageBytes,
-          featureId: featureId,
-          scale: scale,
-        );
-        if (asyncResult != null) return asyncResult;
-        debugPrint('Async backend flow failed; trying synchronous proxy as fallback.');
-      }
+      // Fast mode: use fire-and-poll for both Fal.ai queue and Replicate.
+      // This avoids long Vercel requests and lets the app download provider output directly.
+      final asyncResult = await runBackendAsyncPrediction(
+        imageBytes: imageBytes,
+        featureId: featureId,
+        isReplicate: isReplicate,
+        scale: scale,
+      );
+      if (asyncResult != null) return asyncResult;
+      debugPrint('Async backend flow failed; trying synchronous proxy as fallback.');
 
-      // Fal.ai (fast/synchronous) and Replicate fallback use the legacy proxy.
+      // Synchronous proxy fallback for older backend deployments.
       final backendResult = await runBackendProxyPrediction(
         imageBytes: imageBytes,
         featureId: featureId,

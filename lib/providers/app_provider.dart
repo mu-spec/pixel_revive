@@ -315,6 +315,13 @@ static const int _dailyFreeExports = 3;
     if (originalBytes == null) return;
 
     isProcessing = true;
+    if (useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId)) {
+      lastProcessingSource = 'Cloud AI';
+      lastProcessingMessage = 'Uploading to ${CloudApiConfig.activeProviderLabel} fast cloud queue...';
+    } else {
+      lastProcessingSource = 'Local';
+      lastProcessingMessage = 'Processing on device...';
+    }
     notifyListeners();
 
     if (_canUseCache && _lastFeatureId == featureId) {
