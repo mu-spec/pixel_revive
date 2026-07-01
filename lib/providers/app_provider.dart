@@ -46,7 +46,7 @@ class AppProvider extends ChangeNotifier {
   bool _mlServicePreWarmed = false;
 
 // Line 48:
-static const int _dailyFreeExports = 1;
+static const int _dailyFreeExports = 3;
 
   // Features that have a real Replicate cloud model. Others (cartoon, bokeh)
   // are local-only and must NOT be sent to cloud (they'd get the wrong model).
