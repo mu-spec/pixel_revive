@@ -26,7 +26,13 @@ class ImageProcessor {
   static const int _pngCompression = 6;
 
   /// Max working dimension (longest side) for local-only features.
+  /// Keep local/offline tools responsive on budget phones. Cloud/HD export still
+  /// uses its own higher quality pipeline; these caps only affect on-device tools.
   static const int _maxWorkDim = 1400;
+  static const int _fastWorkDim = 1200;
+  static const int _heavyWorkDim = 1100;
+  static const int _mlWorkDim = 1000;
+  static const int _cartoonWorkDim = 850;
 
   static img.Image? _decode(Uint8List bytes) {
     try {
@@ -692,7 +698,7 @@ class ImageProcessor {
 
   static Uint8List _autoEnhanceSync(_AutoEnhanceArgs args) {
     final sw = Stopwatch()..start();
-    final src = _prepare(args.input);
+    final src = _prepare(args.input, maxDim: _fastWorkDim);
     if (src == null) return args.input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
@@ -723,9 +729,24 @@ class ImageProcessor {
       src = src.convert(numChannels: 4);
     }
 
-    final maxDim = 2400 * args.scale;
-    final newW = (src.width * args.scale).clamp(1, maxDim).toInt();
-    final newH = (src.height * args.scale).clamp(1, maxDim).toInt();
+    // Local upscale must stay responsive. Keep 2x under ~3200px and 4x under
+    // ~4096px; cloud HD export is used for higher quality/larger premium output.
+    final maxOutputDim = args.scale >= 4 ? 4096 : 3200;
+    final longest = math.max(src.width, src.height);
+    final maxInputDim = (maxOutputDim / args.scale).floor();
+    if (longest > maxInputDim) {
+      final factor = maxInputDim / longest;
+      src = img.copyResize(
+        src,
+        width: (src.width * factor).round().clamp(1, maxInputDim),
+        height: (src.height * factor).round().clamp(1, maxInputDim),
+        interpolation: img.Interpolation.cubic,
+      );
+      if (src.numChannels != 4) src = src.convert(numChannels: 4);
+    }
+
+    final newW = (src.width * args.scale).clamp(1, maxOutputDim).toInt();
+    final newH = (src.height * args.scale).clamp(1, maxOutputDim).toInt();
 
     final sw0 = src.width, sh0 = src.height;
     final rgbIn = Uint8List(sw0 * sh0 * 3);
@@ -756,9 +777,9 @@ class ImageProcessor {
     double smoothness = 0.5,
     double strength = 0.8,
   }) async {
-    final prepared = _prepare(input);
+    final prepared = _prepare(input, maxDim: _mlWorkDim);
     if (prepared == null) return input;
-    final preparedBytes = Uint8List.fromList(img.encodeJpg(prepared, quality: 92));
+    final preparedBytes = Uint8List.fromList(img.encodeJpg(prepared, quality: 88));
     final faceRegions = await OnDeviceMlService.detectFaceRegions(preparedBytes);
     return await compute(
       _faceEnhanceSync,
@@ -768,7 +789,7 @@ class ImageProcessor {
 
   static Uint8List _faceEnhanceSync(_FaceEnhanceArgs args) {
     final sw = Stopwatch()..start();
-    final src = _prepare(args.input);
+    final src = _prepare(args.input, maxDim: _mlWorkDim);
     if (src == null) return args.input;
     final w = src.width, h = src.height;
 
@@ -852,16 +873,16 @@ class ImageProcessor {
   }
 
   static Future<Uint8List> backgroundBlur(Uint8List input, {double radius = 0.6}) async {
-    final prepared = _prepare(input);
+    final prepared = _prepare(input, maxDim: _mlWorkDim);
     if (prepared == null) return input;
-    final preparedBytes = Uint8List.fromList(img.encodeJpg(prepared, quality: 92));
+    final preparedBytes = Uint8List.fromList(img.encodeJpg(prepared, quality: 88));
     final faceRegions = await OnDeviceMlService.detectFaceRegions(preparedBytes);
     return await compute(_bgBlurSync, _BgBlurArgs(preparedBytes, radius, faceRegions));
   }
 
   static Uint8List _bgBlurSync(_BgBlurArgs args) {
     final sw = Stopwatch()..start();
-    final src = _prepare(args.input);
+    final src = _prepare(args.input, maxDim: _mlWorkDim);
     if (src == null) return args.input;
     final w = src.width, h = src.height;
     final orig = _toRgba8(src);
@@ -930,7 +951,7 @@ class ImageProcessor {
 
   static Uint8List _denoiseSync(Uint8List input) {
     final sw = Stopwatch()..start();
-    final src = _prepare(input);
+    final src = _prepare(input, maxDim: _heavyWorkDim);
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
@@ -950,7 +971,7 @@ class ImageProcessor {
 
   static Uint8List _unblurSync(Uint8List input) {
     final sw = Stopwatch()..start();
-    final src = _prepare(input);
+    final src = _prepare(input, maxDim: _fastWorkDim);
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
@@ -969,7 +990,7 @@ class ImageProcessor {
 
   static Uint8List _colorizeSync(Uint8List input) {
     final sw = Stopwatch()..start();
-    final src = _prepare(input);
+    final src = _prepare(input, maxDim: _fastWorkDim);
     if (src == null) return input;
     final w = src.width, h = src.height;
     final n = w * h;
@@ -1039,7 +1060,7 @@ class ImageProcessor {
 
   static Uint8List _restoreOldPhotoSync(Uint8List input) {
     final sw = Stopwatch()..start();
-    final src = _prepare(input);
+    final src = _prepare(input, maxDim: _heavyWorkDim);
     if (src == null) return input;
     final w = src.width, h = src.height;
     final inBytes = _toRgba8(src);
@@ -1112,7 +1133,7 @@ class ImageProcessor {
 
   static Uint8List _cartoonSync(Uint8List input) {
     final sw = Stopwatch()..start();
-    var src = _prepare(input);
+    var src = _prepare(input, maxDim: _cartoonWorkDim);
     if (src == null) return input;
     final w = src.width, h = src.height;
 
@@ -1174,7 +1195,7 @@ class ImageProcessor {
 
   static Uint8List _bgCleanupSync(Uint8List input) {
     final sw = Stopwatch()..start();
-    final src = _prepare(input);
+    final src = _prepare(input, maxDim: _heavyWorkDim);
     if (src == null) return input;
     final w = src.width, h = src.height;
     final inBytes = _toRgba8(src);
