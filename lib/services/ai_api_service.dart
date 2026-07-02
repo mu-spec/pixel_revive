@@ -81,13 +81,21 @@ class AiApiService {
     required String featureId,
     required bool isReplicate,
     int? scale,
+    int uploadMaxDimension = 1280,
+    int uploadQuality = 82,
+    ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.backendBaseUrl.trim();
     if (baseUrl.isEmpty) return null;
 
     final client = http.Client();
     try {
-      final uploadBytes = _prepareCloudUpload(imageBytes);
+      onProgress?.call('Compressing image for fast upload...');
+      final uploadBytes = _prepareCloudUpload(
+        imageBytes,
+        maxDimension: uploadMaxDimension,
+        quality: uploadQuality,
+      );
 
       final uri = CloudApiConfig.backendEnhanceUri;
       final headers = <String, String>{
@@ -99,6 +107,7 @@ class AiApiService {
       }
 
       debugPrint('Backend proxy posting to: $uri');
+      onProgress?.call('Uploading to ${CloudApiConfig.activeProviderLabel}...');
 
       final response = await client
           .post(
@@ -125,6 +134,7 @@ class AiApiService {
         return null;
       }
 
+      onProgress?.call('Downloading enhanced result...');
       final bytes = await _readBackendImage(data, client);
       if (bytes == null) {
         debugPrint('Backend proxy returned no image: ${response.body}');
@@ -149,6 +159,9 @@ class AiApiService {
     required String featureId,
     required bool isReplicate,
     int? scale,
+    int uploadMaxDimension = 1280,
+    int uploadQuality = 82,
+    ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
     if (baseUrl.isEmpty) return null;
@@ -157,7 +170,12 @@ class AiApiService {
     try {
       // SPEED MODE: smaller cloud upload = faster upload, faster queue start,
       // lower backend timeout risk, and better phone performance.
-      final uploadBytes = _prepareCloudUpload(imageBytes);
+      onProgress?.call('Compressing image for fast upload...');
+      final uploadBytes = _prepareCloudUpload(
+        imageBytes,
+        maxDimension: uploadMaxDimension,
+        quality: uploadQuality,
+      );
 
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (CloudApiConfig.backendClientSecret.isNotEmpty) {
@@ -165,6 +183,7 @@ class AiApiService {
       }
 
       // ── Step 1: START ──────────────────────────────
+      onProgress?.call('Uploading to ${CloudApiConfig.activeProviderLabel} cloud queue...');
       final startResponse = await client
           .post(
             Uri.parse('$baseUrl/enhance/start'),
@@ -192,6 +211,7 @@ class AiApiService {
 
       final String predictionId = Uri.encodeComponent(startData['predictionId'].toString());
       debugPrint('Async prediction started: $predictionId');
+      onProgress?.call('AI enhancing on ${CloudApiConfig.activeProviderLabel}...');
 
       // ── Step 2: POLL status until done ─────────────
       const maxAttempts = 90; // 90 * 2s = up to 3 minutes total
@@ -214,6 +234,7 @@ class AiApiService {
         final statusData = jsonDecode(statusResponse.body) as Map<String, dynamic>;
 
         if (statusData['done'] == true) {
+          onProgress?.call('Downloading enhanced result...');
           final bytes = await _readBackendImage(statusData, client);
           if (bytes != null) {
             debugPrint('Async prediction succeeded after ${attempt + 1} polls');
@@ -513,6 +534,9 @@ class AiApiService {
     required String apiToken,
     required bool isReplicate,
     int? scale,
+    int uploadMaxDimension = 1280,
+    int uploadQuality = 82,
+    ValueChanged<String>? onProgress,
   }) async {
     lastErrorMessage = null;
     // Preferred secure route: Flutter -> your backend proxy -> Replicate/Fal.ai.
@@ -524,6 +548,9 @@ class AiApiService {
         featureId: featureId,
         isReplicate: isReplicate,
         scale: scale,
+        uploadMaxDimension: uploadMaxDimension,
+        uploadQuality: uploadQuality,
+        onProgress: onProgress,
       );
       if (asyncResult != null) return asyncResult;
       debugPrint('Async backend flow failed; trying synchronous proxy as fallback.');
@@ -534,6 +561,9 @@ class AiApiService {
         featureId: featureId,
         isReplicate: isReplicate,
         scale: scale,
+        uploadMaxDimension: uploadMaxDimension,
+        uploadQuality: uploadQuality,
+        onProgress: onProgress,
       );
       if (backendResult != null) return backendResult;
       debugPrint('Backend proxy failed; falling back if a direct dev token exists.');

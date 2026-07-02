@@ -380,6 +380,62 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 16),
+                  Text(
+                    'Cloud speed / quality',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _modeOption(
+                          context: context,
+                          icon: Icons.flash_on_rounded,
+                          title: 'Fast',
+                          subtitle: '1024px • quickest',
+                          selected: provider.processingQuality == 'fast',
+                          onTap: () => provider.setProcessingQuality('fast'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _modeOption(
+                          context: context,
+                          icon: Icons.balance_rounded,
+                          title: 'Balanced',
+                          subtitle: '1280px • normal',
+                          selected: provider.processingQuality == 'balanced',
+                          onTap: () => provider.setProcessingQuality('balanced'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _modeOption(
+                          context: context,
+                          icon: Icons.hd_rounded,
+                          title: 'HD',
+                          subtitle: provider.isPremium ? '1920px • premium' : 'Premium only',
+                          selected: provider.processingQuality == 'hd',
+                          enabled: provider.isPremium,
+                          onTap: () {
+                            if (!provider.isPremium) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('HD quality is a Premium feature.')),
+                              );
+                              return;
+                            }
+                            provider.setProcessingQuality('hd');
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

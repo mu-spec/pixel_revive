@@ -68,6 +68,22 @@ function normalizeImageInput(imageBase64, mimeType = 'image/jpeg') {
   return { mimeType, base64: cleanBase64, dataUri: `data:${mimeType};base64,${cleanBase64}` };
 }
 
+function normalizeProviderInput(body) {
+  const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
+  if (imageUrl) {
+    let parsed;
+    try { parsed = new URL(imageUrl); }
+    catch (_) { throw new Error('imageUrl must be a valid URL'); }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('imageUrl must use http or https');
+    }
+    // Fal.ai and Replicate accept remote image URLs directly. This is the fast path
+    // once the Flutter app uploads inputs to Supabase/R2/Firebase/Vercel Blob.
+    return { mimeType: body.mimeType || 'image/jpeg', dataUri: imageUrl, imageUrl };
+  }
+  return normalizeImageInput(body.imageBase64, body.mimeType || 'image/jpeg');
+}
+
 function envModel(name, fallback) { return process.env[name] || fallback; }
 
 function normalizeScale(value) {
@@ -122,8 +138,10 @@ function falConfigForFeature(featureId, dataUri, scale = 2) {
       return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-apps-v2/photo-restoration'), input: { image_url: dataUri, enhance_resolution: false, fix_colors: true, remove_scratches: true } };
     case 'colorize':
       return { model: getEnv('FAL_COLORIZE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
-    case 'denoise': case 'unblur':
-      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.5, upscaling: 1, face_upscale: false } };
+    case 'denoise':
+      return { model: getEnv('FAL_DENOISE_MODEL', getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer')), input: { image_url: dataUri, fidelity: 0.5, upscaling: 1, face_upscale: false } };
+    case 'unblur':
+      return { model: getEnv('FAL_UNBLUR_MODEL', getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer')), input: { image_url: dataUri, fidelity: 0.55, upscaling: 1, face_upscale: false } };
     default:
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: false } };
   }
@@ -303,7 +321,7 @@ app.post('/enhance/start', requireClientSecret, async (req, res) => {
     const provider = String(req.body.provider || DEFAULT_AI_PROVIDER).toLowerCase();
     if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
-    const normalized = normalizeImageInput(req.body.imageBase64, req.body.mimeType || 'image/jpeg');
+    const normalized = normalizeProviderInput(req.body);
     const started = provider === 'fal'
       ? await startFal(featureId, normalized.dataUri, req.body.scale)
       : await startReplicate(featureId, normalized.dataUri, req.body.scale);
@@ -344,7 +362,7 @@ app.post('/enhance', requireClientSecret, async (req, res) => {
     const provider = String(req.body.provider || DEFAULT_AI_PROVIDER).toLowerCase();
     if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
-    const normalized = normalizeImageInput(req.body.imageBase64, req.body.mimeType || 'image/jpeg');
+    const normalized = normalizeProviderInput(req.body);
     const result = provider === 'fal'
       ? await runFal(featureId, normalized.dataUri, req.body.scale)
       : await runReplicate(featureId, normalized.dataUri, req.body.scale);

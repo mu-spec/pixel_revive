@@ -29,6 +29,7 @@ class AppProvider extends ChangeNotifier {
   double skinSmoothness = 0.5;
   double bokehBlur = 0.6;
   int upscaleScale = 2;
+  String processingQuality = 'balanced'; // fast, balanced, hd
 
   bool lastProcessingUsedCloud = false;
   String lastProcessingSource = 'Local';
@@ -43,7 +44,9 @@ class AppProvider extends ChangeNotifier {
 
   Uint8List? _lastProcessedBytes;
   String? _lastFeatureId;
+  final Map<String, Uint8List> _processedCache = <String, Uint8List>{};
   bool _mlServicePreWarmed = false;
+  bool _cancelProcessingRequested = false;
 
 // Line 48:
 static const int _dailyFreeExports = 3;
@@ -67,9 +70,7 @@ static const int _dailyFreeExports = 3;
   AppProvider() {
     _loadPrefs();
     _initIap();
-    // Do not run heavy ML/GPU initialization immediately on app open.
-    // Delaying it makes splash/main UI much faster on low-memory phones.
-    Future.delayed(const Duration(seconds: 3), _preWarmServices);
+    // Heavy ML/GPU services are now lazy-loaded only when a local feature needs them.
   }
 
   Future<void> _initIap() async {
@@ -106,7 +107,9 @@ static const int _dailyFreeExports = 3;
     useCloudAi = prefs.getBool('use_cloud_ai') ?? CloudApiConfig.useBackendProxy;
     devOverrideToken = prefs.getString('dev_override_token') ?? '';
     cloudAiUsedToday = prefs.getInt('cloud_ai_used_today') ?? 0;
-    upscaleScale = (prefs.getInt('upscale_scale') ?? 2).clamp(2, 4).toInt();
+    upscaleScale = (prefs.getInt('upscale_scale') ?? 2).clamp(2, isPremium ? 4 : 2).toInt();
+    processingQuality = prefs.getString('processing_quality') ?? (isPremium ? 'balanced' : 'fast');
+    if (!isPremium && processingQuality == 'hd') processingQuality = 'fast';
     languageCode = prefs.getString('language_code') ?? 'en';
     creationHistory = prefs.getStringList('creation_history') ?? [];
     _resetDailyIfNeeded();
@@ -122,6 +125,7 @@ static const int _dailyFreeExports = 3;
     await prefs.setString('dev_override_token', devOverrideToken);
     await prefs.setInt('cloud_ai_used_today', cloudAiUsedToday);
     await prefs.setInt('upscale_scale', upscaleScale);
+    await prefs.setString('processing_quality', processingQuality);
     await prefs.setString('language_code', languageCode);
     await prefs.setStringList('creation_history', creationHistory);
   }
@@ -153,6 +157,50 @@ static const int _dailyFreeExports = 3;
     if (isPremium) return true;
     if (CloudApiConfig.cloudAiPremiumOnly) return false;
     return cloudAiUsedToday < CloudApiConfig.freeDailyCloudLimit;
+  }
+
+
+  bool get canUseHdQuality => isPremium;
+
+  int get cloudUploadMaxDimension {
+    if (processingQuality == 'hd' && isPremium) return 1920;
+    if (processingQuality == 'balanced') return 1280;
+    return 1024;
+  }
+
+  int get cloudUploadQuality {
+    if (processingQuality == 'hd' && isPremium) return 90;
+    if (processingQuality == 'balanced') return 82;
+    return 76;
+  }
+
+  String get processingQualityLabel {
+    switch (processingQuality) {
+      case 'hd':
+        return 'HD Quality';
+      case 'fast':
+        return 'Fast';
+      default:
+        return 'Balanced';
+    }
+  }
+
+  String estimatedProcessingTime(String featureId) {
+    if (!useCloudAi || !canUseCloudAi || !_isCloudCapableFeature(featureId)) {
+      return 'usually 3–20 sec on device';
+    }
+    switch (featureId) {
+      case 'upscale':
+        return upscaleScale >= 4 ? 'usually 25–60 sec' : 'usually 12–35 sec';
+      case 'restore':
+      case 'colorize':
+        return 'usually 15–45 sec';
+      case 'denoise':
+      case 'unblur':
+        return 'usually 10–30 sec';
+      default:
+        return 'usually 5–20 sec';
+    }
   }
 
   String get cloudProviderLabel => CloudApiConfig.activeProviderLabel;
@@ -187,9 +235,30 @@ static const int _dailyFreeExports = 3;
 
   bool get _canUseCache => _lastProcessedBytes != null && _lastFeatureId != null && originalBytes != null;
 
+  String _cacheKey(String featureId) => [
+        featureId,
+        useCloudAi && canUseCloudAi ? 'cloud' : 'local',
+        processingQuality,
+        upscaleScale,
+        enhanceStrength.toStringAsFixed(2),
+        skinSmoothness.toStringAsFixed(2),
+        bokehBlur.toStringAsFixed(2),
+        originalBytes?.length ?? 0,
+      ].join('|');
+
+  void _rememberProcessedResult(String featureId, Uint8List bytes) {
+    _lastProcessedBytes = bytes;
+    _lastFeatureId = featureId;
+    _processedCache[_cacheKey(featureId)] = bytes;
+    if (_processedCache.length > 8) {
+      _processedCache.remove(_processedCache.keys.first);
+    }
+  }
+
   void _clearProcessingCache() {
     _lastProcessedBytes = null;
     _lastFeatureId = null;
+    _processedCache.clear();
   }
 
   void setEnhanceStrength(double value) {
@@ -211,12 +280,26 @@ static const int _dailyFreeExports = 3;
   }
 
   void setUpscaleScale(int value) {
-    upscaleScale = value.clamp(2, 4).toInt();
-    _lastProcessedBytes = null;
-    if (_lastFeatureId == 'upscale') {
-      _lastFeatureId = null;
-    }
+    upscaleScale = value.clamp(2, isPremium ? 4 : 2).toInt();
+    _clearProcessingCache();
     _savePrefs();
+    notifyListeners();
+  }
+
+  void setProcessingQuality(String value) {
+    final normalized = value == 'fast' || value == 'hd' ? value : 'balanced';
+    processingQuality = (!isPremium && normalized == 'hd') ? 'fast' : normalized;
+    _clearProcessingCache();
+    _savePrefs();
+    notifyListeners();
+  }
+
+  void cancelProcessing() {
+    if (!isProcessing) return;
+    _cancelProcessingRequested = true;
+    isProcessing = false;
+    lastProcessingSource = 'Canceled';
+    lastProcessingMessage = 'Processing canceled. The cloud job may finish in the background but its result will be ignored.';
     notifyListeners();
   }
 
@@ -281,8 +364,7 @@ static const int _dailyFreeExports = 3;
       originalImage = File(picked.path);
       originalBytes = await originalImage!.readAsBytes();
       
-      _lastProcessedBytes = null;
-      _lastFeatureId = null;
+      _clearProcessingCache();
       processedBytes = null;
       displayBytes = null;
       lastProcessingUsedCloud = false;
@@ -303,8 +385,7 @@ static const int _dailyFreeExports = 3;
     originalBytes = null;
     processedBytes = null;
     displayBytes = null;
-    _lastProcessedBytes = null;
-    _lastFeatureId = null;
+    _clearProcessingCache();
     lastProcessingUsedCloud = false;
     lastProcessingSource = 'Local';
     lastProcessingMessage = 'Ready for on-device enhancement';
@@ -314,15 +395,27 @@ static const int _dailyFreeExports = 3;
   Future<void> processFeature(String featureId) async {
     if (originalBytes == null) return;
 
+    _cancelProcessingRequested = false;
     isProcessing = true;
     if (useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId)) {
       lastProcessingSource = 'Cloud AI';
-      lastProcessingMessage = 'Uploading to ${CloudApiConfig.activeProviderLabel} fast cloud queue...';
+      lastProcessingMessage = 'Preparing ${processingQualityLabel.toLowerCase()} cloud job (${estimatedProcessingTime(featureId)})...';
     } else {
       lastProcessingSource = 'Local';
-      lastProcessingMessage = 'Processing on device...';
+      lastProcessingMessage = 'Processing on device (${estimatedProcessingTime(featureId)})...';
     }
     notifyListeners();
+
+    final cacheKey = _cacheKey(featureId);
+    final cachedResult = _processedCache[cacheKey];
+    if (cachedResult != null) {
+      processedBytes = cachedResult;
+      displayBytes = isPremium ? cachedResult : await ImageProcessor.applyWatermark(cachedResult);
+      isProcessing = false;
+      lastProcessingMessage = 'Loaded instantly from cache.';
+      notifyListeners();
+      return;
+    }
 
     if (_canUseCache && _lastFeatureId == featureId) {
       processedBytes = _lastProcessedBytes;
@@ -355,14 +448,22 @@ static const int _dailyFreeExports = 3;
           apiToken: _activeApiToken,
           isReplicate: CloudApiConfig.useReplicate,
           scale: featureId == 'upscale' ? upscaleScale : null,
+          uploadMaxDimension: cloudUploadMaxDimension,
+          uploadQuality: cloudUploadQuality,
+          onProgress: (message) {
+            if (_cancelProcessingRequested) return;
+            lastProcessingMessage = message;
+            notifyListeners();
+          },
         );
+
+        if (_cancelProcessingRequested) return;
 
         if (cloudResult != null) {
           processedBytes = cloudResult;
           displayBytes = isPremium ? cloudResult : await ImageProcessor.applyWatermark(cloudResult);
           
-          _lastProcessedBytes = cloudResult;
-          _lastFeatureId = featureId;
+          _rememberProcessedResult(featureId, cloudResult);
           lastProcessingUsedCloud = true;
           lastProcessingSource = 'Cloud AI';
           lastProcessingMessage = 'Processed securely with ${CloudApiConfig.activeProviderLabel} via Vercel backend.';
@@ -379,9 +480,22 @@ static const int _dailyFreeExports = 3;
       }
     }
 
+    const heavyCloudFeatures = {'upscale', 'restore', 'denoise', 'unblur', 'bg_cleanup'};
+    if (cloudAttempted && !freeCloudLimitReached && heavyCloudFeatures.contains(featureId)) {
+      lastProcessingUsedCloud = false;
+      lastProcessingSource = 'Cloud unavailable';
+      lastProcessingMessage = 'Cloud AI was unavailable or timed out. Please retry cloud, switch to Fast quality, or choose Offline mode for local processing.';
+      isProcessing = false;
+      notifyListeners();
+      return;
+    }
+
     try {
       Uint8List result;
       final stopwatch = Stopwatch()..start();
+      if (featureId == 'face' || featureId == 'bg') {
+        await _preWarmServices();
+      }
 
       switch (featureId) {
         case 'auto':
@@ -420,12 +534,12 @@ static const int _dailyFreeExports = 3;
 
       stopwatch.stop();
       debugPrint("⚡ Local processing completed in ${stopwatch.elapsedMilliseconds}ms");
+      if (_cancelProcessingRequested) return;
 
       processedBytes = result;
       displayBytes = isPremium ? result : await ImageProcessor.applyWatermark(result);
 
-      _lastProcessedBytes = result;
-      _lastFeatureId = featureId;
+      _rememberProcessedResult(featureId, result);
       lastProcessingUsedCloud = false;
       lastProcessingSource = freeCloudLimitReached
           ? 'Daily AI limit reached'
@@ -496,6 +610,11 @@ static const int _dailyFreeExports = 3;
 
   Future<void> setPremium(bool value) async {
     isPremium = value;
+    if (!isPremium) {
+      if (upscaleScale > 2) upscaleScale = 2;
+      if (processingQuality == 'hd') processingQuality = 'fast';
+    }
+    _clearProcessingCache();
     await _savePrefs();
     if (processedBytes != null) {
       displayBytes = isPremium ? processedBytes : await ImageProcessor.applyWatermark(processedBytes!);
@@ -507,8 +626,7 @@ static const int _dailyFreeExports = 3;
     originalBytes = editedBytes;
     processedBytes = null;
     displayBytes = null;
-    _lastProcessedBytes = null;
-    _lastFeatureId = null;
+    _clearProcessingCache();
     lastProcessingUsedCloud = false;
     lastProcessingSource = 'Local';
     lastProcessingMessage = 'Image edited. Run enhancement again.';
@@ -594,6 +712,8 @@ static const int _dailyFreeExports = 3;
             apiToken: _activeApiToken,
             isReplicate: CloudApiConfig.useReplicate,
             scale: featureId == 'upscale' ? upscaleScale : null,
+            uploadMaxDimension: cloudUploadMaxDimension,
+            uploadQuality: cloudUploadQuality,
           );
           result = cloudResult ?? await _processLocalFeatureSync(input, featureId);
         } else {

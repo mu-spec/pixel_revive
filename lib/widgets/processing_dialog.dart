@@ -172,7 +172,7 @@ class _ProcessingDialogState extends State<ProcessingDialog>
               const SizedBox(height: 10),
               // Dynamically changing phrase
               SizedBox(
-                height: 20,
+                height: 38,
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   transitionBuilder: (child, animation) {
@@ -182,8 +182,15 @@ class _ProcessingDialogState extends State<ProcessingDialog>
                     );
                   },
                   child: Text(
-                    phrases[_textIndex],
-                    key: ValueKey<int>(_textIndex),
+                    provider.lastProcessingMessage.isNotEmpty
+                        ? provider.lastProcessingMessage
+                        : phrases[_textIndex],
+                    key: ValueKey<String>(provider.lastProcessingMessage.isNotEmpty
+                        ? provider.lastProcessingMessage
+                        : phrases[_textIndex]),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textMuted,
                       fontSize: 13,
@@ -200,6 +207,19 @@ class _ProcessingDialogState extends State<ProcessingDialog>
                   backgroundColor: AppColors.card,
                   color: AppColors.success,
                   minHeight: 4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextButton(
+                onPressed: () {
+                  provider.cancelProcessing();
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
+                },
+                child: Text(
+                  AppStrings.getText('cancel', provider.languageCode),
+                  style: const TextStyle(color: AppColors.textMuted),
                 ),
               ),
             ],

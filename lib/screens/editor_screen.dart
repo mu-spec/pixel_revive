@@ -39,9 +39,7 @@ class _EditorScreenState extends State<EditorScreen> {
     super.initState();
     selectedFeatureId = widget.initialFeatureId ?? 'auto';
     _lastStrengthValue = context.read<AppProvider>().enhanceStrength;
-    
-    GpuShaderService.initialize();
-    
+
     if (widget.initialFeatureId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _process();
