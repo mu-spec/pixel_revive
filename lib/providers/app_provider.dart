@@ -77,6 +77,23 @@ static const int _dailyFreeExports = 3;
   static bool _isCloudCapableFeature(String featureId) =>
       _cloudCapableFeatures.contains(featureId);
 
+  // Speed policy: in Fast mode, these features stay on-device so users get an
+  // immediate result instead of waiting for slower cloud restoration models.
+  static const Set<String> _fastModeLocalFeatures = {
+    'auto',
+    'denoise',
+    'unblur',
+  };
+
+  bool _shouldUseFastLocal(String featureId) =>
+      processingQuality == 'fast' && _fastModeLocalFeatures.contains(featureId);
+
+  bool _shouldAttemptCloudForFeature(String featureId) =>
+      useCloudAi &&
+      canUseCloudAi &&
+      _isCloudCapableFeature(featureId) &&
+      !_shouldUseFastLocal(featureId);
+
   AppProvider() {
     _loadPrefs();
     _initIap();
@@ -256,7 +273,7 @@ static const int _dailyFreeExports = 3;
 
   String _cacheKey(String featureId) => [
         featureId,
-        useCloudAi && canUseCloudAi ? 'cloud' : 'local',
+        _shouldAttemptCloudForFeature(featureId) ? 'cloud' : 'local',
         processingQuality,
         upscaleScale,
         enhanceStrength.toStringAsFixed(2),
@@ -434,12 +451,15 @@ static const int _dailyFreeExports = 3;
 
     _cancelProcessingRequested = false;
     isProcessing = true;
-    if (useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId)) {
+    final bool willUseCloud = _shouldAttemptCloudForFeature(featureId);
+    if (willUseCloud) {
       lastProcessingSource = 'Cloud AI';
       lastProcessingMessage = 'Preparing ${processingQualityLabel.toLowerCase()} cloud job (${estimatedProcessingTime(featureId)})...';
     } else {
       lastProcessingSource = 'Local';
-      lastProcessingMessage = 'Processing on device (${estimatedProcessingTime(featureId)})...';
+      lastProcessingMessage = _shouldUseFastLocal(featureId)
+          ? 'Fast mode uses instant on-device ${featureId.replaceAll('_', ' ')}. Switch to Balanced/HD for cloud quality.'
+          : 'Processing on device (${estimatedProcessingTime(featureId)})...';
     }
     notifyListeners();
 
@@ -472,11 +492,12 @@ static const int _dailyFreeExports = 3;
         !CloudApiConfig.cloudAiPremiumOnly &&
         useCloudAi &&
         _isCloudCapableFeature(featureId) &&
+        !_shouldUseFastLocal(featureId) &&
         cloudAiUsedToday >= CloudApiConfig.freeDailyCloudLimit) {
       freeCloudLimitReached = true;
     }
 
-    if (useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId)) {
+    if (_shouldAttemptCloudForFeature(featureId)) {
       cloudAttempted = true;
       try {
         final cloudResult = await AiApiService.smartEnhance(
@@ -826,7 +847,8 @@ static const int _dailyFreeExports = 3;
         if (useCloudAi &&
             isPremium &&
             isCloudAiAvailable &&
-            _isCloudCapableFeature(featureId)) {
+            _isCloudCapableFeature(featureId) &&
+            !_shouldUseFastLocal(featureId)) {
           Uint8List? cloudResult = await AiApiService.smartEnhance(
             imageBytes: input,
             featureId: featureId,
