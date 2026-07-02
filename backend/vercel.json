@@ -6,12 +6,6 @@
       "maxDuration": 60
     }
   },
-  "crons": [
-    {
-      "path": "/health",
-      "schedule": "*/5 * * * *"
-    }
-  ],
   "rewrites": [
     {
       "source": "/(.*)",
