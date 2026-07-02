@@ -139,9 +139,9 @@ function falConfigForFeature(featureId, dataUri, scale = 2) {
     case 'colorize':
       return { model: getEnv('FAL_COLORIZE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
     case 'denoise':
-      return { model: getEnv('FAL_DENOISE_MODEL', getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer')), input: { image_url: dataUri, fidelity: 0.5, upscaling: 1, face_upscale: false } };
+      return { model: getEnv('FAL_DENOISE_MODEL', 'fal-ai/nafnet/denoise'), input: { image_url: dataUri } };
     case 'unblur':
-      return { model: getEnv('FAL_UNBLUR_MODEL', getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer')), input: { image_url: dataUri, fidelity: 0.55, upscaling: 1, face_upscale: false } };
+      return { model: getEnv('FAL_UNBLUR_MODEL', 'fal-ai/nafnet/deblur'), input: { image_url: dataUri } };
     default:
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: false } };
   }
