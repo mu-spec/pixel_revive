@@ -135,9 +135,9 @@ function falConfigForFeature(featureId, dataUri, scale = 2) {
       // Users can choose HD Upscale separately when they want a larger output.
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: false } };
     case 'restore':
-      return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-apps-v2/photo-restoration'), input: { image_url: dataUri, enhance_resolution: false, fix_colors: true, remove_scratches: true } };
+      return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
     case 'colorize':
-      return { model: getEnv('FAL_COLORIZE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
+      return { model: getEnv('FAL_COLORIZE_MODEL', 'bria/fibo-edit/colorize'), input: { image_url: dataUri, color: process.env.FAL_COLORIZE_STYLE || 'contemporary color' } };
     case 'denoise':
       return { model: getEnv('FAL_DENOISE_MODEL', 'fal-ai/nafnet/denoise'), input: { image_url: dataUri } };
     case 'unblur':
