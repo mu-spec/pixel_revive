@@ -83,6 +83,7 @@ class AiApiService {
     int? scale,
     int uploadMaxDimension = 1280,
     int uploadQuality = 82,
+    bool isPremiumUser = false,
     ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.backendBaseUrl.trim();
@@ -117,6 +118,7 @@ class AiApiService {
               'provider': isReplicate ? 'replicate' : 'fal',
               'featureId': featureId,
               if (scale != null) 'scale': scale,
+              'isPremium': isPremiumUser,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -161,6 +163,7 @@ class AiApiService {
     int? scale,
     int uploadMaxDimension = 1280,
     int uploadQuality = 82,
+    bool isPremiumUser = false,
     ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
@@ -192,6 +195,7 @@ class AiApiService {
               'provider': isReplicate ? 'replicate' : 'fal',
               'featureId': featureId,
               if (scale != null) 'scale': scale,
+              'isPremium': isPremiumUser,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -536,6 +540,7 @@ class AiApiService {
     int? scale,
     int uploadMaxDimension = 1280,
     int uploadQuality = 82,
+    bool isPremiumUser = false,
     ValueChanged<String>? onProgress,
   }) async {
     lastErrorMessage = null;
@@ -550,6 +555,7 @@ class AiApiService {
         scale: scale,
         uploadMaxDimension: uploadMaxDimension,
         uploadQuality: uploadQuality,
+        isPremiumUser: isPremiumUser,
         onProgress: onProgress,
       );
       if (asyncResult != null) return asyncResult;
@@ -563,6 +569,7 @@ class AiApiService {
         scale: scale,
         uploadMaxDimension: uploadMaxDimension,
         uploadQuality: uploadQuality,
+        isPremiumUser: isPremiumUser,
         onProgress: onProgress,
       );
       if (backendResult != null) return backendResult;

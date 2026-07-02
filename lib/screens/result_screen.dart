@@ -238,63 +238,85 @@ class ResultScreen extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: SizedBox(
-                height: 52,
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _shareImage(context, provider),
+                      icon: const Icon(Icons.share, size: 20),
+                      label: Text(
+                        AppStrings.getText('share', provider.languageCode),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.text,
+                        side: BorderSide(color: Colors.black.withOpacity(0.15)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: AppColors.brandGradient),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accent.withOpacity(0.2),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: () => _saveImage(context, provider),
+                      icon: const Icon(Icons.download, size: 20),
+                      label: Text(
+                        AppStrings.getText('save', provider.languageCode),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Colors.white,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (provider.needsHdExportForSave) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
                 child: OutlinedButton.icon(
-                  onPressed: () => _shareImage(context, provider),
-                  icon: const Icon(Icons.share, size: 20),
-                  label: Text(
-                    AppStrings.getText('share', provider.languageCode),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  onPressed: () => _saveHdImage(context, provider),
+                  icon: const Icon(Icons.hd_rounded, size: 20, color: AppColors.gold),
+                  label: const Text(
+                    'Save HD (Premium)',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.gold),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.text,
-                    side: BorderSide(color: Colors.black.withOpacity(0.15)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    side: const BorderSide(color: AppColors.gold),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: AppColors.brandGradient,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.accent.withOpacity(0.2),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ElevatedButton.icon(
-                  onPressed: () => _saveImage(context, provider),
-                  icon: const Icon(Icons.download, size: 20),
-                  label: Text(
-                    AppStrings.getText('save', provider.languageCode),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            ],
           ],
         ),
       ),
@@ -308,28 +330,50 @@ class ResultScreen extends StatelessWidget {
       return;
     }
 
-    final showHdExportDialog = provider.needsHdExportForSave;
-    bool hdDialogOpen = false;
-    if (showHdExportDialog && context.mounted) {
-      hdDialogOpen = true;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const ProcessingDialog(),
-      ).then((_) => hdDialogOpen = false);
-    }
-
     final path = await provider.saveToGallery();
-
-    if (showHdExportDialog && hdDialogOpen && context.mounted && Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    }
 
     if (context.mounted) {
       if (path != null) {
         // Free users see an interstitial only after every few successful saves.
         // Premium users never see ads.
         AdMobService.maybeShowInterstitialAfterSave(isPremium: provider.isPremium);
+        _showSuccessDialog(context, provider);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppStrings.getText('saveFailedSnack', provider.languageCode)),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveHdImage(BuildContext context, AppProvider provider) async {
+    final ok = await provider.canExport();
+    if (!ok) {
+      _showLimitReachedDialog(context, provider);
+      return;
+    }
+
+    bool dialogOpen = false;
+    if (context.mounted) {
+      dialogOpen = true;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const ProcessingDialog(),
+      ).then((_) => dialogOpen = false);
+    }
+
+    final path = await provider.saveHdToGallery();
+
+    if (dialogOpen && context.mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+
+    if (context.mounted) {
+      if (path != null) {
         _showSuccessDialog(context, provider);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

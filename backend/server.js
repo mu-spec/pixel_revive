@@ -7,7 +7,7 @@ const app = express();
 
 const PORT = Number(process.env.PORT || 8080);
 const MAX_JSON_MB = Number(process.env.MAX_JSON_MB || 25);
-const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 8);
+const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 4);
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 55000);
 const DEFAULT_AI_PROVIDER = (process.env.DEFAULT_AI_PROVIDER || 'fal').toLowerCase();
 const CLIENT_SHARED_SECRET = process.env.CLIENT_SHARED_SECRET || '';
@@ -25,7 +25,7 @@ app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: `${MAX_JSON_MB}mb` }));
 app.use(rateLimit({
   windowMs: 60 * 1000,
-  limit: Number(process.env.RATE_LIMIT_PER_MINUTE || 30),
+  limit: Number(process.env.RATE_LIMIT_PER_MINUTE || 10),
   standardHeaders: true,
   legacyHeaders: false,
 }));
@@ -120,7 +120,7 @@ function replicateConfigForFeature(featureId, dataUri, scale = 2) {
   }
 }
 
-function falConfigForFeature(featureId, dataUri, scale = 2) {
+function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false) {
   const upscaleScale = normalizeScale(scale);
   const getEnv = (name, fallback) => process.env[name] || fallback;
   switch (featureId) {
@@ -137,7 +137,10 @@ function falConfigForFeature(featureId, dataUri, scale = 2) {
     case 'restore':
       return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
     case 'colorize':
-      return { model: getEnv('FAL_COLORIZE_MODEL', 'bria/fibo-edit/colorize'), input: { image_url: dataUri, color: process.env.FAL_COLORIZE_STYLE || 'contemporary color' } };
+      if (isPremium) {
+        return { model: getEnv('FAL_COLORIZE_MODEL', 'bria/fibo-edit/colorize'), input: { image_url: dataUri, color: process.env.FAL_COLORIZE_STYLE || 'contemporary color' } };
+      }
+      return { model: getEnv('FAL_COLORIZE_FAST_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
     case 'denoise':
       return { model: getEnv('FAL_DENOISE_MODEL', 'fal-ai/nafnet/denoise'), input: { image_url: dataUri } };
     case 'unblur':
@@ -241,10 +244,10 @@ async function checkReplicate(predictionId) {
   return { status };
 }
 
-async function runFal(featureId, dataUri, scale = 2) {
+async function runFal(featureId, dataUri, scale = 2, isPremium = false) {
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
-  const { model, input } = falConfigForFeature(featureId, dataUri, scale);
+  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium);
   const response = await fetchWithTimeout(`https://fal.run/${model}`, { method: 'POST', headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   const text = await response.text();
   let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal.ai returned non-JSON response: ${text.slice(0, 200)}`); }
@@ -253,11 +256,11 @@ async function runFal(featureId, dataUri, scale = 2) {
   return outputToResult(output, RETURN_IMAGE_URL);
 }
 
-async function startFal(featureId, dataUri, scale = 2) {
+async function startFal(featureId, dataUri, scale = 2, isPremium = false) {
   if (!FAL_QUEUE_ENABLED) throw new Error('Fal queue is disabled');
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
-  const { model, input } = falConfigForFeature(featureId, dataUri, scale);
+  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium);
   const response = await fetchWithTimeout(`https://queue.fal.run/${model}`, {
     method: 'POST',
     headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' },
@@ -323,7 +326,7 @@ app.post('/enhance/start', requireClientSecret, async (req, res) => {
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeProviderInput(req.body);
     const started = provider === 'fal'
-      ? await startFal(featureId, normalized.dataUri, req.body.scale)
+      ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium))
       : await startReplicate(featureId, normalized.dataUri, req.body.scale);
     res.json({ success: true, provider, predictionId: started.id, status: started.status });
   } catch (error) {
@@ -364,7 +367,7 @@ app.post('/enhance', requireClientSecret, async (req, res) => {
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeProviderInput(req.body);
     const result = provider === 'fal'
-      ? await runFal(featureId, normalized.dataUri, req.body.scale)
+      ? await runFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium))
       : await runReplicate(featureId, normalized.dataUri, req.body.scale);
     res.json({
       success: true,

@@ -39,7 +39,7 @@ class AppProvider extends ChangeNotifier {
   double skinSmoothness = 0.5;
   double bokehBlur = 0.6;
   int upscaleScale = 2;
-  String processingQuality = 'balanced'; // fast, balanced, hd
+  String processingQuality = 'fast'; // fast, balanced, hd
 
   bool lastProcessingUsedCloud = false;
   String lastProcessingSource = 'Local';
@@ -118,7 +118,7 @@ static const int _dailyFreeExports = 3;
     devOverrideToken = prefs.getString('dev_override_token') ?? '';
     cloudAiUsedToday = prefs.getInt('cloud_ai_used_today') ?? 0;
     upscaleScale = (prefs.getInt('upscale_scale') ?? 2).clamp(2, isPremium ? 4 : 2).toInt();
-    processingQuality = prefs.getString('processing_quality') ?? (isPremium ? 'balanced' : 'fast');
+    processingQuality = prefs.getString('processing_quality') ?? 'fast';
     if (!isPremium && processingQuality == 'hd') processingQuality = 'fast';
     languageCode = prefs.getString('language_code') ?? 'en';
     creationHistory = prefs.getStringList('creation_history') ?? [];
@@ -487,6 +487,7 @@ static const int _dailyFreeExports = 3;
           scale: featureId == 'upscale' ? upscaleScale : null,
           uploadMaxDimension: cloudUploadMaxDimension,
           uploadQuality: cloudUploadQuality,
+          isPremiumUser: isPremium,
           onProgress: (message) {
             if (_cancelProcessingRequested) return;
             lastProcessingMessage = message;
@@ -627,44 +628,9 @@ static const int _dailyFreeExports = 3;
     }
 
     try {
-      Uint8List bytesToSave = displayBytes ?? processedPreviewBytes!;
-
-      // Preview-first processing: the editor shows a fast preview result first.
-      // Premium users get a final HD cloud export only when they actually save.
-      if (needsHdExportForSave && originalFullBytes != null && lastProcessedFeatureId != null) {
-        _cancelProcessingRequested = false;
-        isProcessing = true;
-        lastProcessingSource = 'HD Export';
-        lastProcessingMessage = 'Preparing premium HD export...';
-        notifyListeners();
-
-        final hdResult = await AiApiService.smartEnhance(
-          imageBytes: originalFullBytes!,
-          featureId: lastProcessedFeatureId!,
-          apiToken: _activeApiToken,
-          isReplicate: CloudApiConfig.useReplicate,
-          scale: lastProcessedFeatureId == 'upscale' ? upscaleScale : null,
-          uploadMaxDimension: 1920,
-          uploadQuality: 90,
-          onProgress: (message) {
-            if (_cancelProcessingRequested) return;
-            lastProcessingMessage = 'HD export: $message';
-            notifyListeners();
-          },
-        );
-
-        if (!_cancelProcessingRequested && hdResult != null) {
-          processedHdBytes = hdResult;
-          hdExportReady = true;
-          bytesToSave = hdResult;
-          lastProcessingMessage = 'HD export ready.';
-        } else {
-          lastProcessingMessage = 'HD export was unavailable. Saving preview quality instead.';
-        }
-        isProcessing = false;
-        notifyListeners();
-      }
-
+      // Normal Save is intentionally instant: save the current preview result.
+      // Premium HD export is available through a separate Save HD action.
+      final Uint8List bytesToSave = displayBytes ?? processedPreviewBytes!;
       final path = await StorageService.saveToGallery(bytesToSave);
       if (path != null) {
         await addToHistory(path);
@@ -679,6 +645,66 @@ static const int _dailyFreeExports = 3;
     } catch (e) {
       isProcessing = false;
       return null;
+    }
+  }
+
+  Future<String?> saveHdToGallery() async {
+    if (!isPremium) return 'HD export is a Premium feature.';
+    if (originalFullBytes == null || lastProcessedFeatureId == null) {
+      return 'No processed image available for HD export.';
+    }
+
+    try {
+      _cancelProcessingRequested = false;
+      isProcessing = true;
+      lastProcessingSource = 'HD Export';
+      lastProcessingMessage = 'Preparing premium HD export...';
+      notifyListeners();
+
+      Uint8List? hdBytes = processedHdBytes;
+      if (hdBytes == null) {
+        hdBytes = await AiApiService.smartEnhance(
+          imageBytes: originalFullBytes!,
+          featureId: lastProcessedFeatureId!,
+          apiToken: _activeApiToken,
+          isReplicate: CloudApiConfig.useReplicate,
+          scale: lastProcessedFeatureId == 'upscale' ? upscaleScale : null,
+          uploadMaxDimension: 1920,
+          uploadQuality: 90,
+          isPremiumUser: true,
+          onProgress: (message) {
+            if (_cancelProcessingRequested) return;
+            lastProcessingMessage = 'HD export: $message';
+            notifyListeners();
+          },
+        );
+      }
+
+      if (_cancelProcessingRequested) return null;
+      if (hdBytes == null) {
+        isProcessing = false;
+        lastProcessingMessage = 'HD export was unavailable. Please try again.';
+        notifyListeners();
+        return null;
+      }
+
+      processedHdBytes = hdBytes;
+      hdExportReady = true;
+      final path = await StorageService.saveToGallery(hdBytes);
+      if (path != null) {
+        await addToHistory(path);
+        lastProcessingMessage = 'HD export saved to gallery.';
+        await _savePrefs();
+        notifyListeners();
+        return path;
+      }
+      return null;
+    } catch (e) {
+      lastProcessingMessage = 'HD export failed: $e';
+      return null;
+    } finally {
+      isProcessing = false;
+      notifyListeners();
     }
   }
 
@@ -808,6 +834,7 @@ static const int _dailyFreeExports = 3;
             scale: featureId == 'upscale' ? upscaleScale : null,
             uploadMaxDimension: cloudUploadMaxDimension,
             uploadQuality: cloudUploadQuality,
+            isPremiumUser: isPremium,
           );
           result = cloudResult ?? await _processLocalFeatureSync(input, featureId);
         } else {
