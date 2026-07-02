@@ -42,6 +42,7 @@ class AppProvider extends ChangeNotifier {
   String processingQuality = 'fast'; // fast, balanced, hd
 
   bool lastProcessingUsedCloud = false;
+  bool isCloudRefining = false;
   String lastProcessingSource = 'Local';
   String lastProcessingMessage = 'Ready for on-device enhancement';
 
@@ -57,6 +58,7 @@ class AppProvider extends ChangeNotifier {
   final Map<String, Uint8List> _processedCache = <String, Uint8List>{};
   bool _mlServicePreWarmed = false;
   bool _cancelProcessingRequested = false;
+  int _processingRunId = 0;
 
 // Line 48:
 static const int _dailyFreeExports = 3;
@@ -93,6 +95,9 @@ static const int _dailyFreeExports = 3;
       canUseCloudAi &&
       _isCloudCapableFeature(featureId) &&
       !_shouldUseFastLocal(featureId);
+
+  bool _canStartBackgroundCloud(String featureId) =>
+      useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId);
 
   AppProvider() {
     _loadPrefs();
@@ -243,6 +248,7 @@ static const int _dailyFreeExports = 3;
 
   String get processingRouteLabel {
     if (isProcessing) return 'Processing...';
+    if (isCloudRefining) return 'Fast Preview • Cloud improving...';
     if (processedBytes == null) {
       return CloudApiConfig.isCloudAvailable
           ? 'Cloud ready • ${CloudApiConfig.activeProviderLabel}'
@@ -335,6 +341,7 @@ static const int _dailyFreeExports = 3;
     if (!isProcessing) return;
     _cancelProcessingRequested = true;
     isProcessing = false;
+    isCloudRefining = false;
     lastProcessingSource = 'Canceled';
     lastProcessingMessage = 'Processing canceled. The cloud job may finish in the background but its result will be ignored.';
     notifyListeners();
@@ -415,6 +422,7 @@ static const int _dailyFreeExports = 3;
       hdExportReady = false;
       lastProcessedFeatureId = null;
       lastProcessingUsedCloud = false;
+      isCloudRefining = false;
       lastProcessingSource = 'Local';
       lastProcessingMessage = 'Ready for enhancement';
       
@@ -440,6 +448,7 @@ static const int _dailyFreeExports = 3;
     lastProcessedFeatureId = null;
     _clearProcessingCache();
     lastProcessingUsedCloud = false;
+    isCloudRefining = false;
     lastProcessingSource = 'Local';
     lastProcessingMessage = 'Ready for on-device enhancement';
     notifyListeners();
@@ -450,17 +459,14 @@ static const int _dailyFreeExports = 3;
     final Uint8List previewInput = originalPreviewBytes ?? originalBytes!;
 
     _cancelProcessingRequested = false;
+    final int runId = ++_processingRunId;
+    final bool canStartCloudInBackground = _canStartBackgroundCloud(featureId);
     isProcessing = true;
-    final bool willUseCloud = _shouldAttemptCloudForFeature(featureId);
-    if (willUseCloud) {
-      lastProcessingSource = 'Cloud AI';
-      lastProcessingMessage = 'Preparing ${processingQualityLabel.toLowerCase()} cloud job (${estimatedProcessingTime(featureId)})...';
-    } else {
-      lastProcessingSource = 'Local';
-      lastProcessingMessage = _shouldUseFastLocal(featureId)
-          ? 'Fast mode uses instant on-device ${featureId.replaceAll('_', ' ')}. Switch to Balanced/HD for cloud quality.'
-          : 'Processing on device (${estimatedProcessingTime(featureId)})...';
-    }
+    lastProcessingUsedCloud = false;
+    lastProcessingSource = 'Fast Preview';
+    lastProcessingMessage = canStartCloudInBackground
+        ? 'Creating fast local preview first. Cloud AI will improve it in the background...'
+        : 'Creating fast local preview (${estimatedProcessingTime(featureId)})...';
     notifyListeners();
 
     final cacheKey = _cacheKey(featureId);
@@ -482,7 +488,6 @@ static const int _dailyFreeExports = 3;
       return;
     }
 
-    bool cloudAttempted = false;
     bool freeCloudLimitReached = false;
 
     // OPTION B: detect when a free user has hit their daily cloud AI limit so
@@ -492,66 +497,11 @@ static const int _dailyFreeExports = 3;
         !CloudApiConfig.cloudAiPremiumOnly &&
         useCloudAi &&
         _isCloudCapableFeature(featureId) &&
-        !_shouldUseFastLocal(featureId) &&
         cloudAiUsedToday >= CloudApiConfig.freeDailyCloudLimit) {
       freeCloudLimitReached = true;
     }
 
-    if (_shouldAttemptCloudForFeature(featureId)) {
-      cloudAttempted = true;
-      try {
-        final cloudResult = await AiApiService.smartEnhance(
-          imageBytes: previewInput,
-          featureId: featureId,
-          apiToken: _activeApiToken,
-          isReplicate: CloudApiConfig.useReplicate,
-          scale: featureId == 'upscale' ? upscaleScale : null,
-          uploadMaxDimension: cloudUploadMaxDimension,
-          uploadQuality: cloudUploadQuality,
-          isPremiumUser: isPremium,
-          onProgress: (message) {
-            if (_cancelProcessingRequested) return;
-            lastProcessingMessage = message;
-            notifyListeners();
-          },
-        );
-
-        if (_cancelProcessingRequested) return;
-
-        if (cloudResult != null) {
-          processedPreviewBytes = cloudResult;
-          processedHdBytes = null;
-          hdExportReady = false;
-          lastProcessedFeatureId = featureId;
-          processedBytes = cloudResult;
-          displayBytes = isPremium ? cloudResult : await ImageProcessor.applyWatermark(cloudResult);
-          
-          _rememberProcessedResult(featureId, cloudResult);
-          lastProcessingUsedCloud = true;
-          lastProcessingSource = 'Cloud AI';
-          lastProcessingMessage = 'Processed securely with ${CloudApiConfig.activeProviderLabel} via Vercel backend.';
-          
-          if (!isPremium) cloudAiUsedToday++;
-          _resetDailyIfNeeded();
-          await _savePrefs();
-          isProcessing = false;
-          notifyListeners();
-          return;
-        }
-      } catch (e) {
-        debugPrint("Cloud AI failed, using local: $e");
-      }
-    }
-
-    const heavyCloudFeatures = {'upscale', 'restore', 'denoise', 'unblur', 'bg_cleanup'};
-    if (cloudAttempted && !freeCloudLimitReached && heavyCloudFeatures.contains(featureId)) {
-      lastProcessingUsedCloud = false;
-      lastProcessingSource = 'Cloud unavailable';
-      lastProcessingMessage = 'Cloud AI was unavailable or timed out. Please retry cloud, switch to Fast quality, or choose Offline mode for local processing.';
-      isProcessing = false;
-      notifyListeners();
-      return;
-    }
+    final bool shouldStartBackgroundCloud = canStartCloudInBackground && !freeCloudLimitReached;
 
     try {
       Uint8List result;
@@ -608,22 +558,23 @@ static const int _dailyFreeExports = 3;
 
       _rememberProcessedResult(featureId, result);
       lastProcessingUsedCloud = false;
-      lastProcessingSource = freeCloudLimitReached
-          ? 'Daily AI limit reached'
-          : (cloudAttempted ? 'Local Fallback' : 'Local');
-      final cloudError = AiApiService.lastErrorMessage ?? '';
-      final bool replicateCreditError = cloudError.contains('Insufficient credit') || cloudError.contains('HTTP 402');
-
+      lastProcessingSource = shouldStartBackgroundCloud ? 'Fast Preview' : (freeCloudLimitReached ? 'Daily AI limit reached' : 'Local');
       lastProcessingMessage = freeCloudLimitReached
-          ? 'Daily free AI limit (${CloudApiConfig.freeDailyCloudLimit}) reached — used fast on-device processing instead. Upgrade to Premium for unlimited AI.'
-          : (cloudAttempted
-              ? (replicateCreditError
-                  ? 'Cloud AI could not run because Replicate has insufficient credit. Local processing was used.'
-                  : 'Cloud AI was unavailable or timed out. Local processing was used.')
-              : 'Processed on-device with local image enhancement.');
+          ? 'Daily free AI limit (${CloudApiConfig.freeDailyCloudLimit}) reached — fast local result is ready. Upgrade to Premium for more cloud AI.'
+          : (shouldStartBackgroundCloud
+              ? 'Fast preview ready. Cloud AI is improving it in the background...'
+              : 'Fast local result is ready.');
 
       _resetDailyIfNeeded();
       await _savePrefs();
+
+      if (shouldStartBackgroundCloud) {
+        _startCloudRefinement(
+          runId: runId,
+          featureId: featureId,
+          previewInput: previewInput,
+        );
+      }
     } catch (e, st) {
       debugPrint('processFeature error: $e\n$st');
       processedBytes = originalBytes;
@@ -632,6 +583,68 @@ static const int _dailyFreeExports = 3;
       isProcessing = false;
       notifyListeners();
     }
+  }
+
+  void _startCloudRefinement({
+    required int runId,
+    required String featureId,
+    required Uint8List previewInput,
+  }) {
+    Future<void>(() async {
+      isCloudRefining = true;
+      notifyListeners();
+      try {
+        final cloudResult = await AiApiService.smartEnhance(
+          imageBytes: previewInput,
+          featureId: featureId,
+          apiToken: _activeApiToken,
+          isReplicate: CloudApiConfig.useReplicate,
+          scale: featureId == 'upscale' ? upscaleScale : null,
+          uploadMaxDimension: cloudUploadMaxDimension,
+          uploadQuality: cloudUploadQuality,
+          isPremiumUser: isPremium,
+          onProgress: (message) {
+            if (runId != _processingRunId || _cancelProcessingRequested) return;
+            lastProcessingMessage = 'Fast preview ready. Cloud AI: $message';
+            notifyListeners();
+          },
+        );
+
+        if (runId != _processingRunId || _cancelProcessingRequested) return;
+
+        if (cloudResult != null) {
+          processedPreviewBytes = cloudResult;
+          processedHdBytes = null;
+          hdExportReady = false;
+          lastProcessedFeatureId = featureId;
+          processedBytes = cloudResult;
+          displayBytes = isPremium ? cloudResult : await ImageProcessor.applyWatermark(cloudResult);
+          _rememberProcessedResult(featureId, cloudResult);
+          lastProcessingUsedCloud = true;
+          lastProcessingSource = 'Cloud AI';
+          lastProcessingMessage = 'Cloud AI result applied. You can save or compare now.';
+          if (!isPremium) cloudAiUsedToday++;
+          _resetDailyIfNeeded();
+          await _savePrefs();
+        } else {
+          lastProcessingUsedCloud = false;
+          lastProcessingSource = 'Fast Preview';
+          lastProcessingMessage = AiApiService.lastErrorMessage ?? 'Cloud AI was slow or unavailable. Fast local result is kept.';
+        }
+      } catch (e) {
+        if (runId == _processingRunId) {
+          lastProcessingUsedCloud = false;
+          lastProcessingSource = 'Fast Preview';
+          lastProcessingMessage = 'Cloud AI failed. Fast local result is kept.';
+          debugPrint('Cloud refinement failed: $e');
+        }
+      } finally {
+        if (runId == _processingRunId) {
+          isCloudRefining = false;
+          notifyListeners();
+        }
+      }
+    });
   }
 
   Future<bool> canExport() async {
