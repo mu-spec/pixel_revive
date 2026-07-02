@@ -222,7 +222,18 @@ class AiApiService {
       onProgress?.call('AI enhancing on ${CloudApiConfig.activeProviderLabel}...');
 
       // ── Step 2: POLL status until done ─────────────
-      const maxAttempts = 90; // 90 * 2s = up to 3 minutes total
+      // Fast preview jobs should not feel endless. Balanced gets a longer wait,
+      // while HD export is allowed the longest because it is user-requested.
+      final int maxAttempts = isHdExport
+          ? 90 // ~180s
+          : (uploadMaxDimension <= 1024
+              ? 30 // ~60s
+              : (uploadMaxDimension <= 1280 ? 60 : 90)); // ~120s / ~180s
+      final String timeoutHint = isHdExport
+          ? 'HD cloud export is taking too long. Try again later or save the preview result.'
+          : (uploadMaxDimension <= 1024
+              ? 'Cloud is taking too long. Fast mode uses local processing for Auto, Denoise and Unblur; try Offline/Fast mode or retry.'
+              : 'Cloud quality is taking too long. Try Fast mode for a quicker preview or retry later.');
       for (int attempt = 0; attempt < maxAttempts; attempt++) {
         await Future.delayed(const Duration(seconds: 2));
 
@@ -260,7 +271,7 @@ class AiApiService {
         debugPrint('Async status: ${statusData['status']} (poll ${attempt + 1})');
       }
 
-      _rememberError('Cloud AI timed out after polling.');
+      _rememberError(timeoutHint);
       return null;
     } catch (e) {
       _rememberError('Cloud AI backend error: $e');

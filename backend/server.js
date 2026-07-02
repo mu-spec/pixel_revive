@@ -308,6 +308,44 @@ async function checkFal(job) {
   return { status: rawStatus || 'IN_PROGRESS' };
 }
 
+app.get('/model-map', (_req, res) => {
+  res.json({
+    ok: true,
+    provider: DEFAULT_AI_PROVIDER,
+    routing: {
+      auto: {
+        fast: 'local on-device',
+        balanced: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
+        hd: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
+      },
+      face: process.env.FAL_FACE_MODEL || 'fal-ai/codeformer',
+      upscale: {
+        normal: process.env.FAL_UPSCALE_MODEL || 'fal-ai/esrgan',
+        premiumHd: process.env.FAL_PREMIUM_HD_MODEL || 'fal-ai/aura-sr',
+      },
+      denoise: {
+        fast: 'local on-device',
+        balanced: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
+        hd: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
+      },
+      unblur: {
+        fast: 'local on-device',
+        balanced: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
+        hd: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
+      },
+      colorize: {
+        freeFast: process.env.FAL_COLORIZE_FAST_MODEL || 'fal-ai/image-editing/photo-restoration',
+        premium: process.env.FAL_COLORIZE_MODEL || 'bria/fibo-edit/colorize',
+        premiumStyle: process.env.FAL_COLORIZE_STYLE || 'contemporary color',
+      },
+      restore: process.env.FAL_RESTORE_MODEL || 'fal-ai/image-editing/photo-restoration',
+      backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
+      cartoon: 'local on-device',
+      backgroundBlur: 'local on-device',
+    },
+  });
+});
+
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
