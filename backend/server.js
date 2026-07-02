@@ -120,20 +120,22 @@ function replicateConfigForFeature(featureId, dataUri, scale = 2) {
   }
 }
 
-function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false) {
+function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false) {
   const upscaleScale = normalizeScale(scale);
   const getEnv = (name, fallback) => process.env[name] || fallback;
   switch (featureId) {
     case 'upscale':
+      if (isPremium && isHdExport) {
+        return { model: getEnv('FAL_PREMIUM_HD_MODEL', 'fal-ai/aura-sr'), input: { image_url: dataUri, upscale_factor: upscaleScale, overlapping_tiles: false } };
+      }
       return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, upscaling: upscaleScale, model: 'RealESRGAN_x4plus', output_format: 'png' } };
     case 'bg_cleanup':
       return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
     case 'face':
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: true } };
     case 'auto':
-      // Fast auto-enhance: keep face/detail restoration but avoid automatic 2x upscaling.
-      // Users can choose HD Upscale separately when they want a larger output.
-      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: false } };
+      // Whole-photo enhancement: use restoration/editing instead of face-only CodeFormer.
+      return { model: getEnv('FAL_AUTO_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
     case 'restore':
       return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
     case 'colorize':
@@ -244,10 +246,10 @@ async function checkReplicate(predictionId) {
   return { status };
 }
 
-async function runFal(featureId, dataUri, scale = 2, isPremium = false) {
+async function runFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false) {
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
-  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium);
+  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium, isHdExport);
   const response = await fetchWithTimeout(`https://fal.run/${model}`, { method: 'POST', headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   const text = await response.text();
   let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal.ai returned non-JSON response: ${text.slice(0, 200)}`); }
@@ -256,11 +258,11 @@ async function runFal(featureId, dataUri, scale = 2, isPremium = false) {
   return outputToResult(output, RETURN_IMAGE_URL);
 }
 
-async function startFal(featureId, dataUri, scale = 2, isPremium = false) {
+async function startFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false) {
   if (!FAL_QUEUE_ENABLED) throw new Error('Fal queue is disabled');
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
-  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium);
+  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium, isHdExport);
   const response = await fetchWithTimeout(`https://queue.fal.run/${model}`, {
     method: 'POST',
     headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' },
@@ -326,7 +328,7 @@ app.post('/enhance/start', requireClientSecret, async (req, res) => {
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeProviderInput(req.body);
     const started = provider === 'fal'
-      ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium))
+      ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport))
       : await startReplicate(featureId, normalized.dataUri, req.body.scale);
     res.json({ success: true, provider, predictionId: started.id, status: started.status });
   } catch (error) {
@@ -367,7 +369,7 @@ app.post('/enhance', requireClientSecret, async (req, res) => {
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeProviderInput(req.body);
     const result = provider === 'fal'
-      ? await runFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium))
+      ? await runFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport))
       : await runReplicate(featureId, normalized.dataUri, req.body.scale);
     res.json({
       success: true,

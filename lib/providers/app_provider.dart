@@ -672,6 +672,7 @@ static const int _dailyFreeExports = 3;
           uploadMaxDimension: 1920,
           uploadQuality: 90,
           isPremiumUser: true,
+          isHdExport: true,
           onProgress: (message) {
             if (_cancelProcessingRequested) return;
             lastProcessingMessage = 'HD export: $message';

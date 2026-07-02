@@ -84,6 +84,7 @@ class AiApiService {
     int uploadMaxDimension = 1280,
     int uploadQuality = 82,
     bool isPremiumUser = false,
+    bool isHdExport = false,
     ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.backendBaseUrl.trim();
@@ -119,6 +120,7 @@ class AiApiService {
               'featureId': featureId,
               if (scale != null) 'scale': scale,
               'isPremium': isPremiumUser,
+              'isHdExport': isHdExport,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -164,6 +166,7 @@ class AiApiService {
     int uploadMaxDimension = 1280,
     int uploadQuality = 82,
     bool isPremiumUser = false,
+    bool isHdExport = false,
     ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
@@ -196,6 +199,7 @@ class AiApiService {
               'featureId': featureId,
               if (scale != null) 'scale': scale,
               'isPremium': isPremiumUser,
+              'isHdExport': isHdExport,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -541,6 +545,7 @@ class AiApiService {
     int uploadMaxDimension = 1280,
     int uploadQuality = 82,
     bool isPremiumUser = false,
+    bool isHdExport = false,
     ValueChanged<String>? onProgress,
   }) async {
     lastErrorMessage = null;
@@ -556,6 +561,7 @@ class AiApiService {
         uploadMaxDimension: uploadMaxDimension,
         uploadQuality: uploadQuality,
         isPremiumUser: isPremiumUser,
+        isHdExport: isHdExport,
         onProgress: onProgress,
       );
       if (asyncResult != null) return asyncResult;
@@ -570,6 +576,7 @@ class AiApiService {
         uploadMaxDimension: uploadMaxDimension,
         uploadQuality: uploadQuality,
         isPremiumUser: isPremiumUser,
+        isHdExport: isHdExport,
         onProgress: onProgress,
       );
       if (backendResult != null) return backendResult;
