@@ -15,9 +15,19 @@ class AppProvider extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
 
   File? originalImage;
+  // Full/HD original kept for final premium export.
+  Uint8List? originalFullBytes;
+  // Lightweight preview original used for fast preview processing and UI.
+  Uint8List? originalPreviewBytes;
+  // Backward-compatible current original used by existing screens (preview-sized).
   Uint8List? originalBytes;
+
+  Uint8List? processedPreviewBytes;
+  Uint8List? processedHdBytes;
   Uint8List? processedBytes;
   Uint8List? displayBytes;
+  bool hdExportReady = false;
+  String? lastProcessedFeatureId;
 
   bool isPremium = false;
   bool isProcessing = false;
@@ -203,6 +213,15 @@ static const int _dailyFreeExports = 3;
     }
   }
 
+  bool get needsHdExportForSave =>
+      isPremium &&
+      processedPreviewBytes != null &&
+      processedHdBytes == null &&
+      !hdExportReady &&
+      lastProcessedFeatureId != null &&
+      useCloudAi &&
+      _isCloudCapableFeature(lastProcessedFeatureId!);
+
   String get cloudProviderLabel => CloudApiConfig.activeProviderLabel;
 
   String get processingRouteLabel {
@@ -243,7 +262,8 @@ static const int _dailyFreeExports = 3;
         enhanceStrength.toStringAsFixed(2),
         skinSmoothness.toStringAsFixed(2),
         bokehBlur.toStringAsFixed(2),
-        originalBytes?.length ?? 0,
+        originalPreviewBytes?.length ?? originalBytes?.length ?? 0,
+        originalFullBytes?.length ?? 0,
       ].join('|');
 
   void _rememberProcessedResult(String featureId, Uint8List bytes) {
@@ -354,19 +374,29 @@ static const int _dailyFreeExports = 3;
     try {
       final picked = await _picker.pickImage(
         source: source,
-        // Smaller import = faster preview, faster offline processing, faster cloud upload.
-        maxWidth: 1280,
-        maxHeight: 1280,
-        imageQuality: 85,
+        // Keep a larger source for premium HD export, then create a fast preview copy below.
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 95,
       );
       if (picked == null) return;
 
       originalImage = File(picked.path);
-      originalBytes = await originalImage!.readAsBytes();
+      originalFullBytes = await originalImage!.readAsBytes();
+      originalPreviewBytes = await ImageProcessor.preparePreview(
+        originalFullBytes!,
+        maxDimension: 1024,
+        quality: 76,
+      );
+      originalBytes = originalPreviewBytes;
       
       _clearProcessingCache();
+      processedPreviewBytes = null;
+      processedHdBytes = null;
       processedBytes = null;
-      displayBytes = null;
+      displayBytes = originalPreviewBytes;
+      hdExportReady = false;
+      lastProcessedFeatureId = null;
       lastProcessingUsedCloud = false;
       lastProcessingSource = 'Local';
       lastProcessingMessage = 'Ready for enhancement';
@@ -382,9 +412,15 @@ static const int _dailyFreeExports = 3;
 
   Future<void> clearImage() async {
     originalImage = null;
+    originalFullBytes = null;
+    originalPreviewBytes = null;
     originalBytes = null;
+    processedPreviewBytes = null;
+    processedHdBytes = null;
     processedBytes = null;
     displayBytes = null;
+    hdExportReady = false;
+    lastProcessedFeatureId = null;
     _clearProcessingCache();
     lastProcessingUsedCloud = false;
     lastProcessingSource = 'Local';
@@ -393,7 +429,8 @@ static const int _dailyFreeExports = 3;
   }
 
   Future<void> processFeature(String featureId) async {
-    if (originalBytes == null) return;
+    if (originalPreviewBytes == null && originalBytes == null) return;
+    final Uint8List previewInput = originalPreviewBytes ?? originalBytes!;
 
     _cancelProcessingRequested = false;
     isProcessing = true;
@@ -443,7 +480,7 @@ static const int _dailyFreeExports = 3;
       cloudAttempted = true;
       try {
         final cloudResult = await AiApiService.smartEnhance(
-          imageBytes: originalBytes!,
+          imageBytes: previewInput,
           featureId: featureId,
           apiToken: _activeApiToken,
           isReplicate: CloudApiConfig.useReplicate,
@@ -460,6 +497,10 @@ static const int _dailyFreeExports = 3;
         if (_cancelProcessingRequested) return;
 
         if (cloudResult != null) {
+          processedPreviewBytes = cloudResult;
+          processedHdBytes = null;
+          hdExportReady = false;
+          lastProcessedFeatureId = featureId;
           processedBytes = cloudResult;
           displayBytes = isPremium ? cloudResult : await ImageProcessor.applyWatermark(cloudResult);
           
@@ -499,43 +540,47 @@ static const int _dailyFreeExports = 3;
 
       switch (featureId) {
         case 'auto':
-          result = await ImageProcessor.autoEnhance(originalBytes!, strength: enhanceStrength);
+          result = await ImageProcessor.autoEnhance(previewInput, strength: enhanceStrength);
           break;
         case 'upscale':
-          result = await ImageProcessor.upscale(originalBytes!, scale: upscaleScale);
+          result = await ImageProcessor.upscale(previewInput, scale: upscaleScale);
           break;
         case 'face':
-          result = await ImageProcessor.faceEnhance(originalBytes!, smoothness: skinSmoothness, strength: enhanceStrength);
+          result = await ImageProcessor.faceEnhance(previewInput, smoothness: skinSmoothness, strength: enhanceStrength);
           break;
         case 'denoise':
-          result = await ImageProcessor.denoise(originalBytes!);
+          result = await ImageProcessor.denoise(previewInput);
           break;
         case 'unblur':
-          result = await ImageProcessor.unblur(originalBytes!);
+          result = await ImageProcessor.unblur(previewInput);
           break;
         case 'colorize':
-          result = await ImageProcessor.colorize(originalBytes!);
+          result = await ImageProcessor.colorize(previewInput);
           break;
         case 'restore':
-          result = await ImageProcessor.restoreOldPhoto(originalBytes!);
+          result = await ImageProcessor.restoreOldPhoto(previewInput);
           break;
         case 'cartoon':
-          result = await ImageProcessor.cartoonEffect(originalBytes!);
+          result = await ImageProcessor.cartoonEffect(previewInput);
           break;
         case 'bg':
-          result = await ImageProcessor.backgroundBlur(originalBytes!, radius: bokehBlur);
+          result = await ImageProcessor.backgroundBlur(previewInput, radius: bokehBlur);
           break;
         case 'bg_cleanup':
-          result = await ImageProcessor.backgroundCleanup(originalBytes!);
+          result = await ImageProcessor.backgroundCleanup(previewInput);
           break;
         default:
-          result = await ImageProcessor.autoEnhance(originalBytes!, strength: enhanceStrength);
+          result = await ImageProcessor.autoEnhance(previewInput, strength: enhanceStrength);
       }
 
       stopwatch.stop();
       debugPrint("⚡ Local processing completed in ${stopwatch.elapsedMilliseconds}ms");
       if (_cancelProcessingRequested) return;
 
+      processedPreviewBytes = result;
+      processedHdBytes = null;
+      hdExportReady = false;
+      lastProcessedFeatureId = featureId;
       processedBytes = result;
       displayBytes = isPremium ? result : await ImageProcessor.applyWatermark(result);
 
@@ -574,7 +619,7 @@ static const int _dailyFreeExports = 3;
   }
 
   Future<String?> saveToGallery() async {
-    if (displayBytes == null) return 'No image to save';
+    if (displayBytes == null && processedPreviewBytes == null) return 'No image to save';
 
     final ok = await canExport();
     if (!ok) {
@@ -582,7 +627,45 @@ static const int _dailyFreeExports = 3;
     }
 
     try {
-      final path = await StorageService.saveToGallery(displayBytes!);
+      Uint8List bytesToSave = displayBytes ?? processedPreviewBytes!;
+
+      // Preview-first processing: the editor shows a fast preview result first.
+      // Premium users get a final HD cloud export only when they actually save.
+      if (needsHdExportForSave && originalFullBytes != null && lastProcessedFeatureId != null) {
+        _cancelProcessingRequested = false;
+        isProcessing = true;
+        lastProcessingSource = 'HD Export';
+        lastProcessingMessage = 'Preparing premium HD export...';
+        notifyListeners();
+
+        final hdResult = await AiApiService.smartEnhance(
+          imageBytes: originalFullBytes!,
+          featureId: lastProcessedFeatureId!,
+          apiToken: _activeApiToken,
+          isReplicate: CloudApiConfig.useReplicate,
+          scale: lastProcessedFeatureId == 'upscale' ? upscaleScale : null,
+          uploadMaxDimension: 1920,
+          uploadQuality: 90,
+          onProgress: (message) {
+            if (_cancelProcessingRequested) return;
+            lastProcessingMessage = 'HD export: $message';
+            notifyListeners();
+          },
+        );
+
+        if (!_cancelProcessingRequested && hdResult != null) {
+          processedHdBytes = hdResult;
+          hdExportReady = true;
+          bytesToSave = hdResult;
+          lastProcessingMessage = 'HD export ready.';
+        } else {
+          lastProcessingMessage = 'HD export was unavailable. Saving preview quality instead.';
+        }
+        isProcessing = false;
+        notifyListeners();
+      }
+
+      final path = await StorageService.saveToGallery(bytesToSave);
       if (path != null) {
         await addToHistory(path);
         if (!isPremium) {
@@ -594,6 +677,7 @@ static const int _dailyFreeExports = 3;
       }
       return null;
     } catch (e) {
+      isProcessing = false;
       return null;
     }
   }
@@ -623,9 +707,19 @@ static const int _dailyFreeExports = 3;
   }
 
   Future<void> updateOriginalImage(Uint8List editedBytes) async {
-    originalBytes = editedBytes;
+    originalFullBytes = editedBytes;
+    originalPreviewBytes = await ImageProcessor.preparePreview(
+      editedBytes,
+      maxDimension: 1024,
+      quality: 76,
+    );
+    originalBytes = originalPreviewBytes;
+    processedPreviewBytes = null;
+    processedHdBytes = null;
     processedBytes = null;
-    displayBytes = null;
+    displayBytes = originalPreviewBytes;
+    hdExportReady = false;
+    lastProcessedFeatureId = null;
     _clearProcessingCache();
     lastProcessingUsedCloud = false;
     lastProcessingSource = 'Local';

@@ -53,6 +53,29 @@ class ImageProcessor {
   // ── DECODE / NORMALISE / DOWNSCALE ──────────────────
   /// Decodes + (optionally) downscales to <= [maxDim] longest side.
   /// Returns null if decode fails (caller returns original input).
+  /// Creates a lightweight preview copy for fast UI/cloud preview processing.
+  /// This keeps the original full/HD bytes available for final export.
+  static Future<Uint8List> preparePreview(
+    Uint8List input, {
+    int maxDimension = 1024,
+    int quality = 76,
+  }) async {
+    return await compute(
+      _preparePreviewSync,
+      _PreviewPrepareArgs(input, maxDimension, quality),
+    );
+  }
+
+  static Uint8List _preparePreviewSync(_PreviewPrepareArgs args) {
+    final src = _prepare(args.input, maxDim: args.maxDimension);
+    if (src == null) return args.input;
+    try {
+      return Uint8List.fromList(img.encodeJpg(src, quality: args.quality.clamp(50, 95).toInt()));
+    } catch (_) {
+      return Uint8List.fromList(img.encodePng(src, level: _pngCompression));
+    }
+  }
+
   static img.Image? _prepare(Uint8List bytes, {int maxDim = _maxWorkDim}) {
     final src = _decode(bytes);
     if (src == null) return null;
@@ -1403,4 +1426,10 @@ class _FastPreviewArgs {
   final double saturation;
   final double sharpness;
   _FastPreviewArgs(this.input, this.contrast, this.saturation, this.sharpness);
+}
+class _PreviewPrepareArgs {
+  final Uint8List input;
+  final int maxDimension;
+  final int quality;
+  _PreviewPrepareArgs(this.input, this.maxDimension, this.quality);
 }

@@ -7,6 +7,7 @@ import 'package:pixel_revive/screens/premium_screen.dart';
 import 'package:pixel_revive/services/storage_service.dart';
 import 'package:pixel_revive/widgets/before_after_slider.dart';
 import 'package:pixel_revive/widgets/ad_banner.dart';
+import 'package:pixel_revive/widgets/processing_dialog.dart';
 import 'package:pixel_revive/services/ad_mob_service.dart';
 
 class ResultScreen extends StatelessWidget {
@@ -307,7 +308,23 @@ class ResultScreen extends StatelessWidget {
       return;
     }
 
+    final showHdExportDialog = provider.needsHdExportForSave;
+    bool hdDialogOpen = false;
+    if (showHdExportDialog && context.mounted) {
+      hdDialogOpen = true;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const ProcessingDialog(),
+      ).then((_) => hdDialogOpen = false);
+    }
+
     final path = await provider.saveToGallery();
+
+    if (showHdExportDialog && hdDialogOpen && context.mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+
     if (context.mounted) {
       if (path != null) {
         // Free users see an interstitial only after every few successful saves.
