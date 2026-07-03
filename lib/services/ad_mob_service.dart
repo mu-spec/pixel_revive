@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:pixel_revive/services/ump_consent_service.dart';
@@ -16,6 +17,10 @@ class AdMobService {
       'ca-app-pub-3940256099942544/1033173712';
   static const String iosTestInterstitialAdUnitId =
       'ca-app-pub-3940256099942544/4411468910';
+  static const String androidTestRewardedAdUnitId =
+      'ca-app-pub-3940256099942544/5224354917';
+  static const String iosTestRewardedAdUnitId =
+      'ca-app-pub-3940256099942544/1712485313';
 
   // ── Your real production AdMob IDs ─────────────────────────────────────
   // Android App ID is set in AndroidManifest.xml:
@@ -24,10 +29,13 @@ class AdMobService {
       'ca-app-pub-7540130362404221/6541462424';
   static const String androidProductionInterstitialAdUnitId =
       'ca-app-pub-7540130362404221/4375149844';
+  static const String androidProductionRewardedAdUnitId =
+      'ca-app-pub-7540130362404221/3732455938';
 
   // iOS is not active for this Android-only build.
   static const String iosProductionBannerAdUnitId = '';
   static const String iosProductionInterstitialAdUnitId = '';
+  static const String iosProductionRewardedAdUnitId = '';
 
   // Safe frequency cap: show interstitial only after every 3 successful saves.
   // This avoids annoying users and follows a cleaner monetization strategy.
@@ -35,6 +43,8 @@ class AdMobService {
 
   static InterstitialAd? _interstitialAd;
   static bool _isInterstitialLoading = false;
+  static RewardedAd? _rewardedAd;
+  static bool _isRewardedLoading = false;
   static int _successfulSavesSinceInterstitial = 0;
 
   static String get bannerAdUnitId {
@@ -64,6 +74,20 @@ class AdMobService {
     }
     return androidTestInterstitialAdUnitId;
   }
+
+  static String get rewardedAdUnitId {
+    if (Platform.isAndroid) {
+      if (androidProductionRewardedAdUnitId.isNotEmpty) return androidProductionRewardedAdUnitId;
+      return kDebugMode ? androidTestRewardedAdUnitId : '';
+    }
+    if (Platform.isIOS) {
+      if (iosProductionRewardedAdUnitId.isNotEmpty) return iosProductionRewardedAdUnitId;
+      return kDebugMode ? iosTestRewardedAdUnitId : '';
+    }
+    return kDebugMode ? androidTestRewardedAdUnitId : '';
+  }
+
+  static bool get rewardedAdsAvailable => rewardedAdUnitId.isNotEmpty;
 
   static RequestConfiguration get requestConfiguration => RequestConfiguration(
         // Keep empty for production. Add test device IDs here only if you want
@@ -132,9 +156,68 @@ class AdMobService {
     ad.show();
   }
 
+  static void preloadRewarded() {
+    if (!adsEnabled ||
+        !rewardedAdsAvailable ||
+        !UmpConsentService.canRequestAds ||
+        _rewardedAd != null ||
+        _isRewardedLoading) {
+      return;
+    }
+
+    _isRewardedLoading = true;
+    RewardedAd.load(
+      adUnitId: rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          _isRewardedLoading = false;
+          _rewardedAd = ad;
+        },
+        onAdFailedToLoad: (error) {
+          _isRewardedLoading = false;
+          _rewardedAd = null;
+          debugPrint('Rewarded failed to load: $error');
+        },
+      ),
+    );
+  }
+
+  static Future<bool> showRewardedForCloudCredit() async {
+    if (!adsEnabled || !rewardedAdsAvailable || !UmpConsentService.canRequestAds) {
+      return false;
+    }
+    if (_rewardedAd == null) {
+      preloadRewarded();
+      return false;
+    }
+
+    final ad = _rewardedAd!;
+    _rewardedAd = null;
+    bool earned = false;
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        preloadRewarded();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        debugPrint('Rewarded failed to show: $error');
+        preloadRewarded();
+      },
+    );
+    await ad.show(onUserEarnedReward: (ad, reward) {
+      earned = true;
+    });
+    return earned;
+  }
+
   static void disposeInterstitial() {
     _interstitialAd?.dispose();
     _interstitialAd = null;
+    _rewardedAd?.dispose();
+    _rewardedAd = null;
     _isInterstitialLoading = false;
+    _isRewardedLoading = false;
   }
 }

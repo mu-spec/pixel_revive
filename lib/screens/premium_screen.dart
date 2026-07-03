@@ -5,6 +5,8 @@ import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/services/cloud_api_config.dart';
 import 'package:pixel_revive/services/iap_service.dart';
+import 'package:pixel_revive/services/ad_mob_service.dart';
+import 'package:pixel_revive/services/app_telemetry_service.dart';
 
 class PremiumScreen extends StatefulWidget {
   const PremiumScreen({super.key});
@@ -290,20 +292,51 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   ),
                   if (CloudApiConfig.isCloudAvailable && !provider.isPremium && !CloudApiConfig.cloudAiPremiumOnly) ...[
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.gold.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '☁️ ${provider.cloudAiUsedToday}/${CloudApiConfig.freeDailyCloudLimit} cloud AI used today',
-                        style: const TextStyle(
-                          color: AppColors.gold,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.gold.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '☁️ ${provider.cloudAiUsedToday}/${provider.totalCloudCreditsToday} cloud credits used • ${provider.remainingCloudCreditsToday} left',
+                            style: const TextStyle(
+                              color: AppColors.gold,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
+                        OutlinedButton.icon(
+                          onPressed: AdMobService.rewardedAdsAvailable
+                              ? () async {
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  final earned = await AdMobService.showRewardedForCloudCredit();
+                                  if (earned) {
+                                    await provider.addRewardedCloudCredit();
+                                    await AppTelemetryService.logEvent('rewarded_cloud_credit_earned');
+                                    messenger.showSnackBar(const SnackBar(content: Text('+1 cloud credit added')));
+                                  } else {
+                                    AdMobService.preloadRewarded();
+                                    messenger.showSnackBar(const SnackBar(content: Text('Rewarded ad is not ready yet. Try again soon.')));
+                                  }
+                                }
+                              : null,
+                          icon: const Icon(Icons.play_circle_outline, size: 16),
+                          label: const Text('Watch ad +1'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.gold,
+                            side: const BorderSide(color: AppColors.gold),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
 

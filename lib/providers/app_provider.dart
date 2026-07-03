@@ -38,7 +38,10 @@ class AppProvider extends ChangeNotifier {
   bool isProcessing = false;
   int freeExportsToday = 0;
   String? lastExportDate;
+  // Cloud AI credits used today. Free users get CloudApiConfig.freeDailyCloudLimit
+  // base credits plus any rewarded-ad credits earned today.
   int cloudAiUsedToday = 0;
+  int rewardedCloudCreditsToday = 0;
 
   double enhanceStrength = 0.8;
   double skinSmoothness = 0.5;
@@ -100,12 +103,12 @@ static const int _dailyFreeExports = 3;
 
   bool _shouldAttemptCloudForFeature(String featureId) =>
       useCloudAi &&
-      canUseCloudAi &&
+      canUseCloudAiForFeature(featureId) &&
       _isCloudCapableFeature(featureId) &&
       !_shouldUseFastLocal(featureId);
 
   bool _canStartBackgroundCloud(String featureId) =>
-      useCloudAi && canUseCloudAi && _isCloudCapableFeature(featureId);
+      useCloudAi && canUseCloudAiForFeature(featureId) && _isCloudCapableFeature(featureId);
 
   AppProvider() {
     _loadPrefs();
@@ -147,6 +150,7 @@ static const int _dailyFreeExports = 3;
     useCloudAi = prefs.getBool('use_cloud_ai') ?? CloudApiConfig.useBackendProxy;
     devOverrideToken = prefs.getString('dev_override_token') ?? '';
     cloudAiUsedToday = prefs.getInt('cloud_ai_used_today') ?? 0;
+    rewardedCloudCreditsToday = prefs.getInt('rewarded_cloud_credits_today') ?? 0;
     upscaleScale = (prefs.getInt('upscale_scale') ?? 2).clamp(2, isPremium ? 4 : 2).toInt();
     enhancementPreset = prefs.getString('enhancement_preset') ?? 'balanced';
     processingQuality = prefs.getString('processing_quality') ?? 'fast';
@@ -171,6 +175,7 @@ static const int _dailyFreeExports = 3;
     await prefs.setBool('use_cloud_ai', useCloudAi);
     await prefs.setString('dev_override_token', devOverrideToken);
     await prefs.setInt('cloud_ai_used_today', cloudAiUsedToday);
+    await prefs.setInt('rewarded_cloud_credits_today', rewardedCloudCreditsToday);
     await prefs.setInt('upscale_scale', upscaleScale);
     await prefs.setString('enhancement_preset', enhancementPreset);
     await prefs.setString('processing_quality', processingQuality);
@@ -183,6 +188,7 @@ static const int _dailyFreeExports = 3;
     if (lastExportDate != today) {
       freeExportsToday = 0;
       cloudAiUsedToday = 0;
+      rewardedCloudCreditsToday = 0;
       lastExportDate = today;
     }
   }
@@ -199,14 +205,62 @@ static const int _dailyFreeExports = 3;
 
   bool get isCloudAiAvailable => CloudApiConfig.isCloudAvailable || devOverrideToken.isNotEmpty;
 
-  bool get canUseCloudAi {
+  int get totalCloudCreditsToday =>
+      CloudApiConfig.freeDailyCloudLimit + rewardedCloudCreditsToday;
+
+  int get remainingCloudCreditsToday =>
+      (totalCloudCreditsToday - cloudAiUsedToday).clamp(0, 999999).toInt();
+
+  int cloudCreditCost(String featureId, {bool isHdExport = false, bool isBatch = false}) {
+    if (isBatch) return 1;
+    if (isHdExport) return 3;
+    switch (featureId) {
+      case 'colorize':
+        return isPremium ? 2 : 1;
+      case 'upscale':
+        return upscaleScale >= 4 ? 2 : 1;
+      case 'auto':
+      case 'face':
+      case 'denoise':
+      case 'unblur':
+      case 'restore':
+      case 'bg_cleanup':
+      default:
+        return 1;
+    }
+  }
+
+  bool canUseCloudAiForFeature(String featureId, {bool isHdExport = false, bool isBatch = false}) {
     if (!isCloudAiAvailable) return false;
     if (!useCloudAi) return false;
     if (isPremium) return true;
     if (CloudApiConfig.cloudAiPremiumOnly) return false;
-    return cloudAiUsedToday < CloudApiConfig.freeDailyCloudLimit;
+    return cloudAiUsedToday + cloudCreditCost(featureId, isHdExport: isHdExport, isBatch: isBatch) <= totalCloudCreditsToday;
   }
 
+  bool get canUseCloudAi => canUseCloudAiForFeature('auto');
+
+  Future<void> addRewardedCloudCredit({int amount = 1}) async {
+    _resetDailyIfNeeded();
+    rewardedCloudCreditsToday += amount.clamp(1, 10).toInt();
+    await _savePrefs();
+    unawaited(AppTelemetryService.logEvent('rewarded_cloud_credit_added', parameters: {
+      'amount': amount,
+      'rewarded_credits_today': rewardedCloudCreditsToday,
+      'remaining_credits_today': remainingCloudCreditsToday,
+    }));
+    notifyListeners();
+  }
+
+  Future<bool> consumeCloudCredits(String featureId, {bool isHdExport = false, bool isBatch = false}) async {
+    if (isPremium) return true;
+    final cost = cloudCreditCost(featureId, isHdExport: isHdExport, isBatch: isBatch);
+    if (cloudAiUsedToday + cost > totalCloudCreditsToday) return false;
+    cloudAiUsedToday += cost;
+    _resetDailyIfNeeded();
+    await _savePrefs();
+    return true;
+  }
 
   bool get canUseHdQuality => isPremium;
 
@@ -281,7 +335,7 @@ static const int _dailyFreeExports = 3;
   }
 
   String estimatedProcessingTime(String featureId) {
-    if (!useCloudAi || !canUseCloudAi || !_isCloudCapableFeature(featureId)) {
+    if (!useCloudAi || !canUseCloudAiForFeature(featureId) || !_isCloudCapableFeature(featureId)) {
       return 'usually 3–20 sec on device';
     }
     switch (featureId) {
@@ -641,7 +695,7 @@ static const int _dailyFreeExports = 3;
         !CloudApiConfig.cloudAiPremiumOnly &&
         useCloudAi &&
         _isCloudCapableFeature(featureId) &&
-        cloudAiUsedToday >= CloudApiConfig.freeDailyCloudLimit) {
+        cloudAiUsedToday + cloudCreditCost(featureId) > totalCloudCreditsToday) {
       freeCloudLimitReached = true;
     }
 
@@ -722,7 +776,7 @@ static const int _dailyFreeExports = 3;
       lastProcessingUsedCloud = false;
       lastProcessingSource = shouldStartBackgroundCloud ? 'Fast Preview' : (freeCloudLimitReached ? 'Daily AI limit reached' : 'Local');
       lastProcessingMessage = freeCloudLimitReached
-          ? 'Daily free AI limit (${CloudApiConfig.freeDailyCloudLimit}) reached — fast local result is ready. Upgrade to Premium for more cloud AI.'
+          ? 'Daily cloud credits used ($cloudAiUsedToday/$totalCloudCreditsToday). Fast local result is ready. Watch a rewarded ad or upgrade for more cloud AI.'
           : (shouldStartBackgroundCloud
               ? 'Fast preview ready. Cloud AI is improving it in the background...'
               : 'Fast local result is ready.');
@@ -797,9 +851,7 @@ static const int _dailyFreeExports = 3;
           lastProcessingUsedCloud = true;
           lastProcessingSource = 'Cloud AI';
           lastProcessingMessage = 'Cloud AI result applied. You can save or compare now.';
-          if (!isPremium) cloudAiUsedToday++;
-          _resetDailyIfNeeded();
-          await _savePrefs();
+          await consumeCloudCredits(featureId);
           unawaited(AppTelemetryService.logEvent('cloud_refine_success', parameters: {
             'feature': featureId,
             'quality': processingQuality,
@@ -940,6 +992,7 @@ static const int _dailyFreeExports = 3;
       if (path != null) {
         await addToHistory(path);
         lastProcessingMessage = 'HD export saved to gallery.';
+        await consumeCloudCredits(lastProcessedFeatureId!, isHdExport: true);
         await _savePrefs();
         unawaited(AppTelemetryService.logEvent('save_hd_success', parameters: {
           'feature': lastProcessedFeatureId ?? '',

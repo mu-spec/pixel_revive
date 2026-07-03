@@ -12,6 +12,14 @@ const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 4);
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 55000);
 const DEFAULT_AI_PROVIDER = (process.env.DEFAULT_AI_PROVIDER || 'fal').toLowerCase();
 const CLIENT_SHARED_SECRET = process.env.CLIENT_SHARED_SECRET || '';
+const DAILY_START_LIMIT_PER_IP = Number(process.env.DAILY_START_LIMIT_PER_IP || 40);
+const FAILURE_BLOCK_THRESHOLD = Number(process.env.FAILURE_BLOCK_THRESHOLD || 8);
+const FAILURE_BLOCK_MINUTES = Number(process.env.FAILURE_BLOCK_MINUTES || 30);
+
+// Best-effort in-memory abuse guard. On serverless this resets with cold starts,
+// but it still protects warm instances. Keep Vercel rateLimit enabled too.
+const ipDailyStarts = new Map();
+const ipFailures = new Map();
 
 // Fast mode defaults:
 // 1) Use provider queue endpoints for long jobs, especially Fal.ai.
@@ -47,6 +55,59 @@ function requireClientSecret(req, res, next) {
     return res.status(401).json({ success: false, error: 'Unauthorized client' });
   }
   return next();
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function clientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function abuseGuard(req, res, next) {
+  const ip = clientIp(req);
+  const now = Date.now();
+  const failure = ipFailures.get(ip);
+  if (failure?.blockedUntil && failure.blockedUntil > now) {
+    return res.status(429).json({
+      success: false,
+      error: 'Too many failed cloud requests. Please try again later.',
+    });
+  }
+
+  const day = todayKey();
+  const current = ipDailyStarts.get(ip);
+  const record = current?.day === day ? current : { day, count: 0 };
+  if (record.count >= DAILY_START_LIMIT_PER_IP) {
+    return res.status(429).json({
+      success: false,
+      error: 'Daily cloud request limit reached for this network. Try again tomorrow or use offline mode.',
+    });
+  }
+  record.count += 1;
+  ipDailyStarts.set(ip, record);
+  return next();
+}
+
+function markFailure(req) {
+  const ip = clientIp(req);
+  const now = Date.now();
+  const current = ipFailures.get(ip) || { count: 0, blockedUntil: 0, lastFailureAt: 0 };
+  const count = now - current.lastFailureAt > 60 * 60 * 1000 ? 1 : current.count + 1;
+  const blockedUntil = count >= FAILURE_BLOCK_THRESHOLD
+    ? now + FAILURE_BLOCK_MINUTES * 60 * 1000
+    : current.blockedUntil || 0;
+  ipFailures.set(ip, { count, blockedUntil, lastFailureAt: now });
+}
+
+function markSuccess(req) {
+  const ip = clientIp(req);
+  ipFailures.delete(ip);
 }
 
 function assertImageSize(base64) {
@@ -391,10 +452,12 @@ app.get('/health', (_req, res) => {
     falQueueEnabled: FAL_QUEUE_ENABLED,
     returnImageUrl: RETURN_IMAGE_URL,
     falCdnUploadEnabled: FAL_CDN_UPLOAD_ENABLED,
+    dailyStartLimitPerIp: DAILY_START_LIMIT_PER_IP,
+    failureBlockThreshold: FAILURE_BLOCK_THRESHOLD,
   });
 });
 
-app.post('/enhance/start', requireClientSecret, async (req, res) => {
+app.post('/enhance/start', requireClientSecret, abuseGuard, async (req, res) => {
   try {
     const featureId = String(req.body.featureId || 'auto');
     const provider = String(req.body.provider || DEFAULT_AI_PROVIDER).toLowerCase();
@@ -404,8 +467,10 @@ app.post('/enhance/start', requireClientSecret, async (req, res) => {
     const started = provider === 'fal'
       ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport))
       : await startReplicate(featureId, normalized.dataUri, req.body.scale);
+    markSuccess(req);
     res.json({ success: true, provider, predictionId: started.id, status: started.status, model: started.model });
   } catch (error) {
+    markFailure(req);
     console.error('[enhance/start] error:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to start prediction' });
   }
@@ -434,7 +499,7 @@ app.get('/enhance/status/:id', requireClientSecret, async (req, res) => {
   }
 });
 
-app.post('/enhance', requireClientSecret, async (req, res) => {
+app.post('/enhance', requireClientSecret, abuseGuard, async (req, res) => {
   const startedAt = Date.now();
   try {
     const featureId = String(req.body.featureId || 'auto');
@@ -445,6 +510,7 @@ app.post('/enhance', requireClientSecret, async (req, res) => {
     const result = provider === 'fal'
       ? await runFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport))
       : await runReplicate(featureId, normalized.dataUri, req.body.scale);
+    markSuccess(req);
     res.json({
       success: true,
       provider,
@@ -455,6 +521,7 @@ app.post('/enhance', requireClientSecret, async (req, res) => {
       elapsedMs: Date.now() - startedAt,
     });
   } catch (error) {
+    markFailure(req);
     console.error('[enhance] error:', error);
     res.status(500).json({ success: false, error: error.message || 'Cloud enhancement failed', elapsedMs: Date.now() - startedAt });
   }

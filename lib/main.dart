@@ -33,6 +33,7 @@ Future<void> main() async {
 
   if (UmpConsentService.canRequestAds) {
     AdMobService.preloadInterstitial();
+    AdMobService.preloadRewarded();
   }
 
   runApp(const PixelReviveApp());
