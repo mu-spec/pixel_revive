@@ -331,6 +331,107 @@ class ImageProcessor {
     return out;
   }
 
+
+  // ── PROFESSIONAL LOCAL ENHANCEMENT HELPERS ─────────
+  /// Gray-world white balance with clamped gains. Removes common yellow/blue
+  /// casts without the heavy cost of full color-science pipelines.
+  static Uint8List _grayWorldWhiteBalanceFlat(Uint8List src, int w, int h) {
+    final n = w * h;
+    double sumR = 1, sumG = 1, sumB = 1;
+    int samples = 1;
+    // sample every other pixel for speed
+    for (int i = 0; i < n; i += 2) {
+      final o = i * 4;
+      final r = src[o], g = src[o + 1], b = src[o + 2];
+      // skip near-black/near-white pixels; they skew white balance
+      final lum = (r + g + b) ~/ 3;
+      if (lum > 18 && lum < 238) {
+        sumR += r;
+        sumG += g;
+        sumB += b;
+        samples++;
+      }
+    }
+    final avgR = sumR / samples;
+    final avgG = sumG / samples;
+    final avgB = sumB / samples;
+    final avg = (avgR + avgG + avgB) / 3.0;
+    final gainR = (avg / avgR).clamp(0.82, 1.22);
+    final gainG = (avg / avgG).clamp(0.88, 1.14);
+    final gainB = (avg / avgB).clamp(0.82, 1.28);
+
+    final out = Uint8List(src.length);
+    for (int i = 0; i < n; i++) {
+      final o = i * 4;
+      out[o] = _clampByte((src[o] * gainR).round());
+      out[o + 1] = _clampByte((src[o + 1] * gainG).round());
+      out[o + 2] = _clampByte((src[o + 2] * gainB).round());
+      out[o + 3] = src[o + 3];
+    }
+    return out;
+  }
+
+  /// Vibrance boosts dull colors more than already-saturated colors. This looks
+  /// more natural than a simple saturation multiplier, especially for faces.
+  static Uint8List _vibranceFlat(Uint8List src, int w, int h, double amount) {
+    final n = w * h;
+    final out = Uint8List(src.length);
+    for (int i = 0; i < n; i++) {
+      final o = i * 4;
+      final r = src[o].toDouble();
+      final g = src[o + 1].toDouble();
+      final b = src[o + 2].toDouble();
+      final maxC = math.max(r, math.max(g, b));
+      final minC = math.min(r, math.min(g, b));
+      final sat = (maxC - minC) / 255.0;
+      final lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      final boost = amount * (1.0 - sat).clamp(0.0, 1.0);
+      out[o] = (lum + (r - lum) * (1.0 + boost)).round().clamp(0, 255);
+      out[o + 1] = (lum + (g - lum) * (1.0 + boost)).round().clamp(0, 255);
+      out[o + 2] = (lum + (b - lum) * (1.0 + boost)).round().clamp(0, 255);
+      out[o + 3] = src[o + 3];
+    }
+    return out;
+  }
+
+  /// Local contrast / clarity. Adds mid-size detail without changing global
+  /// exposure too aggressively. Radius is capped for mobile speed.
+  static Uint8List _clarityFlat(Uint8List src, int w, int h, double amount, int radius) {
+    final blur = _gaussianBlurFlat(src, w, h, radius.clamp(2, 8));
+    final n = w * h;
+    final out = Uint8List(src.length);
+    for (int i = 0; i < n; i++) {
+      final o = i * 4;
+      for (int c = 0; c < 3; c++) {
+        final v = src[o + c];
+        final diff = v - blur[o + c];
+        // Avoid boosting tiny noise; enhance real mid-tone texture.
+        out[o + c] = diff.abs() < 3 ? v : _clampByte((v + diff * amount).round());
+      }
+      out[o + 3] = src[o + 3];
+    }
+    return out;
+  }
+
+  /// Gentle gamma lift/darken via LUT. gamma < 1 brightens shadows, gamma > 1 darkens.
+  static Uint8List _gammaFlat(Uint8List src, int w, int h, double gamma) {
+    final lut = Uint8List(256);
+    final inv = 1.0 / gamma.clamp(0.35, 2.5);
+    for (int i = 0; i < 256; i++) {
+      lut[i] = (math.pow(i / 255.0, inv) * 255.0).round().clamp(0, 255);
+    }
+    final out = Uint8List(src.length);
+    final n = w * h;
+    for (int i = 0; i < n; i++) {
+      final o = i * 4;
+      out[o] = lut[src[o]];
+      out[o + 1] = lut[src[o + 1]];
+      out[o + 2] = lut[src[o + 2]];
+      out[o + 3] = src[o + 3];
+    }
+    return out;
+  }
+
   // ── CLAHE: Contrast Limited Adaptive Histogram Equalization ──
   static Uint8List _claheFlat(
     Uint8List src,
@@ -703,14 +804,17 @@ class ImageProcessor {
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
 
-    final cl = 1.5 + args.strength * 2.0;
-    buf = _claheFlat(buf, w, h, clipLimit: cl.clamp(1.0, 4.0));
-    buf = _adjustFlat(buf, w, h, 1.0, 1.0, 1.0 + args.strength * 0.45);
-    buf = _sharpenFlat(buf, w, h, 0.8 + args.strength * 1.2);
-
-    if (args.strength > 0.5) {
-      buf = _bilateralFlat(buf, w, h, 30.0);
+    // Stronger local auto pipeline: white balance → denoise → CLAHE → clarity → vibrance → sharpen.
+    buf = _grayWorldWhiteBalanceFlat(buf, w, h);
+    if (args.strength > 0.35) {
+      buf = _bilateralFlat(buf, w, h, 34.0);
     }
+    final cl = 1.7 + args.strength * 2.0;
+    buf = _claheFlat(buf, w, h, clipLimit: cl.clamp(1.3, 4.2));
+    buf = _gammaFlat(buf, w, h, 0.96);
+    buf = _clarityFlat(buf, w, h, 0.20 + args.strength * 0.22, 5);
+    buf = _vibranceFlat(buf, w, h, 0.18 + args.strength * 0.30);
+    buf = _smartUnsharpFlat(buf, w, h, 0.9 + args.strength * 1.0, 1.5);
 
     sw.stop();
     debugPrint("⚡ autoEnhance ${w}x${h} in ${sw.elapsedMilliseconds}ms");
@@ -955,10 +1059,13 @@ class ImageProcessor {
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
+    // Two-stage denoise: remove salt/pepper noise, then smooth color noise while
+    // restoring edges with a conservative detail pass.
     buf = _median3x3Flat(buf, w, h);
-    buf = _bilateralFlat(buf, w, h, 38.0);
+    buf = _bilateralFlat(buf, w, h, 42.0);
+    buf = _clarityFlat(buf, w, h, 0.18, 4);
     final blur = _gaussianBlurFlat(buf, w, h, 1);
-    buf = _unsharpFlat(buf, blur, w, h, 1.2, 3.0);
+    buf = _unsharpFlat(buf, blur, w, h, 0.9, 4.0);
 
     sw.stop();
     debugPrint("⚡ denoise ${w}x$h in ${sw.elapsedMilliseconds}ms");
@@ -975,9 +1082,11 @@ class ImageProcessor {
     if (src == null) return input;
     final w = src.width, h = src.height;
     var buf = _toRgba8(src);
-    buf = _smartUnsharpFlat(buf, w, h, 2.4, 2.0);
-    buf = _smartUnsharpFlat(buf, w, h, 1.2, 1.0);
-    buf = _adjustFlat(buf, w, h, 1.0, 1.18, 1.05);
+    buf = _grayWorldWhiteBalanceFlat(buf, w, h);
+    buf = _clarityFlat(buf, w, h, 0.28, 4);
+    buf = _smartUnsharpFlat(buf, w, h, 2.2, 2.0);
+    buf = _smartUnsharpFlat(buf, w, h, 0.9, 1.0);
+    buf = _adjustFlat(buf, w, h, 1.0, 1.16, 1.06);
 
     sw.stop();
     debugPrint("⚡ unblur ${w}x$h (deconv) in ${sw.elapsedMilliseconds}ms");
@@ -1117,10 +1226,13 @@ class ImageProcessor {
       balanced[o + 3] = inBytes[o + 3];
     }
 
-    var buf = _claheFlat(balanced, w, h, clipLimit: 2.5);
+    var buf = _grayWorldWhiteBalanceFlat(balanced, w, h);
+    buf = _claheFlat(buf, w, h, clipLimit: 2.7);
     buf = _median3x3Flat(buf, w, h);
-    buf = _bilateralFlat(buf, w, h, 32.0);
-    buf = _sharpenFlat(buf, w, h, 1.6);
+    buf = _bilateralFlat(buf, w, h, 36.0);
+    buf = _clarityFlat(buf, w, h, 0.22, 5);
+    buf = _vibranceFlat(buf, w, h, 0.18);
+    buf = _smartUnsharpFlat(buf, w, h, 1.4, 1.6);
 
     sw.stop();
     debugPrint("⚡ restoreOldPhoto ${w}x$h in ${sw.elapsedMilliseconds}ms");
