@@ -33,6 +33,7 @@ class _EditorScreenState extends State<EditorScreen> {
   double _lastSmoothnessValue = 0.5;
   double _lastBokehValue = 0.6;
   bool _previewInitialized = false;
+  bool _showAdvancedOptions = false;
 
   @override
   void initState() {
@@ -83,11 +84,11 @@ class _EditorScreenState extends State<EditorScreen> {
         decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
         child: Column(
           children: [
-            Expanded(flex: 4, child: _buildImagePreview(provider)),
-            _buildDescriptionBox(provider),
-            _buildAdjustmentSliders(provider),
+            Expanded(flex: 7, child: _buildImagePreview(provider)),
+            _buildSelectedFeatureSummary(provider),
             _buildFeatureSelector(provider),
-            const AdBanner(margin: EdgeInsets.fromLTRB(20, 0, 20, 8)),
+            _buildAdvancedOptions(provider),
+            const AdBanner(margin: EdgeInsets.fromLTRB(20, 0, 20, 6)),
             _buildActionBar(provider),
           ],
         ),
@@ -183,6 +184,176 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildSelectedFeatureSummary(AppProvider provider) {
+    final id = selectedFeatureId ?? 'auto';
+    final feature = allFeatures.firstWhere(
+      (f) => f.id == id,
+      orElse: () => allFeatures.first,
+    );
+    final desc = AppStrings.getText('desc_$id', provider.languageCode);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: feature.color.withOpacity(0.24), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [feature.color.withOpacity(0.95), feature.color.withOpacity(0.55)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(feature.icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        feature.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.text,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    _cloudModeChip(provider),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  desc,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11.2,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cloudModeChip(AppProvider provider) {
+    final bool fast = provider.processingQuality == 'fast';
+    final color = fast ? AppColors.success : AppColors.accent;
+    final text = fast ? 'Fast' : provider.processingQualityLabel.replaceAll(' Quality', '');
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.13),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(fast ? Icons.flash_on_rounded : Icons.cloud_done_rounded, color: color, size: 13),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvancedOptions(AppProvider provider) {
+    if (provider.originalBytes == null) return const SizedBox.shrink();
+    final hasOptions = _adjustmentHasOptions(selectedFeatureId ?? 'auto');
+    if (!hasOptions) return const SizedBox.shrink();
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: InkWell(
+              onTap: () => setState(() => _showAdvancedOptions = !_showAdvancedOptions),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.035),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.tune_rounded, color: AppColors.textMuted, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _showAdvancedOptions
+                            ? 'Hide advanced options'
+                            : 'Advanced options: Look, strength and quality controls',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12.2,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      _showAdvancedOptions ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.textMuted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_showAdvancedOptions) _buildAdjustmentSliders(provider),
+        ],
+      ),
+    );
+  }
+
+  bool _adjustmentHasOptions(String id) {
+    return id == 'auto' ||
+        id == 'upscale' ||
+        id == 'face' ||
+        id == 'bg' ||
+        {'restore', 'denoise', 'unblur', 'colorize', 'bg_cleanup'}.contains(id);
   }
 
   Widget _buildDescriptionBox(AppProvider provider) {
@@ -321,7 +492,7 @@ class _EditorScreenState extends State<EditorScreen> {
               const Icon(Icons.tune_rounded, color: AppColors.success, size: 17),
               const SizedBox(width: 8),
               Text(
-                'Enhancement style: ${provider.enhancementPresetLabel}',
+                'Look: ${provider.enhancementPresetLabel}',
                 style: const TextStyle(color: AppColors.text, fontSize: 12.5, fontWeight: FontWeight.w800),
               ),
             ],
@@ -524,7 +695,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 color: isSelected ? AppColors.accent : AppColors.surface,
                 borderRadius: BorderRadius.circular(18),
                 child: InkWell(
-                  onTap: () { setState(() => selectedFeatureId = feature.id); _process(); },
+                  onTap: () { setState(() { selectedFeatureId = feature.id; _showAdvancedOptions = false; }); _process(); },
                   borderRadius: BorderRadius.circular(18),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -576,32 +747,6 @@ class _EditorScreenState extends State<EditorScreen> {
                   ],
                 ),
               ),
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
-                children: [
-                  Icon(provider.processingQuality == 'fast' ? Icons.flash_on_rounded : Icons.cloud_done_rounded,
-                      color: provider.processingQuality == 'fast' ? AppColors.success : AppColors.accent,
-                      size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      provider.processingQuality == 'fast'
-                          ? 'Fast mode: instant local preview, cloud improves in background when available.'
-                          : '${provider.processingQualityLabel}: cloud quality may take 15–60 seconds.',
-                      style: const TextStyle(color: AppColors.textMuted, fontSize: 10.8, height: 1.25, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             Row(
               children: [
                 Expanded(
