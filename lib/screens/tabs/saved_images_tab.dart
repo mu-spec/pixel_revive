@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:pixel_revive/constants/app_colors.dart';
 import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
+import 'package:pixel_revive/services/storage_service.dart';
 
 class SavedImagesTab extends StatefulWidget {
   const SavedImagesTab({super.key});
@@ -252,9 +253,13 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.file(
-                          file,
-                          fit: BoxFit.cover,
+                        Hero(
+                          tag: 'creation-$path',
+                          child: Image.file(
+                            file,
+                            fit: BoxFit.cover,
+                            filterQuality: FilterQuality.medium,
+                          ),
                         ),
                         if (_isSelectionMode)
                           Positioned(
@@ -316,57 +321,191 @@ class _SavedImagesTabState extends State<SavedImagesTab> {
 
   void _showFullscreenHistoryImage(BuildContext context, AppProvider provider, String path) {
     final lang = provider.languageCode;
+    final file = File(path);
+    final date = _getFileDateString(path);
+
     showDialog(
       context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.black.withOpacity(0.08), width: 1),
-          ),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Image.file(
-                  File(path),
-                  fit: BoxFit.contain,
+      barrierColor: Colors.black.withOpacity(0.78),
+      builder: (dialogContext) {
+        final size = MediaQuery.of(dialogContext).size;
+        final maxImageHeight = size.height * 0.68;
+
+        return Dialog(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 24),
+          child: Container(
+            constraints: BoxConstraints(maxWidth: 560, maxHeight: size.height * 0.90),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B0B14),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.white.withOpacity(0.10), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.65),
+                  blurRadius: 36,
+                  offset: const Offset(0, 18),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, size: 18),
-                    label: Text(AppStrings.getText('closeBtn', lang)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.text,
-                      side: BorderSide(color: Colors.black.withOpacity(0.1)),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 10, 10),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(Icons.auto_awesome, color: AppColors.success, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                AppStrings.getText('enhancedPhoto', lang),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.text,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                date,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: AppStrings.getText('closeBtn', lang),
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
+                        ),
+                      ],
                     ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await provider.shareImage();
-                    },
-                    icon: const Icon(Icons.share, size: 18, color: Colors.white),
-                    label: Text(AppStrings.getText('share', lang), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.success,
+                  Flexible(
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.28),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: InteractiveViewer(
+                          minScale: 1,
+                          maxScale: 4,
+                          child: Center(
+                            child: Hero(
+                              tag: 'creation-$path',
+                              child: Image.file(
+                                file,
+                                width: double.infinity,
+                                height: maxImageHeight,
+                                fit: BoxFit.contain,
+                                filterQuality: FilterQuality.high,
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 260,
+                                  alignment: Alignment.center,
+                                  color: AppColors.card,
+                                  child: const Icon(Icons.broken_image_outlined, color: AppColors.textMuted, size: 44),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 52,
+                            child: OutlinedButton.icon(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              icon: const Icon(Icons.close_rounded, size: 20),
+                              label: Text(
+                                AppStrings.getText('closeBtn', lang),
+                                style: const TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.text,
+                                side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 52,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  final bytes = await file.readAsBytes();
+                                  await StorageService.shareImage(bytes);
+                                } catch (_) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Unable to share this image.'),
+                                        backgroundColor: Colors.redAccent,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.ios_share_rounded, size: 20, color: Colors.white),
+                              label: Text(
+                                AppStrings.getText('share', lang),
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.success,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
+
 }
