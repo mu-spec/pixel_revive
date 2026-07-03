@@ -60,9 +60,12 @@ class StorageService {
     final tempDir = await getTemporaryDirectory();
     final file = File('${tempDir.path}/pixel_revive_share.jpg');
     await file.writeAsBytes(bytes, flush: true);
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Restored with PixelRevive',
+
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'Restored with PixelRevive',
+        files: [XFile(file.path)],
+      ),
     );
   }
 }
