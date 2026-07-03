@@ -215,21 +215,27 @@ class _EditorScreenState extends State<EditorScreen> {
     final id = selectedFeatureId ?? 'auto';
 
     if (id == 'auto') {
-      return _sliderCard(
-        title: AppStrings.getText('enhanceStrength', provider.languageCode),
-        value: provider.enhanceStrength,
-        onChanged: (v) {
-          provider.setEnhanceStrength(v);
-          _applyRealTimePreview(v);
-        },
-        icon: Icons.shutter_speed,
-        activeColor: AppColors.success,
+      return Column(
+        children: [
+          _enhancementPresetCard(provider),
+          _sliderCard(
+            title: AppStrings.getText('enhanceStrength', provider.languageCode),
+            value: provider.enhanceStrength,
+            onChanged: (v) {
+              provider.setEnhanceStrength(v);
+              _applyRealTimePreview(v);
+            },
+            icon: Icons.shutter_speed,
+            activeColor: AppColors.success,
+          ),
+        ],
       );
     } else if (id == 'upscale') {
       return _upscaleSelectorCard(provider);
     } else if (id == 'face') {
       return Column(
         children: [
+          _enhancementPresetCard(provider),
           _sliderCard(
             title: AppStrings.getText('faceStrength', provider.languageCode),
             value: provider.enhanceStrength,
@@ -263,6 +269,8 @@ class _EditorScreenState extends State<EditorScreen> {
         icon: Icons.blur_on,
         activeColor: AppColors.accent,
       );
+    } else if ({'restore', 'denoise', 'unblur', 'colorize', 'bg_cleanup'}.contains(id)) {
+      return _enhancementPresetCard(provider, compact: true);
     }
 
     return const SizedBox.shrink();
@@ -291,6 +299,82 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _enhancementPresetCard(AppProvider provider, {bool compact = false}) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tune_rounded, color: AppColors.success, size: 17),
+              const SizedBox(width: 8),
+              Text(
+                'Enhancement style: ${provider.enhancementPresetLabel}',
+                style: const TextStyle(color: AppColors.text, fontSize: 12.5, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          if (!compact) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _presetChip(provider, 'natural', 'Natural'),
+                const SizedBox(width: 8),
+                _presetChip(provider, 'balanced', 'Balanced'),
+                const SizedBox(width: 8),
+                _presetChip(provider, 'strong', 'Strong'),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Natural/Balanced/Strong affects local preview strength. Cloud model quality depends on selected speed mode.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 10.5, height: 1.3),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _presetChip(AppProvider provider, String value, String label) {
+    final selected = provider.enhancementPreset == value;
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          provider.setEnhancementPreset(value);
+          _applyRealTimePreview(provider.enhanceStrength);
+        },
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.success.withOpacity(0.16) : Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: selected ? AppColors.success : Colors.white12),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? AppColors.success : AppColors.textMuted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -492,6 +576,32 @@ class _EditorScreenState extends State<EditorScreen> {
                   ],
                 ),
               ),
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Row(
+                children: [
+                  Icon(provider.processingQuality == 'fast' ? Icons.flash_on_rounded : Icons.cloud_done_rounded,
+                      color: provider.processingQuality == 'fast' ? AppColors.success : AppColors.accent,
+                      size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      provider.processingQuality == 'fast'
+                          ? 'Fast mode: instant local preview, cloud improves in background when available.'
+                          : '${provider.processingQualityLabel}: cloud quality may take 15–60 seconds.',
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 10.8, height: 1.25, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Row(
               children: [
                 Expanded(

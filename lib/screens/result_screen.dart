@@ -158,8 +158,80 @@ class ResultScreen extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (provider.hasLocalAndCloudResults) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _resultModeChip(provider, 'local', 'Fast'),
+                      const SizedBox(width: 8),
+                      _resultModeChip(provider, 'cloud', 'Cloud'),
+                    ],
+                  ),
+                ],
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Debug timings',
+            onPressed: () => _showDebugDialog(context, provider),
+            icon: const Icon(Icons.bug_report_outlined, size: 18, color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _resultModeChip(AppProvider provider, String mode, String label) {
+    final selected = provider.resultViewMode == mode || (provider.resultViewMode == 'auto' && mode == 'cloud');
+    return InkWell(
+      onTap: () => provider.setResultViewMode(mode),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.success.withOpacity(0.16) : Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? AppColors.success : Colors.white12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AppColors.success : AppColors.textMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDebugDialog(BuildContext context, AppProvider provider) {
+    final lines = <String>[
+      'Feature: ${provider.lastProcessedFeatureId ?? '-'}',
+      'Mode: ${provider.processingQualityLabel}',
+      'Preset: ${provider.enhancementPresetLabel}',
+      'Route: ${provider.processingRouteLabel}',
+      'Message: ${provider.lastProcessingMessage}',
+      if (provider.lastProcessingTimingSummary.isNotEmpty) 'Summary: ${provider.lastProcessingTimingSummary}',
+      '',
+      'Raw timings:',
+      if (provider.lastProcessingTimings.isEmpty) '-' else ...provider.lastProcessingTimings.entries.map((e) => '${e.key}: ${e.value}'),
+    ];
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Processing debug', style: TextStyle(color: AppColors.text)),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            lines.join('\n'),
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.35),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
         ],
       ),

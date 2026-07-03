@@ -24,6 +24,9 @@ class AppProvider extends ChangeNotifier {
 
   Uint8List? processedPreviewBytes;
   Uint8List? processedHdBytes;
+  Uint8List? localResultBytes;
+  Uint8List? cloudResultBytes;
+  String resultViewMode = 'auto'; // auto, local, cloud
   Uint8List? processedBytes;
   Uint8List? displayBytes;
   bool hdExportReady = false;
@@ -39,6 +42,7 @@ class AppProvider extends ChangeNotifier {
   double skinSmoothness = 0.5;
   double bokehBlur = 0.6;
   int upscaleScale = 2;
+  String enhancementPreset = 'balanced'; // natural, balanced, strong
   String processingQuality = 'fast'; // fast, balanced, hd
 
   bool lastProcessingUsedCloud = false;
@@ -142,6 +146,7 @@ static const int _dailyFreeExports = 3;
     devOverrideToken = prefs.getString('dev_override_token') ?? '';
     cloudAiUsedToday = prefs.getInt('cloud_ai_used_today') ?? 0;
     upscaleScale = (prefs.getInt('upscale_scale') ?? 2).clamp(2, isPremium ? 4 : 2).toInt();
+    enhancementPreset = prefs.getString('enhancement_preset') ?? 'balanced';
     processingQuality = prefs.getString('processing_quality') ?? 'fast';
     if (!isPremium && processingQuality == 'hd') processingQuality = 'fast';
     languageCode = prefs.getString('language_code') ?? 'en';
@@ -159,6 +164,7 @@ static const int _dailyFreeExports = 3;
     await prefs.setString('dev_override_token', devOverrideToken);
     await prefs.setInt('cloud_ai_used_today', cloudAiUsedToday);
     await prefs.setInt('upscale_scale', upscaleScale);
+    await prefs.setString('enhancement_preset', enhancementPreset);
     await prefs.setString('processing_quality', processingQuality);
     await prefs.setString('language_code', languageCode);
     await prefs.setStringList('creation_history', creationHistory);
@@ -217,6 +223,53 @@ static const int _dailyFreeExports = 3;
       default:
         return 'Balanced';
     }
+  }
+
+  String get enhancementPresetLabel {
+    switch (enhancementPreset) {
+      case 'natural':
+        return 'Natural';
+      case 'strong':
+        return 'Strong';
+      default:
+        return 'Balanced';
+    }
+  }
+
+  bool get hasLocalAndCloudResults => localResultBytes != null && cloudResultBytes != null;
+
+  Future<void> _refreshDisplayFromProcessed() async {
+    final bytes = processedBytes;
+    if (bytes == null) {
+      displayBytes = null;
+      return;
+    }
+    displayBytes = isPremium ? bytes : await ImageProcessor.applyWatermark(bytes);
+  }
+
+  Future<void> setResultViewMode(String mode) async {
+    if (mode != 'local' && mode != 'cloud' && mode != 'auto') return;
+    resultViewMode = mode;
+    if (mode == 'local' && localResultBytes != null) {
+      processedBytes = localResultBytes;
+      lastProcessingUsedCloud = false;
+      lastProcessingSource = 'Fast Preview';
+      lastProcessingMessage = 'Showing fast local preview result.';
+    } else if (mode == 'cloud' && cloudResultBytes != null) {
+      processedBytes = cloudResultBytes;
+      lastProcessingUsedCloud = true;
+      lastProcessingSource = 'Cloud AI';
+      lastProcessingMessage = 'Showing cloud AI result.';
+    } else if (mode == 'auto') {
+      processedBytes = cloudResultBytes ?? localResultBytes ?? processedPreviewBytes;
+      lastProcessingUsedCloud = cloudResultBytes != null;
+      lastProcessingSource = cloudResultBytes != null ? 'Cloud AI' : 'Fast Preview';
+      lastProcessingMessage = cloudResultBytes != null
+          ? 'Cloud AI result applied. You can save or compare now.'
+          : 'Showing fast local preview result.';
+    }
+    await _refreshDisplayFromProcessed();
+    notifyListeners();
   }
 
   String estimatedProcessingTime(String featureId) {
@@ -363,6 +416,27 @@ static const int _dailyFreeExports = 3;
     notifyListeners();
   }
 
+  void setEnhancementPreset(String value) {
+    final normalized = value == 'natural' || value == 'strong' ? value : 'balanced';
+    enhancementPreset = normalized;
+    switch (normalized) {
+      case 'natural':
+        enhanceStrength = 0.45;
+        skinSmoothness = 0.35;
+        break;
+      case 'strong':
+        enhanceStrength = 0.95;
+        skinSmoothness = 0.70;
+        break;
+      default:
+        enhanceStrength = 0.75;
+        skinSmoothness = 0.50;
+    }
+    _clearProcessingCache();
+    _savePrefs();
+    notifyListeners();
+  }
+
   void cancelProcessing() {
     if (!isProcessing) return;
     _cancelProcessingRequested = true;
@@ -451,6 +525,9 @@ static const int _dailyFreeExports = 3;
       _clearProcessingCache();
       processedPreviewBytes = null;
       processedHdBytes = null;
+      localResultBytes = null;
+      cloudResultBytes = null;
+      resultViewMode = 'auto';
       processedBytes = null;
       displayBytes = originalPreviewBytes;
       hdExportReady = false;
@@ -476,6 +553,9 @@ static const int _dailyFreeExports = 3;
     originalBytes = null;
     processedPreviewBytes = null;
     processedHdBytes = null;
+    localResultBytes = null;
+    cloudResultBytes = null;
+    resultViewMode = 'auto';
     processedBytes = null;
     displayBytes = null;
     hdExportReady = false;
@@ -595,6 +675,9 @@ static const int _dailyFreeExports = 3;
 
       processedPreviewBytes = result;
       processedHdBytes = null;
+      localResultBytes = result;
+      cloudResultBytes = null;
+      resultViewMode = 'local';
       hdExportReady = false;
       lastProcessedFeatureId = featureId;
       processedBytes = result;
@@ -664,6 +747,8 @@ static const int _dailyFreeExports = 3;
         if (cloudResult != null) {
           processedPreviewBytes = cloudResult;
           processedHdBytes = null;
+          cloudResultBytes = cloudResult;
+          resultViewMode = 'cloud';
           hdExportReady = false;
           lastProcessedFeatureId = featureId;
           processedBytes = cloudResult;
@@ -811,7 +896,7 @@ static const int _dailyFreeExports = 3;
     _clearProcessingCache();
     await _savePrefs();
     if (processedBytes != null) {
-      displayBytes = isPremium ? processedBytes : await ImageProcessor.applyWatermark(processedBytes!);
+      await _refreshDisplayFromProcessed();
     }
     notifyListeners();
   }
@@ -826,6 +911,9 @@ static const int _dailyFreeExports = 3;
     originalBytes = originalPreviewBytes;
     processedPreviewBytes = null;
     processedHdBytes = null;
+    localResultBytes = null;
+    cloudResultBytes = null;
+    resultViewMode = 'auto';
     processedBytes = null;
     displayBytes = originalPreviewBytes;
     hdExportReady = false;
