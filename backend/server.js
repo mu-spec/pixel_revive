@@ -227,7 +227,7 @@ async function startReplicate(featureId, dataUri, scale = 2) {
   const createText = await createResponse.text();
   let prediction; try { prediction = JSON.parse(createText); } catch (_) { throw new Error(`Replicate returned non-JSON response: ${createText.slice(0, 200)}`); }
   if (!createResponse.ok) throw new Error(`Replicate create failed: HTTP ${createResponse.status} ${createText}`);
-  return { id: encodeJobToken({ provider: 'replicate', id: prediction.id }), status: prediction.status };
+  return { id: encodeJobToken({ provider: 'replicate', id: prediction.id }), status: prediction.status, model };
 }
 
 async function checkReplicate(predictionId) {
@@ -273,7 +273,7 @@ async function startFal(featureId, dataUri, scale = 2, isPremium = false, isHdEx
   if (!response.ok) throw new Error(`Fal queue submit failed: HTTP ${response.status} ${text}`);
   const requestId = data.request_id || data.requestId || data.id;
   if (!requestId) throw new Error(`Fal queue returned no request_id: ${text}`);
-  return { id: encodeJobToken({ provider: 'fal', model, id: requestId }), status: data.status || 'IN_QUEUE' };
+  return { id: encodeJobToken({ provider: 'fal', model, id: requestId }), status: data.status || 'IN_QUEUE', model };
 }
 
 async function checkFal(job) {
@@ -368,7 +368,7 @@ app.post('/enhance/start', requireClientSecret, async (req, res) => {
     const started = provider === 'fal'
       ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport))
       : await startReplicate(featureId, normalized.dataUri, req.body.scale);
-    res.json({ success: true, provider, predictionId: started.id, status: started.status });
+    res.json({ success: true, provider, predictionId: started.id, status: started.status, model: started.model });
   } catch (error) {
     console.error('[enhance/start] error:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to start prediction' });

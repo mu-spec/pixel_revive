@@ -144,6 +144,20 @@ class ResultScreen extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (provider.lastProcessingTimingSummary.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    provider.lastProcessingTimingSummary,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 10,
+                      height: 1.25,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

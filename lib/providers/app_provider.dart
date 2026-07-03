@@ -45,6 +45,8 @@ class AppProvider extends ChangeNotifier {
   bool isCloudRefining = false;
   String lastProcessingSource = 'Local';
   String lastProcessingMessage = 'Ready for on-device enhancement';
+  String lastProcessingTimingSummary = '';
+  Map<String, Object?> lastProcessingTimings = <String, Object?>{};
 
   bool useCloudAi = false;
   String devOverrideToken = '';
@@ -235,6 +237,30 @@ static const int _dailyFreeExports = 3;
     }
   }
 
+  String _formatMs(Object? value) {
+    final ms = value is int ? value : int.tryParse(value?.toString() ?? '');
+    if (ms == null) return '-';
+    if (ms < 1000) return '${ms}ms';
+    return '${(ms / 1000).toStringAsFixed(1)}s';
+  }
+
+  void _rememberTimings(Map<String, Object?> timings) {
+    lastProcessingTimings = Map<String, Object?>.from(timings);
+    final parts = <String>[];
+    if (timings['localMs'] != null) parts.add('local ${_formatMs(timings['localMs'])}');
+    if (timings['prepMs'] != null) parts.add('prep ${_formatMs(timings['prepMs'])}');
+    if (timings['startMs'] != null) parts.add('start ${_formatMs(timings['startMs'])}');
+    if (timings['polls'] != null) parts.add('polls ${timings['polls']}');
+    if (timings['downloadMs'] != null) parts.add('download ${_formatMs(timings['downloadMs'])}');
+    if (timings['totalMs'] != null) parts.add('total ${_formatMs(timings['totalMs'])}');
+    final model = timings['model']?.toString();
+    lastProcessingTimingSummary = [
+      if (model != null && model.isNotEmpty) 'model $model',
+      if (parts.isNotEmpty) parts.join(' • '),
+    ].join(' • ');
+    debugPrint('⏱ PixelRevive timings: $lastProcessingTimings');
+  }
+
   bool get needsHdExportForSave =>
       isPremium &&
       processedPreviewBytes != null &&
@@ -405,6 +431,7 @@ static const int _dailyFreeExports = 3;
       );
       if (picked == null) return;
 
+      final prepSw = Stopwatch()..start();
       originalImage = File(picked.path);
       originalFullBytes = await originalImage!.readAsBytes();
       originalPreviewBytes = await ImageProcessor.preparePreview(
@@ -412,6 +439,13 @@ static const int _dailyFreeExports = 3;
         maxDimension: 1024,
         quality: 76,
       );
+      prepSw.stop();
+      _rememberTimings({
+        'stage': 'image_prepare',
+        'originalBytes': originalFullBytes!.length,
+        'previewBytes': originalPreviewBytes!.length,
+        'prepMs': prepSw.elapsedMilliseconds,
+      });
       originalBytes = originalPreviewBytes;
       
       _clearProcessingCache();
@@ -451,6 +485,8 @@ static const int _dailyFreeExports = 3;
     isCloudRefining = false;
     lastProcessingSource = 'Local';
     lastProcessingMessage = 'Ready for on-device enhancement';
+    lastProcessingTimingSummary = '';
+    lastProcessingTimings = <String, Object?>{};
     notifyListeners();
   }
 
@@ -546,6 +582,14 @@ static const int _dailyFreeExports = 3;
       }
 
       stopwatch.stop();
+      _rememberTimings({
+        'stage': 'local_preview',
+        'feature': featureId,
+        'quality': processingQuality,
+        'localMs': stopwatch.elapsedMilliseconds,
+        'inputBytes': previewInput.length,
+        'outputBytes': result.length,
+      });
       debugPrint("⚡ Local processing completed in ${stopwatch.elapsedMilliseconds}ms");
       if (_cancelProcessingRequested) return;
 
@@ -611,6 +655,11 @@ static const int _dailyFreeExports = 3;
         );
 
         if (runId != _processingRunId || _cancelProcessingRequested) return;
+        _rememberTimings({
+          ...AiApiService.lastTimings,
+          'stage': 'cloud_refine',
+          'quality': processingQuality,
+        });
 
         if (cloudResult != null) {
           processedPreviewBytes = cloudResult;

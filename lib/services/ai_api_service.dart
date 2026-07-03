@@ -8,6 +8,8 @@ import 'package:pixel_revive/services/cloud_api_config.dart';
 
 class AiApiService {
   static String? lastErrorMessage;
+  static Map<String, Object?> lastTimings = <String, Object?>{};
+  static String? lastCloudModel;
 
   static void _rememberError(String message) {
     lastErrorMessage = message;
@@ -91,6 +93,8 @@ class AiApiService {
     if (baseUrl.isEmpty) return null;
 
     final client = http.Client();
+    final totalSw = Stopwatch()..start();
+    final prepSw = Stopwatch()..start();
     try {
       onProgress?.call('Compressing image for fast upload...');
       final uploadBytes = _prepareCloudUpload(
@@ -98,6 +102,7 @@ class AiApiService {
         maxDimension: uploadMaxDimension,
         quality: uploadQuality,
       );
+      prepSw.stop();
 
       final uri = CloudApiConfig.backendEnhanceUri;
       final headers = <String, String>{
@@ -111,6 +116,7 @@ class AiApiService {
       debugPrint('Backend proxy posting to: $uri');
       onProgress?.call('Uploading to ${CloudApiConfig.activeProviderLabel}...');
 
+      final requestSw = Stopwatch()..start();
       final response = await client
           .post(
             uri,
@@ -127,7 +133,16 @@ class AiApiService {
           )
           .timeout(const Duration(minutes: 4));
 
+      requestSw.stop();
       if (response.statusCode != 200) {
+        lastTimings = {
+          'route': 'proxy',
+          'feature': featureId,
+          'prepMs': prepSw.elapsedMilliseconds,
+          'requestMs': requestSw.elapsedMilliseconds,
+          'totalMs': totalSw.elapsedMilliseconds,
+          'status': response.statusCode,
+        };
         debugPrint('Backend proxy error ${response.statusCode}: ${response.body}');
         return null;
       }
@@ -139,7 +154,20 @@ class AiApiService {
       }
 
       onProgress?.call('Downloading enhanced result...');
+      final downloadSw = Stopwatch()..start();
       final bytes = await _readBackendImage(data, client);
+      downloadSw.stop();
+      totalSw.stop();
+      lastTimings = {
+        'route': 'proxy',
+        'feature': featureId,
+        'prepMs': prepSw.elapsedMilliseconds,
+        'requestMs': requestSw.elapsedMilliseconds,
+        'downloadMs': downloadSw.elapsedMilliseconds,
+        'totalMs': totalSw.elapsedMilliseconds,
+        'bytes': bytes?.length ?? 0,
+      };
+      debugPrint('Cloud timings: $lastTimings');
       if (bytes == null) {
         debugPrint('Backend proxy returned no image: ${response.body}');
       }
@@ -173,6 +201,8 @@ class AiApiService {
     if (baseUrl.isEmpty) return null;
 
     final client = http.Client();
+    final totalSw = Stopwatch()..start();
+    final prepSw = Stopwatch()..start();
     try {
       // SPEED MODE: smaller cloud upload = faster upload, faster queue start,
       // lower backend timeout risk, and better phone performance.
@@ -182,6 +212,7 @@ class AiApiService {
         maxDimension: uploadMaxDimension,
         quality: uploadQuality,
       );
+      prepSw.stop();
 
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (CloudApiConfig.backendClientSecret.isNotEmpty) {
@@ -190,6 +221,7 @@ class AiApiService {
 
       // ── Step 1: START ──────────────────────────────
       onProgress?.call('Uploading to ${CloudApiConfig.activeProviderLabel} cloud queue...');
+      final startSw = Stopwatch()..start();
       final startResponse = await client
           .post(
             Uri.parse('$baseUrl/enhance/start'),
@@ -206,20 +238,30 @@ class AiApiService {
           )
           .timeout(const Duration(seconds: 55));
 
+      startSw.stop();
       if (startResponse.statusCode != 200) {
+        lastTimings = {
+          'route': 'queue',
+          'feature': featureId,
+          'prepMs': prepSw.elapsedMilliseconds,
+          'startMs': startSw.elapsedMilliseconds,
+          'totalMs': totalSw.elapsedMilliseconds,
+          'status': startResponse.statusCode,
+        };
         _rememberError('Cloud AI start error ${startResponse.statusCode}: ${startResponse.body}');
         return null;
       }
 
       final startData = jsonDecode(startResponse.body);
+      lastCloudModel = startData['model']?.toString();
       if (startData['success'] != true || startData['predictionId'] == null) {
         _rememberError('Cloud AI start returned no predictionId: ${startResponse.body}');
         return null;
       }
 
       final String predictionId = Uri.encodeComponent(startData['predictionId'].toString());
-      debugPrint('Async prediction started: $predictionId');
-      onProgress?.call('AI enhancing on ${CloudApiConfig.activeProviderLabel}...');
+      debugPrint('Async prediction started: $predictionId model=${lastCloudModel ?? 'unknown'}');
+      onProgress?.call('AI enhancing on ${CloudApiConfig.activeProviderLabel}${lastCloudModel == null ? '' : ' (${lastCloudModel!})'}...');
 
       // ── Step 2: POLL status until done ─────────────
       // Fast preview jobs should not feel endless. Balanced gets a longer wait,
@@ -254,7 +296,23 @@ class AiApiService {
 
         if (statusData['done'] == true) {
           onProgress?.call('Downloading enhanced result...');
+          final downloadSw = Stopwatch()..start();
           final bytes = await _readBackendImage(statusData, client);
+          downloadSw.stop();
+          totalSw.stop();
+          lastTimings = {
+            'route': 'queue',
+            'feature': featureId,
+            'model': lastCloudModel,
+            'prepMs': prepSw.elapsedMilliseconds,
+            'startMs': startSw.elapsedMilliseconds,
+            'polls': attempt + 1,
+            'queueWaitMs': (attempt + 1) * 2000,
+            'downloadMs': downloadSw.elapsedMilliseconds,
+            'totalMs': totalSw.elapsedMilliseconds,
+            'bytes': bytes?.length ?? 0,
+          };
+          debugPrint('Cloud timings: $lastTimings');
           if (bytes != null) {
             debugPrint('Async prediction succeeded after ${attempt + 1} polls');
             return bytes;
@@ -271,6 +329,18 @@ class AiApiService {
         debugPrint('Async status: ${statusData['status']} (poll ${attempt + 1})');
       }
 
+      totalSw.stop();
+      lastTimings = {
+        'route': 'queue',
+        'feature': featureId,
+        'model': lastCloudModel,
+        'prepMs': prepSw.elapsedMilliseconds,
+        'startMs': startSw.elapsedMilliseconds,
+        'polls': maxAttempts,
+        'totalMs': totalSw.elapsedMilliseconds,
+        'timeout': true,
+      };
+      debugPrint('Cloud timings: $lastTimings');
       _rememberError(timeoutHint);
       return null;
     } catch (e) {
