@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:pixel_revive/services/cloud_api_config.dart';
 import 'package:pixel_revive/services/gpu_shader_service.dart';
 import 'package:pixel_revive/services/on_device_ml_service.dart';
 import 'package:pixel_revive/services/iap_service.dart';
+import 'package:pixel_revive/services/app_telemetry_service.dart';
 
 class AppProvider extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
@@ -152,6 +154,12 @@ static const int _dailyFreeExports = 3;
     languageCode = prefs.getString('language_code') ?? 'en';
     creationHistory = prefs.getStringList('creation_history') ?? [];
     _resetDailyIfNeeded();
+    unawaited(AppTelemetryService.setUserProperties(
+      isPremium: isPremium,
+      processingQuality: processingQuality,
+      cloudEnabled: useCloudAi,
+      languageCode: languageCode,
+    ));
     notifyListeners();
   }
 
@@ -413,6 +421,10 @@ static const int _dailyFreeExports = 3;
     processingQuality = (!isPremium && normalized == 'hd') ? 'fast' : normalized;
     _clearProcessingCache();
     _savePrefs();
+    unawaited(AppTelemetryService.logEvent('processing_quality_changed', parameters: {
+      'quality': processingQuality,
+      'is_premium': isPremium,
+    }));
     notifyListeners();
   }
 
@@ -434,6 +446,10 @@ static const int _dailyFreeExports = 3;
     }
     _clearProcessingCache();
     _savePrefs();
+    unawaited(AppTelemetryService.logEvent('enhancement_preset_changed', parameters: {
+      'preset': enhancementPreset,
+      'strength': enhanceStrength,
+    }));
     notifyListeners();
   }
 
@@ -584,6 +600,14 @@ static const int _dailyFreeExports = 3;
         ? 'Creating fast local preview first. Cloud AI will improve it in the background...'
         : 'Creating fast local preview (${estimatedProcessingTime(featureId)})...';
     notifyListeners();
+    unawaited(AppTelemetryService.logEvent('feature_processing_started', parameters: {
+      'feature': featureId,
+      'quality': processingQuality,
+      'preset': enhancementPreset,
+      'cloud_enabled': useCloudAi,
+      'cloud_possible': canStartCloudInBackground,
+      'is_premium': isPremium,
+    }));
 
     final cacheKey = _cacheKey(featureId);
     final cachedResult = _processedCache[cacheKey];
@@ -592,6 +616,10 @@ static const int _dailyFreeExports = 3;
       displayBytes = isPremium ? cachedResult : await ImageProcessor.applyWatermark(cachedResult);
       isProcessing = false;
       lastProcessingMessage = 'Loaded instantly from cache.';
+      unawaited(AppTelemetryService.logEvent('processing_cache_hit', parameters: {
+        'feature': featureId,
+        'quality': processingQuality,
+      }));
       notifyListeners();
       return;
     }
@@ -671,6 +699,13 @@ static const int _dailyFreeExports = 3;
         'outputBytes': result.length,
       });
       debugPrint("⚡ Local processing completed in ${stopwatch.elapsedMilliseconds}ms");
+      unawaited(AppTelemetryService.logEvent('local_preview_ready', parameters: {
+        'feature': featureId,
+        'quality': processingQuality,
+        'local_ms': stopwatch.elapsedMilliseconds,
+        'input_bytes': previewInput.length,
+        'output_bytes': result.length,
+      }));
       if (_cancelProcessingRequested) return;
 
       processedPreviewBytes = result;
@@ -720,6 +755,11 @@ static const int _dailyFreeExports = 3;
     Future<void>(() async {
       isCloudRefining = true;
       notifyListeners();
+      unawaited(AppTelemetryService.logEvent('cloud_refine_started', parameters: {
+        'feature': featureId,
+        'quality': processingQuality,
+        'is_premium': isPremium,
+      }));
       try {
         final cloudResult = await AiApiService.smartEnhance(
           imageBytes: previewInput,
@@ -760,10 +800,24 @@ static const int _dailyFreeExports = 3;
           if (!isPremium) cloudAiUsedToday++;
           _resetDailyIfNeeded();
           await _savePrefs();
+          unawaited(AppTelemetryService.logEvent('cloud_refine_success', parameters: {
+            'feature': featureId,
+            'quality': processingQuality,
+            'model': AiApiService.lastCloudModel ?? '',
+            'total_ms': AiApiService.lastTimings['totalMs'] ?? 0,
+            'polls': AiApiService.lastTimings['polls'] ?? 0,
+          }));
         } else {
           lastProcessingUsedCloud = false;
           lastProcessingSource = 'Fast Preview';
           lastProcessingMessage = AiApiService.lastErrorMessage ?? 'Cloud AI was slow or unavailable. Fast local result is kept.';
+          unawaited(AppTelemetryService.logEvent('cloud_refine_failed', parameters: {
+            'feature': featureId,
+            'quality': processingQuality,
+            'reason': AiApiService.lastErrorMessage ?? 'null_result',
+            'model': AiApiService.lastCloudModel ?? '',
+            'total_ms': AiApiService.lastTimings['totalMs'] ?? 0,
+          }));
         }
       } catch (e) {
         if (runId == _processingRunId) {
@@ -771,6 +825,15 @@ static const int _dailyFreeExports = 3;
           lastProcessingSource = 'Fast Preview';
           lastProcessingMessage = 'Cloud AI failed. Fast local result is kept.';
           debugPrint('Cloud refinement failed: $e');
+          unawaited(AppTelemetryService.logEvent('cloud_refine_exception', parameters: {
+            'feature': featureId,
+            'quality': processingQuality,
+            'error': e.toString(),
+          }));
+          unawaited(AppTelemetryService.recordError(e, null, reason: 'cloud_refinement_failed', information: {
+            'feature': featureId,
+            'quality': processingQuality,
+          }));
         }
       } finally {
         if (runId == _processingRunId) {
@@ -806,12 +869,22 @@ static const int _dailyFreeExports = 3;
           freeExportsToday++;
           await _savePrefs();
         }
+        unawaited(AppTelemetryService.logEvent('save_success', parameters: {
+          'is_premium': isPremium,
+          'hd': false,
+          'feature': lastProcessedFeatureId ?? '',
+        }));
         notifyListeners();
         return path;
       }
       return null;
-    } catch (e) {
+    } catch (e, st) {
       isProcessing = false;
+      unawaited(AppTelemetryService.logEvent('save_failed', parameters: {
+        'hd': false,
+        'error': e.toString(),
+      }));
+      unawaited(AppTelemetryService.recordError(e, st, reason: 'save_failed'));
       return null;
     }
   }
@@ -828,6 +901,10 @@ static const int _dailyFreeExports = 3;
       lastProcessingSource = 'HD Export';
       lastProcessingMessage = 'Preparing premium HD export...';
       notifyListeners();
+      unawaited(AppTelemetryService.logEvent('save_hd_started', parameters: {
+        'feature': lastProcessedFeatureId ?? '',
+        'scale': upscaleScale,
+      }));
 
       Uint8List? hdBytes = processedHdBytes;
       if (hdBytes == null) {
@@ -864,6 +941,11 @@ static const int _dailyFreeExports = 3;
         await addToHistory(path);
         lastProcessingMessage = 'HD export saved to gallery.';
         await _savePrefs();
+        unawaited(AppTelemetryService.logEvent('save_hd_success', parameters: {
+          'feature': lastProcessedFeatureId ?? '',
+          'model': AiApiService.lastCloudModel ?? '',
+          'total_ms': AiApiService.lastTimings['totalMs'] ?? 0,
+        }));
         notifyListeners();
         return path;
       }
@@ -895,6 +977,15 @@ static const int _dailyFreeExports = 3;
     }
     _clearProcessingCache();
     await _savePrefs();
+    unawaited(AppTelemetryService.setUserProperties(
+      isPremium: isPremium,
+      processingQuality: processingQuality,
+      cloudEnabled: useCloudAi,
+      languageCode: languageCode,
+    ));
+    unawaited(AppTelemetryService.logEvent('premium_status_changed', parameters: {
+      'is_premium': isPremium,
+    }));
     if (processedBytes != null) {
       await _refreshDisplayFromProcessed();
     }

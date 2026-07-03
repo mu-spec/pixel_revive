@@ -4,6 +4,13 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Apply Firebase/Google Services only when the real config file exists.
+// This keeps CI/builds from failing before google-services.json is added.
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+    apply plugin: "com.google.firebase.crashlytics"
+}
+
 android {
     namespace = "com.app.revivememories"
     compileSdk = 35

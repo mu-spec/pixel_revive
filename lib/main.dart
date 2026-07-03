@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:pixel_revive/app.dart';
 import 'package:pixel_revive/services/ad_mob_service.dart';
+import 'package:pixel_revive/services/app_telemetry_service.dart';
 import 'package:pixel_revive/services/ump_consent_service.dart';
 
 Future<void> main() async {
@@ -20,6 +21,8 @@ Future<void> main() async {
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+
+  await AppTelemetryService.init();
 
   MobileAds.instance.updateRequestConfiguration(AdMobService.requestConfiguration);
 
