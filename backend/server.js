@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { fal } from '@fal-ai/client';
 
 const app = express();
 
@@ -18,6 +19,10 @@ const CLIENT_SHARED_SECRET = process.env.CLIENT_SHARED_SECRET || '';
 //    inside Vercel. This removes one full image download/upload hop.
 const FAL_QUEUE_ENABLED = String(process.env.FAL_QUEUE_ENABLED || 'true').toLowerCase() !== 'false';
 const RETURN_IMAGE_URL = String(process.env.RETURN_IMAGE_URL || 'true').toLowerCase() !== 'false';
+// Upload base64/data-URI inputs to fal's CDN before model submission. This keeps
+// model requests URL-based and reduces queue payload size. If upload fails, the
+// backend safely falls back to the original data URI.
+const FAL_CDN_UPLOAD_ENABLED = String(process.env.FAL_CDN_UPLOAD_ENABLED || 'true').toLowerCase() !== 'false';
 
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -117,6 +122,33 @@ function replicateConfigForFeature(featureId, dataUri, scale = 2) {
     case 'face': return { model: envModel('REPLICATE_FACE_MODEL', GFPGAN_VERSION), input: { img: dataUri, version: 'v1.4', scale: 2 } };
     case 'denoise': case 'unblur': return { model: envModel('REPLICATE_ENHANCE_MODEL', 'nightmareai/real-esrgan'), input: { image: dataUri, scale: 2, face_enhance: false } };
     case 'auto': default: return { model: envModel('REPLICATE_AUTO_MODEL', GFPGAN_VERSION), input: { img: dataUri, version: 'v1.4', scale: 2 } };
+  }
+}
+
+async function maybeUploadToFalCdn(imageInput, fallbackMimeType = 'image/jpeg') {
+  if (!FAL_CDN_UPLOAD_ENABLED) return imageInput;
+  if (!imageInput || typeof imageInput !== 'string') return imageInput;
+  // Already a public/presigned URL. Fal models can consume it directly.
+  if (/^https?:\/\//i.test(imageInput)) return imageInput;
+  if (!imageInput.startsWith('data:')) return imageInput;
+
+  const token = process.env.FAL_API_KEY;
+  if (!token) return imageInput;
+
+  try {
+    const match = imageInput.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return imageInput;
+    const mimeType = match[1] || fallbackMimeType;
+    const buffer = Buffer.from(match[2], 'base64');
+
+    fal.config({ credentials: token });
+    const blob = new Blob([buffer], { type: mimeType });
+    const url = await fal.storage.upload(blob);
+    console.log(`[fal-cdn] uploaded input ${buffer.length} bytes -> ${url}`);
+    return url;
+  } catch (error) {
+    console.warn('[fal-cdn] upload failed; falling back to data URI:', error?.message || error);
+    return imageInput;
   }
 }
 
@@ -249,7 +281,8 @@ async function checkReplicate(predictionId) {
 async function runFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false) {
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
-  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium, isHdExport);
+  const modelInputUrl = await maybeUploadToFalCdn(dataUri);
+  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport);
   const response = await fetchWithTimeout(`https://fal.run/${model}`, { method: 'POST', headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   const text = await response.text();
   let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal.ai returned non-JSON response: ${text.slice(0, 200)}`); }
@@ -262,7 +295,8 @@ async function startFal(featureId, dataUri, scale = 2, isPremium = false, isHdEx
   if (!FAL_QUEUE_ENABLED) throw new Error('Fal queue is disabled');
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
-  const { model, input } = falConfigForFeature(featureId, dataUri, scale, isPremium, isHdExport);
+  const modelInputUrl = await maybeUploadToFalCdn(dataUri);
+  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport);
   const response = await fetchWithTimeout(`https://queue.fal.run/${model}`, {
     method: 'POST',
     headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' },
@@ -312,6 +346,7 @@ app.get('/model-map', (_req, res) => {
   res.json({
     ok: true,
     provider: DEFAULT_AI_PROVIDER,
+    falCdnUploadEnabled: FAL_CDN_UPLOAD_ENABLED,
     routing: {
       auto: {
         fast: 'local on-device',
@@ -355,6 +390,7 @@ app.get('/health', (_req, res) => {
     falConfigured: Boolean(process.env.FAL_API_KEY),
     falQueueEnabled: FAL_QUEUE_ENABLED,
     returnImageUrl: RETURN_IMAGE_URL,
+    falCdnUploadEnabled: FAL_CDN_UPLOAD_ENABLED,
   });
 });
 
