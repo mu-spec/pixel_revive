@@ -187,7 +187,6 @@ class _BeforeAfterSliderState extends State<BeforeAfterSlider> {
             ),
           ),
           _miniIconButton(Icons.add_rounded, _zoomIn),
-          _miniIconButton(Icons.center_focus_strong_rounded, _resetZoom),
         ],
       ),
     );
@@ -310,14 +309,6 @@ class _CompareStack extends StatelessWidget {
           right: 14,
           top: 14,
           child: _label(AppStrings.getText('labelEnhanced', lang), AppColors.success),
-        ),
-        Positioned(
-          top: 14,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: _hint('Pinch/drag image • Drag circle to compare'),
-          ),
         ),
       ],
     );

@@ -86,7 +86,6 @@ class _EditorScreenState extends State<EditorScreen> {
           children: [
             Expanded(flex: 7, child: _buildImagePreview(provider)),
             _buildSelectedFeatureSummary(provider),
-            _buildAdvancedOptions(provider),
             const AdBanner(margin: EdgeInsets.fromLTRB(20, 0, 20, 6)),
             _buildActionBar(provider),
           ],
@@ -138,47 +137,6 @@ class _EditorScreenState extends State<EditorScreen> {
                 ),
               ),
             ),
-            Positioned(
-              left: 14,
-              top: 14,
-              child: _processingRouteBadge(provider),
-            ),
-            if (provider.processedBytes != null && provider.lastProcessingMessage.isNotEmpty)
-              Positioned(
-                left: 14,
-                right: 14,
-                bottom: 14,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.55),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    provider.lastProcessingMessage,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      height: 1.25,
-                    ),
-                  ),
-                ),
-              ),
-            if (provider.isProcessing)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: const Center(
-                    child: CircularProgressIndicator(color: AppColors.accent, strokeWidth: 3),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -758,8 +716,8 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     child: ElevatedButton.icon(
                       onPressed: provider.isProcessing ? null : _process,
-                      icon: provider.isProcessing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.auto_fix_high, size: 20),
-                      label: Text(provider.isProcessing ? AppStrings.getText('processingLabel', provider.languageCode) : AppStrings.getText('enhance', provider.languageCode), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
+                      icon: const Icon(Icons.auto_fix_high, size: 20),
+                      label: Text(AppStrings.getText('enhance', provider.languageCode), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, foregroundColor: Colors.white, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     ),
                   ),

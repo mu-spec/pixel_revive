@@ -34,7 +34,6 @@ class ResultScreen extends StatelessWidget {
               flex: 6,
               child: _buildSliderView(provider),
             ),
-            _buildProcessingSourcePanel(context, provider),
             _buildInfoPanel(context, provider),
             const AdBanner(margin: EdgeInsets.fromLTRB(20, 4, 20, 8)),
             _buildActionPanel(context, provider),
@@ -98,7 +97,7 @@ class ResultScreen extends StatelessWidget {
     );
   }
 
- Widget _buildProcessingSourcePanel(BuildContext context, AppProvider provider) {
+  Widget _buildProcessingSourcePanel(BuildContext context, AppProvider provider) {
     if (provider.processedBytes == null) return const SizedBox.shrink();
 
     final color = provider.processingRouteColor;
