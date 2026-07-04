@@ -61,21 +61,18 @@ class _PremiumScreenState extends State<PremiumScreen> {
         'id': IapService.weeklyId,
         'title': AppStrings.getText('weekly', provider.languageCode),
         'period': 'week',
-        'tag': null,
         'sub': AppStrings.getText('autoRenews', provider.languageCode),
       },
       {
         'id': IapService.yearlyId,
         'title': AppStrings.getText('yearly', provider.languageCode),
         'period': 'year',
-        'tag': null,
         'sub': AppStrings.getText('autoRenews', provider.languageCode),
       },
       {
         'id': IapService.lifetimeId,
         'title': AppStrings.getText('lifetime', provider.languageCode),
         'period': 'one-time',
-        'tag': AppStrings.getText('forever', provider.languageCode),
         'sub': AppStrings.getText('payOnce', provider.languageCode),
       },
     ];
@@ -83,626 +80,78 @@ class _PremiumScreenState extends State<PremiumScreen> {
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: Text(
-          AppStrings.getText('premiumTitle', provider.languageCode),
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
+        title: const Text('PixelRevive PRO', style: TextStyle(fontWeight: FontWeight.w900)),
         elevation: 0,
       ),
       body: Container(
         decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(22, 10, 22, 30),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Hero card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(26),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: AppColors.goldGradient,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _simpleHero(provider),
+              const SizedBox(height: 18),
+              _simpleBenefits(),
+              const SizedBox(height: 18),
+              _simpleCloudControls(context, provider),
+              const SizedBox(height: 18),
+              _buildPremiumBatchCard(context, provider),
+              const SizedBox(height: 22),
+              if (!provider.isPremium) ...[
+                const Text(
+                  'Choose your plan',
+                  style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900),
                 ),
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.gold.withOpacity(0.35),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -24,
-                    bottom: -24,
-                    child: Icon(
-                      Icons.workspace_premium,
-                      size: 130,
-                      color: Colors.white.withOpacity(0.12),
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.star, color: Colors.white, size: 24),
-                          ),
-                          const SizedBox(width: 12),
-                          // Tap "PixelRevive PRO" 5 times to reveal dev settings
-                          GestureDetector(
-                            onTap: () {
-                              _devModeTapCount++;
-                              if (_devModeTapCount == 5) {
-                                _devModeTapCount = 0;
-                                setState(() {
-                                  _showDevSettings = true;
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(AppStrings.getText('devUnlocked', provider.languageCode)),
-                                    backgroundColor: AppColors.accent,
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              } else if (_devModeTapCount > 2) {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('🔒 ${5 - _devModeTapCount} ${AppStrings.getText('devMoreTaps', provider.languageCode)}'),
-                                    duration: const Duration(milliseconds: 600),
-                                  ),
-                                );
-                              }
-                            },
-                            child: const Text(
-                              'PixelRevive PRO',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        AppStrings.getText('subTagline', provider.languageCode),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          height: 1.4,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // ── TEST MODE BANNER (when Play products aren't live yet) ──
-            if (IapService.instance.isTestMode)
-              Container(
+                const SizedBox(height: 12),
+                ...List.generate(plans.length, (index) => _simplePlanCard(plans[index], index)),
+                const SizedBox(height: 12),
+              ],
+              SizedBox(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.gold.withOpacity(0.4), width: 1.5),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.science_outlined, color: AppColors.gold, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          AppStrings.getText('testModeBilling', provider.languageCode),
-                          style: const TextStyle(
-                            color: AppColors.gold,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Google Play products aren\'t configured yet. After your \$25 Play Developer '
-                      'account, create products premium_weekly, premium_yearly, premium_lifetime — '
-                      'real billing activates with no code change. To test Premium now, use the '
-                      'dev toggle (tap "PixelRevive PRO" 5×).',
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Cloud AI Status Card (visible to ALL users)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: CloudApiConfig.isCloudAvailable
-                      ? AppColors.success.withOpacity(0.3)
-                      : Colors.white.withOpacity(0.06),
-                  width: 1.5,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        CloudApiConfig.isCloudAvailable ? Icons.cloud_done : Icons.cloud_off,
-                        color: CloudApiConfig.isCloudAvailable ? AppColors.success : AppColors.textMuted,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          CloudApiConfig.isCloudAvailable
-                              ? AppStrings.getText('cloudAiConnected', provider.languageCode)
-                              : AppStrings.getText('onDeviceProcessing', provider.languageCode),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: provider.isPremium || _isPurchasing
+                      ? null
+                      : () => _onUnlockPressed(provider, plans),
+                  icon: Icon(provider.isPremium ? Icons.check_circle : Icons.workspace_premium),
+                  label: Text(
+                    provider.isPremium ? 'Premium Active' : 'Unlock Premium',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    CloudApiConfig.isCloudAvailable
-                        ? (provider.isPremium
-                            ? '✨ Premium: Unlimited cloud AI enhancements powered by ${CloudApiConfig.useReplicate ? "Replicate" : "Fal.ai"}'
-                            : (CloudApiConfig.cloudAiPremiumOnly
-                                ? '☁️ Cloud AI is available for Premium users only. Free users continue with local on-device processing.'
-                                : '⚡ Free: ${CloudApiConfig.freeDailyCloudLimit} cloud AI enhancements/day. Upgrade for unlimited!'))
-                        : 'All processing runs locally on your device. No internet needed — fast & private!',
-                    style: const TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 12,
-                      height: 1.4,
-                    ),
-                  ),
-                  if (CloudApiConfig.isCloudAvailable && !provider.isPremium && !CloudApiConfig.cloudAiPremiumOnly) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.gold.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '☁️ ${provider.cloudAiUsedToday}/${provider.totalCloudCreditsToday} cloud credits used • ${provider.remainingCloudCreditsToday} left',
-                            style: const TextStyle(
-                              color: AppColors.gold,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: AdMobService.rewardedAdsAvailable
-                              ? () async {
-                                  final messenger = ScaffoldMessenger.of(context);
-                                  final earned = await AdMobService.showRewardedForCloudCredit();
-                                  if (earned) {
-                                    await provider.addRewardedCloudCredit();
-                                    await AppTelemetryService.logEvent('rewarded_cloud_credit_earned');
-                                    messenger.showSnackBar(const SnackBar(content: Text('+1 cloud credit added')));
-                                  } else {
-                                    AdMobService.preloadRewarded();
-                                    messenger.showSnackBar(const SnackBar(content: Text('Rewarded ad is not ready yet. Try again soon.')));
-                                  }
-                                }
-                              : null,
-                          icon: const Icon(Icons.play_circle_outline, size: 16),
-                          label: const Text('Watch ad +1'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.gold,
-                            side: const BorderSide(color: AppColors.gold),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  // ── USER-FACING PROCESSING MODE SELECTOR ──────────────
-                  // Lets every user clearly choose Offline (on-device) or
-                  // Cloud AI. If cloud isn't configured, only offline applies.
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white12, height: 1),
-                  const SizedBox(height: 14),
-                  Text(
-                    AppStrings.getText('processingMode', provider.languageCode),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      // Offline option
-                      Expanded(
-                        child: _modeOption(
-                          context: context,
-                          icon: Icons.phone_android_rounded,
-                          title: AppStrings.getText('useOffline', provider.languageCode),
-                          subtitle: AppStrings.getText('offlineModeDesc', provider.languageCode),
-                          selected: !provider.useCloudAi,
-                          onTap: () => provider.setUseCloudAi(false),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Cloud option
-                      Expanded(
-                        child: _modeOption(
-                          context: context,
-                          icon: Icons.cloud_done_rounded,
-                          title: AppStrings.getText('useCloudAi', provider.languageCode),
-                          subtitle: AppStrings.getText('cloudModeDesc', provider.languageCode),
-                          selected: provider.useCloudAi,
-                          enabled: CloudApiConfig.isCloudAvailable || provider.devOverrideToken.isNotEmpty,
-                          onTap: () {
-                            if (!CloudApiConfig.isCloudAvailable && provider.devOverrideToken.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(AppStrings.getText('cloudNotAvailable', provider.languageCode)),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
-                              return;
-                            }
-                            provider.setUseCloudAi(true);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.info_outline_rounded,
-                          color: AppColors.textMuted, size: 15),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          AppStrings.getText('modeHelp', provider.languageCode),
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 11,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-                  Text(
-                    'Cloud speed / quality',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _modeOption(
-                          context: context,
-                          icon: Icons.flash_on_rounded,
-                          title: 'Fast',
-                          subtitle: 'Instant local preview',
-                          selected: provider.processingQuality == 'fast',
-                          onTap: () => provider.setProcessingQuality('fast'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _modeOption(
-                          context: context,
-                          icon: Icons.balance_rounded,
-                          title: 'Balanced',
-                          subtitle: 'Cloud quality • slower',
-                          selected: provider.processingQuality == 'balanced',
-                          onTap: () => provider.setProcessingQuality('balanced'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _modeOption(
-                          context: context,
-                          icon: Icons.hd_rounded,
-                          title: 'HD',
-                          subtitle: provider.isPremium ? 'Best quality • slowest' : 'Premium only',
-                          selected: provider.processingQuality == 'hd',
-                          enabled: provider.isPremium,
-                          onTap: () {
-                            if (!provider.isPremium) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('HD quality is a Premium feature.')),
-                              );
-                              return;
-                            }
-                            provider.setProcessingQuality('hd');
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: const Text(
-                      'Fast mode = smaller upload for quicker cloud processing. Balanced/HD = better cloud quality and may take 15–60 seconds.',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 10.8,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            _buildPremiumBatchCard(context, provider),
-            const SizedBox(height: 22),
-
-            Text(
-              AppStrings.getText('proBenefitTitle', provider.languageCode),
-              style: const TextStyle(
-                color: AppColors.text,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _benefit(Icons.hd, AppStrings.getText('benefit1', provider.languageCode)),
-            _benefit(Icons.water_drop_outlined, AppStrings.getText('benefit2', provider.languageCode)),
-            _benefit(Icons.all_inclusive, AppStrings.getText('benefit3', provider.languageCode)),
-            _benefit(Icons.speed, AppStrings.getText('benefit4', provider.languageCode)),
-            _benefit(Icons.photo_library_outlined, AppStrings.getText('benefit5', provider.languageCode)),
-            if (CloudApiConfig.isCloudAvailable)
-              _benefit(Icons.cloud_done, 'Cloud AI: Professional-grade enhancement via server GPUs'),
-
-            const SizedBox(height: 28),
-
-            // ── HIDDEN DEVELOPER SETTINGS (tap title 5 times to reveal) ──
-            if (_showDevSettings)
-              _buildDevSettings(provider),
-
-            const SizedBox(height: 28),
-            Text(
-              AppStrings.getText('selectPlan', provider.languageCode),
-              style: const TextStyle(
-                color: AppColors.text,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Plan list
-            ...List.generate(plans.length, (index) {
-              final plan = plans[index];
-              final isSelected = _selectedPlanIndex == index;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedPlanIndex = index);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      gradient: isSelected ? const LinearGradient(colors: [Color(0x3322D3EE), Color(0x227C3AED)]) : AppColors.cardGradient,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.gold
-                            : Colors.white.withOpacity(0.10),
-                        width: isSelected ? 2 : 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isSelected ? AppColors.gold.withOpacity(0.18) : Colors.black.withOpacity(0.18),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSelected
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          color: isSelected ? AppColors.gold : AppColors.textMuted,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    plan['title'],
-                                    style: TextStyle(
-                                      color: AppColors.text,
-                                      fontSize: 15,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w800
-                                          : FontWeight.bold,
-                                    ),
-                                  ),
-                                  if (plan['tag'] != null) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.gold.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        plan['tag'],
-                                        style: const TextStyle(
-                                          color: AppColors.gold,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                plan['sub'],
-                                style: const TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              IapService.instance.priceFor(plan['id']),
-                              style: const TextStyle(
-                                color: AppColors.text,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '/${plan['period']}',
-                              style: const TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppColors.success.withOpacity(0.20),
+                    disabledForegroundColor: AppColors.success,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                   ),
                 ),
-              );
-            }),
-
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: provider.isPremium || _isPurchasing
-                    ? null
-                    : () => _onUnlockPressed(provider, plans),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.gold,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: AppColors.primary,
-                  disabledForegroundColor: AppColors.textMuted,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: TextButton.icon(
+                  onPressed: _isPurchasing ? null : () => IapService.instance.restorePurchases(),
+                  icon: const Icon(Icons.restore, size: 18, color: AppColors.textMuted),
+                  label: Text(
+                    AppStrings.getText('restorePurchases', provider.languageCode),
+                    style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w700),
                   ),
-                  elevation: 4,
-                ),
-                child: _isPurchasing
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : Text(
-                        provider.isPremium
-                            ? AppStrings.getText('premiumActive', provider.languageCode)
-                            : AppStrings.getText('unlockPremium', provider.languageCode),
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            // Restore Purchases — required by Google Play policy.
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: TextButton.icon(
-                onPressed: _isPurchasing ? null : () => IapService.instance.restorePurchases(),
-                icon: const Icon(Icons.restore, size: 18, color: AppColors.textMuted),
-                label: Text(
-                  AppStrings.getText('restorePurchases', provider.languageCode),
-                  style: const TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              if (IapService.instance.isTestMode && !provider.isPremium) ...[
+                const SizedBox(height: 8),
+                _testingHint(),
+              ],
+              if (_showDevSettings) ...[
+                const SizedBox(height: 18),
+                _buildDevSettings(provider),
+              ],
+              const SizedBox(height: 18),
+              Center(
                 child: Text(
                   IapService.instance.hasRealProducts
                       ? AppStrings.getText('paymentTerms', provider.languageCode)
@@ -711,11 +160,265 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   style: const TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.4),
                 ),
               ),
-            ),
-            const SizedBox(height: 32),
-          ],
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _simpleHero(AppProvider provider) {
+    return GestureDetector(
+      onTap: () {
+        _devModeTapCount++;
+        if (_devModeTapCount == 5) {
+          _devModeTapCount = 0;
+          setState(() => _showDevSettings = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppStrings.getText('devUnlocked', provider.languageCode)),
+              backgroundColor: AppColors.accent,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else if (_devModeTapCount > 2) {
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🔒 ${5 - _devModeTapCount} more taps'),
+              duration: const Duration(milliseconds: 650),
+            ),
+          );
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: AppColors.goldGradient,
+          ),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.gold.withOpacity(0.28),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.22), shape: BoxShape.circle),
+                  child: const Icon(Icons.workspace_premium, color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    provider.isPremium ? 'Premium Active' : 'Unlock Premium',
+                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'No watermark, HD export, 4x upscale, batch AI and premium cloud models.',
+              style: TextStyle(color: Colors.white, fontSize: 14, height: 1.45, fontWeight: FontWeight.w600),
+            ),
+            if (provider.isPremium) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(999)),
+                child: const Text('✓ All premium tools unlocked', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _simpleBenefits() {
+    const benefits = [
+      ['No watermark', Icons.water_drop_outlined],
+      ['Save HD with premium AI', Icons.hd_rounded],
+      ['4x upscale unlocked', Icons.zoom_out_map_rounded],
+      ['Premium colorize model', Icons.palette_outlined],
+      ['Batch AI processing', Icons.collections_outlined],
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('What you get', style: TextStyle(color: AppColors.text, fontSize: 17, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 14),
+          ...benefits.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(color: AppColors.gold.withOpacity(0.13), borderRadius: BorderRadius.circular(10)),
+                      child: Icon(item[1] as IconData, color: AppColors.gold, size: 17),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(item[0] as String, style: const TextStyle(color: AppColors.text, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _simpleCloudControls(BuildContext context, AppProvider provider) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.success.withOpacity(0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(provider.useCloudAi ? Icons.cloud_done_rounded : Icons.phone_android_rounded,
+                  color: provider.useCloudAi ? AppColors.success : AppColors.textMuted),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  provider.useCloudAi ? 'Cloud AI is ON' : 'Offline mode is ON',
+                  style: const TextStyle(color: AppColors.text, fontSize: 15, fontWeight: FontWeight.w900),
+                ),
+              ),
+              Switch.adaptive(
+                value: provider.useCloudAi,
+                activeColor: AppColors.success,
+                onChanged: (v) {
+                  if (v && !CloudApiConfig.isCloudAvailable && provider.devOverrideToken.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(AppStrings.getText('noBackendConfigured', provider.languageCode)),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                    return;
+                  }
+                  provider.setUseCloudAi(v);
+                },
+              ),
+            ],
+          ),
+          if (!provider.isPremium && !CloudApiConfig.cloudAiPremiumOnly) ...[
+            const SizedBox(height: 10),
+            Text(
+              '${provider.remainingCloudCreditsToday} cloud credits left today',
+              style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: AdMobService.rewardedAdsAvailable
+                  ? () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final earned = await AdMobService.showRewardedForCloudCredit();
+                      if (earned) {
+                        await provider.addRewardedCloudCredit();
+                        await AppTelemetryService.logEvent('rewarded_cloud_credit_earned');
+                        messenger.showSnackBar(const SnackBar(content: Text('+1 cloud credit added')));
+                      } else {
+                        AdMobService.preloadRewarded();
+                        messenger.showSnackBar(const SnackBar(content: Text('Rewarded ad is not ready yet. Try again soon.')));
+                      }
+                    }
+                  : null,
+              icon: const Icon(Icons.play_circle_outline, size: 18),
+              label: const Text('Watch ad for +1 cloud credit'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.gold,
+                side: const BorderSide(color: AppColors.gold),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _simplePlanCard(Map<String, dynamic> plan, int index) {
+    final isSelected = _selectedPlanIndex == index;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: () => setState(() => _selectedPlanIndex = index),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.gold.withOpacity(0.12) : AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: isSelected ? AppColors.gold : Colors.white.withOpacity(0.08), width: isSelected ? 2 : 1),
+          ),
+          child: Row(
+            children: [
+              Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_off, color: isSelected ? AppColors.gold : AppColors.textMuted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(plan['title'], style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w900, fontSize: 14.5)),
+                    const SizedBox(height: 3),
+                    Text(plan['sub'], style: const TextStyle(color: AppColors.textMuted, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(IapService.instance.priceFor(plan['id']), style: const TextStyle(color: AppColors.text, fontSize: 15, fontWeight: FontWeight.w900)),
+                  Text('/${plan['period']}', style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _testingHint() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.gold.withOpacity(0.25)),
+      ),
+      child: const Text(
+        'Testing note: tap “PixelRevive PRO” at the top 5 times to reveal the Premium test switch.',
+        style: TextStyle(color: AppColors.textMuted, fontSize: 11.5, height: 1.35),
       ),
     );
   }
