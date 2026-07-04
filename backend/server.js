@@ -150,6 +150,8 @@ function normalizeProviderInput(body) {
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       throw new Error('imageUrl must use http or https');
     }
+    // Fal.ai and Replicate accept remote image URLs directly. This is the fast path
+    // once the Flutter app uploads inputs to Supabase/R2/Firebase/Vercel Blob.
     return { mimeType: body.mimeType || 'image/jpeg', dataUri: imageUrl, imageUrl };
   }
   return normalizeImageInput(body.imageBase64, body.mimeType || 'image/jpeg');
@@ -194,6 +196,7 @@ function replicateConfigForFeature(featureId, dataUri, scale = 2) {
 async function maybeUploadToFalCdn(imageInput, fallbackMimeType = 'image/jpeg') {
   if (!FAL_CDN_UPLOAD_ENABLED) return imageInput;
   if (!imageInput || typeof imageInput !== 'string') return imageInput;
+  // Already a public/presigned URL. Fal models can consume it directly.
   if (/^https?:\/\//i.test(imageInput)) return imageInput;
   if (!imageInput.startsWith('data:')) return imageInput;
 
@@ -231,9 +234,11 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
     case 'cartoon':
       return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
     case 'age_progression':
-      return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: process.env.FAL_AGE_PROMPT || '30 years older', output_format: 'jpeg' } };
+      return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: extraInput.prompt || process.env.FAL_AGE_PROMPT || '30 years older', output_format: 'jpeg' } };
     case 'baby_version':
       return {
+        // half-moon-ai/ai-baby-and-aging-generator/single returned 404 on Fal for this account.
+        // Use Fal's supported age progression endpoint with a baby prompt by default.
         model: getEnv('FAL_BABY_MODEL', 'fal-ai/image-editing/age-progression'),
         input: {
           image_url: dataUri,
@@ -248,6 +253,7 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
     case 'face':
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: true } };
     case 'auto':
+      // Whole-photo enhancement: use restoration/editing instead of face-only CodeFormer.
       return { model: getEnv('FAL_AUTO_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
     case 'restore':
       return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
@@ -398,6 +404,9 @@ async function checkFal(job) {
   const requestId = job.id;
   if (!model || !requestId) throw new Error('Invalid Fal job token');
 
+  // Use the official Fal client for queue status/result. Some Fal endpoints can
+  // return empty/non-JSON bodies when polled through raw constructed URLs; the
+  // client handles the correct queue API consistently across models.
   fal.config({ credentials: token });
 
   let statusData;

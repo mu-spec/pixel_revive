@@ -810,7 +810,7 @@ class AiApiService {
       case 'cartoon':
         return await runFalPrediction(
           imageBytes: imageBytes,
-          modelName: 'fal-ai/image-editing/cartoonify',
+          modelName: 'fal-ai/cartoonify',
           apiToken: apiToken,
         );
 
@@ -819,7 +819,7 @@ class AiApiService {
           imageBytes: imageBytes,
           modelName: 'fal-ai/image-editing/age-progression',
           apiToken: apiToken,
-          additionalInput: {'prompt': '30 years older', 'output_format': 'jpeg'},
+          additionalInput: {'prompt': extraInput?['prompt'] ?? '30 years older', 'output_format': 'jpeg'},
         );
 
       case 'baby_version':
