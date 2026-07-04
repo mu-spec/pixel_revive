@@ -214,7 +214,7 @@ async function maybeUploadToFalCdn(imageInput, fallbackMimeType = 'image/jpeg') 
   }
 }
 
-function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false) {
+function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false, extraInput = {}) {
   const upscaleScale = normalizeScale(scale);
   const getEnv = (name, fallback) => process.env[name] || fallback;
   switch (featureId) {
@@ -226,13 +226,23 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
     case 'bg_cleanup':
       return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
     case 'cartoon':
-      return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
+      return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/image-editing/cartoonify'), input: { image_url: dataUri } };
     case 'age_progression':
       return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: process.env.FAL_AGE_PROMPT || '30 years older', output_format: 'jpeg' } };
     case 'baby_version':
-      return { model: getEnv('FAL_BABY_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: process.env.FAL_BABY_PROMPT || 'as a cute baby, preserve facial identity', output_format: 'jpeg' } };
+      return {
+        model: getEnv('FAL_BABY_MODEL', 'half-moon-ai/ai-baby-and-aging-generator/single'),
+        input: {
+          age_group: extraInput.age_group || process.env.FAL_BABY_AGE_GROUP || 'baby',
+          gender: extraInput.gender || process.env.FAL_BABY_GENDER || 'male',
+          id_image_urls: [dataUri],
+          prompt: extraInput.prompt || process.env.FAL_BABY_PROMPT || 'a cute baby portrait, preserve facial identity, realistic photo',
+          num_images: 1,
+          output_format: 'jpeg'
+        }
+      };
     case 'background_change':
-      return { model: getEnv('FAL_BACKGROUND_CHANGE_MODEL', 'fal-ai/image-editing/background-change'), input: { image_url: dataUri, prompt: process.env.FAL_BACKGROUND_PROMPT || 'professional studio background, realistic lighting', guidance_scale: 3.5, num_inference_steps: 30, output_format: 'jpeg' } };
+      return { model: getEnv('FAL_BACKGROUND_CHANGE_MODEL', 'fal-ai/image-editing/background-change'), input: { image_url: dataUri, prompt: extraInput.prompt || process.env.FAL_BACKGROUND_PROMPT || 'professional studio background, realistic lighting', guidance_scale: 3.5, num_inference_steps: 30, output_format: 'jpeg' } };
     case 'broccoli_haircut':
       return { model: getEnv('FAL_BROCCOLI_MODEL', 'fal-ai/image-editing/broccoli-haircut'), input: { image_url: dataUri } };
     case 'face':
@@ -350,11 +360,11 @@ async function checkReplicate(predictionId) {
   return { status };
 }
 
-async function runFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false) {
+async function runFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false, extraInput = {}) {
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
   const modelInputUrl = await maybeUploadToFalCdn(dataUri);
-  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport);
+  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport, extraInput);
   const response = await fetchWithTimeout(`https://fal.run/${model}`, { method: 'POST', headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
   const text = await response.text();
   let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal.ai returned non-JSON response: ${text.slice(0, 200)}`); }
@@ -363,12 +373,12 @@ async function runFal(featureId, dataUri, scale = 2, isPremium = false, isHdExpo
   return outputToResult(output, RETURN_IMAGE_URL);
 }
 
-async function startFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false) {
+async function startFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false, extraInput = {}) {
   if (!FAL_QUEUE_ENABLED) throw new Error('Fal queue is disabled');
   const token = process.env.FAL_API_KEY;
   if (!token) throw new Error('FAL_API_KEY is not configured');
   const modelInputUrl = await maybeUploadToFalCdn(dataUri);
-  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport);
+  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport, extraInput);
   const response = await fetchWithTimeout(`https://queue.fal.run/${model}`, {
     method: 'POST',
     headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' },
@@ -449,9 +459,10 @@ app.get('/model-map', (_req, res) => {
       backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
       cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
       ageProgression: process.env.FAL_AGE_MODEL || 'fal-ai/image-editing/age-progression',
-      babyVersion: process.env.FAL_BABY_MODEL || 'fal-ai/image-editing/age-progression',
+      babyVersion: process.env.FAL_BABY_MODEL || 'half-moon-ai/ai-baby-and-aging-generator/single',
       backgroundChange: process.env.FAL_BACKGROUND_CHANGE_MODEL || 'fal-ai/image-editing/background-change',
       broccoliHaircut: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut',
+      cartoonify: process.env.FAL_CARTOON_MODEL || 'fal-ai/image-editing/cartoonify',
       backgroundBlur: 'local on-device',
     },
   });
@@ -480,7 +491,7 @@ app.post('/enhance/start', requireClientSecret, abuseGuard, async (req, res) => 
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeProviderInput(req.body);
     const started = provider === 'fal'
-      ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport))
+      ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport), req.body.extraInput || {})
       : await startReplicate(featureId, normalized.dataUri, req.body.scale);
     markSuccess(req);
     res.json({ success: true, provider, predictionId: started.id, status: started.status, model: started.model });
@@ -523,7 +534,7 @@ app.post('/enhance', requireClientSecret, abuseGuard, async (req, res) => {
     if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
     const normalized = normalizeProviderInput(req.body);
     const result = provider === 'fal'
-      ? await runFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport))
+      ? await runFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport), req.body.extraInput || {})
       : await runReplicate(featureId, normalized.dataUri, req.body.scale);
     markSuccess(req);
     res.json({

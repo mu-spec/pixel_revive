@@ -87,6 +87,7 @@ class AiApiService {
     int uploadQuality = 82,
     bool isPremiumUser = false,
     bool isHdExport = false,
+    Map<String, dynamic>? extraInput,
     ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.backendBaseUrl.trim();
@@ -127,6 +128,7 @@ class AiApiService {
               if (scale != null) 'scale': scale,
               'isPremium': isPremiumUser,
               'isHdExport': isHdExport,
+              if (extraInput != null) 'extraInput': extraInput,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -195,6 +197,7 @@ class AiApiService {
     int uploadQuality = 82,
     bool isPremiumUser = false,
     bool isHdExport = false,
+    Map<String, dynamic>? extraInput,
     ValueChanged<String>? onProgress,
   }) async {
     final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
@@ -232,6 +235,7 @@ class AiApiService {
               if (scale != null) 'scale': scale,
               'isPremium': isPremiumUser,
               'isHdExport': isHdExport,
+              if (extraInput != null) 'extraInput': extraInput,
               'mimeType': 'image/jpeg',
               'imageBase64': base64Encode(uploadBytes),
             }),
@@ -627,6 +631,7 @@ class AiApiService {
     int uploadQuality = 82,
     bool isPremiumUser = false,
     bool isHdExport = false,
+    Map<String, dynamic>? extraInput,
     ValueChanged<String>? onProgress,
   }) async {
     lastErrorMessage = null;
@@ -643,6 +648,7 @@ class AiApiService {
         uploadQuality: uploadQuality,
         isPremiumUser: isPremiumUser,
         isHdExport: isHdExport,
+        extraInput: extraInput,
         onProgress: onProgress,
       );
       if (asyncResult != null) return asyncResult;
@@ -658,6 +664,7 @@ class AiApiService {
         uploadQuality: uploadQuality,
         isPremiumUser: isPremiumUser,
         isHdExport: isHdExport,
+        extraInput: extraInput,
         onProgress: onProgress,
       );
       if (backendResult != null) return backendResult;
@@ -801,7 +808,7 @@ class AiApiService {
       case 'cartoon':
         return await runFalPrediction(
           imageBytes: imageBytes,
-          modelName: 'fal-ai/cartoonify',
+          modelName: 'fal-ai/image-editing/cartoonify',
           apiToken: apiToken,
         );
 
@@ -816,9 +823,15 @@ class AiApiService {
       case 'baby_version':
         return await runFalPrediction(
           imageBytes: imageBytes,
-          modelName: 'fal-ai/image-editing/age-progression',
+          modelName: 'half-moon-ai/ai-baby-and-aging-generator/single',
           apiToken: apiToken,
-          additionalInput: {'prompt': 'as a cute baby, preserve facial identity', 'output_format': 'jpeg'},
+          additionalInput: {
+            'age_group': extraInput?['age_group'] ?? 'baby',
+            'gender': extraInput?['gender'] ?? 'male',
+            'prompt': extraInput?['prompt'] ?? 'a cute baby portrait, preserve facial identity, realistic photo',
+            'num_images': 1,
+            'output_format': 'jpeg',
+          },
         );
 
       case 'background_change':
@@ -826,7 +839,7 @@ class AiApiService {
           imageBytes: imageBytes,
           modelName: 'fal-ai/image-editing/background-change',
           apiToken: apiToken,
-          additionalInput: {'prompt': 'professional studio background, realistic lighting'},
+          additionalInput: {'prompt': extraInput?['prompt'] ?? 'professional studio background, realistic lighting'},
         );
 
       case 'broccoli_haircut':

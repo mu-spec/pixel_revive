@@ -52,6 +52,8 @@ class AppProvider extends ChangeNotifier {
   int upscaleScale = 2;
   String enhancementPreset = 'balanced'; // natural, balanced, strong
   String processingQuality = 'fast'; // fast, balanced, hd
+  String backgroundChangePrompt = 'professional studio background, realistic lighting';
+  Map<String, dynamic> pendingEffectExtraInput = <String, dynamic>{};
 
   bool lastProcessingUsedCloud = false;
   bool isCloudRefining = false;
@@ -501,6 +503,18 @@ static const int _dailyFreeExports = 3;
     notifyListeners();
   }
 
+  void setBackgroundChangePrompt(String prompt) {
+    backgroundChangePrompt = prompt.trim().isEmpty
+        ? 'professional studio background, realistic lighting'
+        : prompt.trim();
+    notifyListeners();
+  }
+
+  void setPendingEffectExtraInput(Map<String, dynamic> input) {
+    pendingEffectExtraInput = Map<String, dynamic>.from(input);
+    notifyListeners();
+  }
+
   void setEnhancementPreset(String value) {
     final normalized = value == 'natural' || value == 'strong' ? value : 'balanced';
     enhancementPreset = normalized;
@@ -659,6 +673,30 @@ static const int _dailyFreeExports = 3;
     notifyListeners();
   }
 
+  Map<String, dynamic>? _extraInputForFeature(String featureId) {
+    if (featureId == 'background_change') {
+      return {
+        'prompt': pendingEffectExtraInput['prompt'] ?? backgroundChangePrompt,
+      };
+    }
+    if (featureId == 'baby_version') {
+      final ageGroup = (pendingEffectExtraInput['age_group'] ?? 'baby').toString();
+      final gender = (pendingEffectExtraInput['gender'] ?? 'male').toString();
+      return {
+        'age_group': ageGroup,
+        'gender': gender,
+        'prompt': pendingEffectExtraInput['prompt'] ?? 'a cute $gender $ageGroup portrait, preserve facial identity, realistic photo',
+      };
+    }
+    if (featureId == 'age_progression') {
+      return {
+        'gender': pendingEffectExtraInput['gender'] ?? 'male',
+        'prompt': pendingEffectExtraInput['prompt'] ?? '30 years older, preserve facial identity, realistic photo',
+      };
+    }
+    return null;
+  }
+
   Future<void> processFeature(String featureId) async {
     if (originalPreviewBytes == null && originalBytes == null) return;
     final Uint8List inputBytes = originalPreviewBytes ?? originalBytes!;
@@ -724,6 +762,7 @@ static const int _dailyFreeExports = 3;
           uploadMaxDimension: cloudUploadMaxDimension,
           uploadQuality: cloudUploadQuality,
           isPremiumUser: isPremium,
+          extraInput: _extraInputForFeature(featureId),
           onProgress: (message) {
             if (_cancelProcessingRequested || runId != _processingRunId) return;
             lastProcessingMessage = message;
@@ -1017,6 +1056,7 @@ static const int _dailyFreeExports = 3;
           uploadQuality: 90,
           isPremiumUser: true,
           isHdExport: true,
+          extraInput: _extraInputForFeature(lastProcessedFeatureId!),
           onProgress: (message) {
             if (_cancelProcessingRequested) return;
             lastProcessingMessage = 'HD export: $message';
@@ -1199,6 +1239,7 @@ static const int _dailyFreeExports = 3;
             uploadMaxDimension: cloudUploadMaxDimension,
             uploadQuality: cloudUploadQuality,
             isPremiumUser: isPremium,
+            extraInput: _extraInputForFeature(featureId),
           );
           result = cloudResult ?? await _processLocalFeatureSync(input, featureId);
         } else {

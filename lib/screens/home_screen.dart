@@ -205,6 +205,8 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 14),
           _buildShowcaseCarousel(provider),
           const SizedBox(height: 16),
+          _buildFunEffectsSection(provider),
+          const SizedBox(height: 16),
           _buildPhotoPickerCard(provider),
         ],
       ),
@@ -283,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _showcaseCard(Map<String, String> item) {
     return InkWell(
       borderRadius: BorderRadius.circular(32),
-      onTap: () => _pickAndGo(ImageSource.gallery, featureId: item['featureId'] ?? 'auto'),
+      onTap: () => _chooseSourceAndGo(item['featureId'] ?? 'auto'),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -404,6 +406,71 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildFunEffectsSection(AppProvider provider) {
+    final effects = [
+      {'id': 'age_progression', 'title': 'Age Progression', 'icon': Icons.elderly_rounded, 'color': AppColors.gold},
+      {'id': 'baby_version', 'title': 'Baby Version', 'icon': Icons.child_care_rounded, 'color': AppColors.accentLight},
+      {'id': 'background_change', 'title': 'Background Change', 'icon': Icons.landscape_rounded, 'color': AppColors.accent},
+      {'id': 'broccoli_haircut', 'title': 'Broccoli Haircut', 'icon': Icons.face_retouching_natural, 'color': AppColors.success},
+      {'id': 'cartoon', 'title': 'Cartoonify', 'icon': Icons.brush_rounded, 'color': AppColors.cyan},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Fun AI Effects', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: effects.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 2.55,
+          ),
+          itemBuilder: (context, index) {
+            final effect = effects[index];
+            final color = effect['color'] as Color;
+            return InkWell(
+              onTap: () => _chooseSourceAndGo(effect['id'] as String),
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: color.withOpacity(0.25)),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.16), blurRadius: 12, offset: const Offset(0, 6))],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(effect['icon'] as IconData, color: color, size: 20),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        effect['title'] as String,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.text, fontSize: 12.2, fontWeight: FontWeight.w900, height: 1.1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _buildPhotoPickerCard(AppProvider provider) {
     return Container(
       width: double.infinity,
@@ -467,6 +534,181 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Future<Map<String, dynamic>?> _chooseAgeGenderOptions(String featureId) async {
+    String gender = 'male';
+    String ageValue = featureId == 'baby_version' ? 'baby' : 'senior';
+
+    final ageOptions = featureId == 'baby_version'
+        ? <Map<String, String>>[
+            {'label': 'Baby', 'value': 'baby', 'prompt': 'a cute baby portrait, preserve facial identity, realistic photo'},
+            {'label': 'Toddler', 'value': 'toddler', 'prompt': 'a cute toddler portrait, preserve facial identity, realistic photo'},
+            {'label': 'Preschool', 'value': 'preschool', 'prompt': 'a cute preschool child portrait, preserve facial identity, realistic photo'},
+          ]
+        : <Map<String, String>>[
+            {'label': 'Teen', 'value': 'teen', 'prompt': 'as a teenager, preserve facial identity, realistic photo'},
+            {'label': 'Adult', 'value': 'adult', 'prompt': 'as a 30 year old adult, preserve facial identity, realistic photo'},
+            {'label': 'Middle Age', 'value': 'mid', 'prompt': '20 years older, middle aged, preserve facial identity, realistic photo'},
+            {'label': 'Senior', 'value': 'senior', 'prompt': '40 years older, senior, preserve facial identity, realistic photo'},
+          ];
+
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final selected = ageOptions.firstWhere((e) => e['value'] == ageValue);
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999)))),
+                    const SizedBox(height: 18),
+                    Text(
+                      featureId == 'baby_version' ? 'Baby Version Options' : 'Age Progression Options',
+                      style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Gender', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _optionChip('Male', gender == 'male', () => setSheetState(() => gender = 'male')),
+                        const SizedBox(width: 10),
+                        _optionChip('Female', gender == 'female', () => setSheetState(() => gender = 'female')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Target age', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ageOptions.map((item) {
+                        final isSelected = item['value'] == ageValue;
+                        return InkWell(
+                          onTap: () => setSheetState(() => ageValue = item['value']!),
+                          borderRadius: BorderRadius.circular(999),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.accent.withOpacity(0.18) : AppColors.primary,
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: isSelected ? AppColors.accent : Colors.white10),
+                            ),
+                            child: Text(
+                              item['label']!,
+                              style: TextStyle(color: isSelected ? AppColors.accent : AppColors.textMuted, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(sheetContext, {
+                          'gender': gender,
+                          'age_group': ageValue,
+                          'prompt': selected['prompt'],
+                        }),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                        child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _optionChip(String text, bool selected, VoidCallback onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.accent.withOpacity(0.18) : AppColors.primary,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: selected ? AppColors.accent : Colors.white10),
+          ),
+          child: Text(text, style: TextStyle(color: selected ? AppColors.accent : AppColors.textMuted, fontWeight: FontWeight.w900)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _chooseSourceAndGo(String featureId) async {
+    if (featureId == 'age_progression' || featureId == 'baby_version') {
+      final options = await _chooseAgeGenderOptions(featureId);
+      if (options == null) return;
+      context.read<AppProvider>().setPendingEffectExtraInput(options);
+    }
+
+    if (featureId == 'background_change') {
+      final prompt = await _chooseBackgroundPrompt();
+      if (prompt == null) return;
+      context.read<AppProvider>().setBackgroundChangePrompt(prompt);
+      context.read<AppProvider>().setPendingEffectExtraInput({'prompt': prompt});
+    }
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999))),
+              const SizedBox(height: 18),
+              const Text('Select photo source', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context, ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Gallery'),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context, ImageSource.camera),
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: const Text('Camera'),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.text, side: BorderSide(color: Colors.white.withOpacity(0.14)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source != null) await _pickAndGo(source, featureId: featureId);
   }
 
   Future<void> _pickAndGo(ImageSource source, {String? featureId}) async {
