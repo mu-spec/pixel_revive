@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -7,8 +6,6 @@ import 'package:pixel_revive/constants/app_strings.dart';
 import 'package:pixel_revive/models/feature_item.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/editor_screen.dart';
-import 'package:pixel_revive/screens/demo_comparison_screen.dart';
-import 'package:pixel_revive/widgets/feature_card.dart';
 import 'package:pixel_revive/widgets/ad_banner.dart';
 
 class AiLabTab extends StatelessWidget {
@@ -20,19 +17,14 @@ class AiLabTab extends StatelessWidget {
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 110),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 110),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeroPromoCard(context, provider),
-          const SizedBox(height: 16),
-          _buildShowcaseGallery(context, provider),
-          const SizedBox(height: 28),
-          _buildPhotoSection(context, provider),
-          const SizedBox(height: 28),
-          _buildFeaturesTitle(context, provider),
-          const SizedBox(height: 16),
-          _buildFeaturesGrid(context),
+          _buildHeader(provider),
+          const SizedBox(height: 18),
+          _buildFeatureList(context, provider),
+          const SizedBox(height: 14),
           const AdBanner(),
           const SizedBox(height: 32),
         ],
@@ -40,82 +32,55 @@ class AiLabTab extends StatelessWidget {
     );
   }
 
-  Widget _buildHeroPromoCard(BuildContext context, AppProvider provider) {
-    final bool isCloudActive = provider.useCloudAi && provider.isCloudAiAvailable;
-
+  Widget _buildHeader(AppProvider provider) {
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isCloudActive ? AppColors.goldGradient : AppColors.brandGradient,
-        ),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
         boxShadow: [
           BoxShadow(
-            color: (isCloudActive ? AppColors.gold : AppColors.accent).withOpacity(0.26),
-            blurRadius: 30,
-            offset: const Offset(0, 16),
+            color: Colors.black.withOpacity(0.22),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Stack(
+      child: Row(
         children: [
-          Positioned(
-            right: -32,
-            bottom: -32,
-            child: Icon(
-              Icons.blur_circular,
-              size: 160,
-              color: Colors.white.withOpacity(0.08),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: AppColors.brandGradient),
+              borderRadius: BorderRadius.circular(16),
             ),
+            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 26),
           ),
-          Padding(
-            padding: const EdgeInsets.all(24.0),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    isCloudActive ? AppStrings.getText('cloudBadge', provider.languageCode) : AppStrings.getText('onDeviceBadge', provider.languageCode),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
                 Text(
-                  isCloudActive
-                      ? AppStrings.getText('cloudHeadline', provider.languageCode)
-                      : AppStrings.getText('subTagline', provider.languageCode),
+                  AppStrings.getText('tabAiLab', provider.languageCode),
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.text,
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: -0.55,
-                    height: 1.18,
+                    letterSpacing: -0.4,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  isCloudActive
-                      ? AppStrings.getText('cloudDesc', provider.languageCode)
-                      : AppStrings.getText('onDeviceHeroDesc', provider.languageCode),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13.2,
-                    height: 1.45,
-                    fontWeight: FontWeight.w500,
+                const SizedBox(height: 4),
+                const Text(
+                  'Choose a tool, then select a photo. Processing starts automatically.',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12.2,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -126,464 +91,178 @@ class AiLabTab extends StatelessWidget {
     );
   }
 
-  Widget _buildShowcaseGallery(BuildContext context, AppProvider provider) {
-    final List<Map<String, String>> showcaseItems = [
-      {
-        'title': AppStrings.getText('showcase1Title', provider.languageCode),
-        'subtitle': AppStrings.getText('showcase1Sub', provider.languageCode),
-        'type': 'restore',
-        'desc': AppStrings.getText('showcase1Desc', provider.languageCode),
-      },
-      {
-        'title': AppStrings.getText('showcase2Title', provider.languageCode),
-        'subtitle': AppStrings.getText('showcase2Sub', provider.languageCode),
-        'type': 'upscale',
-        'desc': AppStrings.getText('showcase2Desc', provider.languageCode),
-      },
-      {
-        'title': AppStrings.getText('showcase3Title', provider.languageCode),
-        'subtitle': AppStrings.getText('showcase3Sub', provider.languageCode),
-        'type': 'blur',
-        'desc': AppStrings.getText('showcase3Desc', provider.languageCode),
-      },
-    ];
-
+  Widget _buildFeatureList(BuildContext context, AppProvider provider) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              AppStrings.getText('showcaseTitle', provider.languageCode),
-              style: const TextStyle(
-                color: AppColors.text,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.3,
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      children: allFeatures.map((feature) {
+        final quality = getFeatureQuality(feature.id);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: InkWell(
+            onTap: () => _pickAndGo(context, provider, feature.id),
+            borderRadius: BorderRadius.circular(22),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
-                color: AppColors.accent.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withOpacity(0.10)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.18),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.touch_app_rounded, color: AppColors.accent, size: 12),
-                  const SizedBox(width: 4),
-                  Text(
-                    AppStrings.getText('tapToCompare', provider.languageCode),
-                    style: const TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: feature.color.withOpacity(0.13),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: feature.color.withOpacity(0.35)),
                     ),
+                    child: Icon(feature.icon, color: feature.color, size: 27),
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        SizedBox(
-          height: 130,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: showcaseItems.length,
-            itemBuilder: (context, index) {
-              final item = showcaseItems[index];
-              return Container(
-                width: 210,
-                margin: const EdgeInsets.only(right: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.black.withOpacity(0.05),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => DemoComparisonScreen(
-                              type: item['type']!,
-                              title: item['title']!,
-                              description: item['desc']!,
-                            ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          feature.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.text,
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w900,
                           ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          feature.subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                            height: 1.3,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.accent.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                item['type'] == 'restore'
-                                    ? Icons.restore
-                                    : item['type'] == 'upscale'
-                                        ? Icons.hd
-                                        : Icons.blur_on,
-                                color: AppColors.accent,
-                                size: 20,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              item['title']!,
-                              style: const TextStyle(
-                                color: AppColors.text,
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              item['subtitle']!,
-                              style: const TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 11,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            _chip(quality, feature.color),
+                            if (provider.useCloudAi && provider.isCloudAiAvailable && !['cartoon', 'bg'].contains(feature.id))
+                              _chip('Cloud AI', AppColors.cyan),
+                            if (['cartoon', 'bg'].contains(feature.id))
+                              _chip('Offline', AppColors.success),
                           ],
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPhotoSection(BuildContext context, AppProvider provider) {
-    if (provider.originalImage == null) {
-      return _buildEmptyPhotoSection(context, provider);
-    }
-    return _buildPhotoPreview(context, provider);
-  }
-
-  Widget _buildEmptyPhotoSection(BuildContext context, AppProvider provider) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.black.withOpacity(0.05),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.accent.withOpacity(0.1),
-                  AppColors.accent.withOpacity(0.02),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted, size: 16),
                 ],
               ),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.accent.withOpacity(0.15),
-                width: 1,
-              ),
-            ),
-            child: const Icon(
-              Icons.add_photo_alternate_outlined,
-              size: 40,
-              color: AppColors.accent,
             ),
           ),
-          const SizedBox(height: 18),
-          Text(
-            AppStrings.getText('selectPhoto', provider.languageCode),
-            style: const TextStyle(
-              color: AppColors.text,
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            AppStrings.getText('importBlurry', provider.languageCode),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: AppColors.brandGradient,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accent.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: () => _pickAndGo(context, ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined, size: 18),
-                    label: Text(
-                      AppStrings.getText('gallery', provider.languageCode),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pickAndGo(context, ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                  label: Text(
-                    AppStrings.getText('camera', provider.languageCode),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.text,
-                    side: BorderSide(color: Colors.black.withOpacity(0.15)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPhotoPreview(BuildContext context, AppProvider provider) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.black.withOpacity(0.05),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.file(
-                provider.originalImage!,
-                height: 240,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pickAndGo(context, ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library_outlined, size: 18),
-                  label: Text(
-                    AppStrings.getText('changePhoto', provider.languageCode),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textMuted,
-                    side: BorderSide(color: Colors.black.withOpacity(0.1)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: AppColors.brandGradient,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accent.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: () => _goToEditor(context, provider),
-                    icon: const Icon(Icons.auto_fix_high, size: 18),
-                    label: Text(
-                      AppStrings.getText('aiEditor', provider.languageCode),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeaturesTitle(BuildContext context, AppProvider provider) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          AppStrings.getText('chooseFeature', provider.languageCode),
-          style: const TextStyle(
-            color: AppColors.text,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          AppStrings.getText('onDevice', provider.languageCode),
-          style: const TextStyle(
-            color: AppColors.textMuted,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFeaturesGrid(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 18,
-        crossAxisSpacing: 18,
-        childAspectRatio: 0.82,
-      ),
-      itemCount: allFeatures.length,
-      itemBuilder: (context, index) {
-        final feature = allFeatures[index];
-        return FeatureCard(
-          feature: feature,
-          onTap: () => _onFeatureTapped(context, feature.id),
         );
-      },
+      }).toList(),
     );
   }
 
-  Future<void> _pickAndGo(BuildContext context, ImageSource source) async {
-    final provider = context.read<AppProvider>();
-    await provider.pickImage(source);
-    if (provider.originalImage != null && context.mounted) {
-      _goToEditor(context, provider);
-    }
+  Widget _chip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w800),
+      ),
+    );
   }
 
-  void _goToEditor(BuildContext context, AppProvider provider) {
+  Future<void> _pickAndGo(BuildContext context, AppProvider provider, String featureId) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Select photo source',
+                style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context, ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('Gallery'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context, ImageSource.camera),
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      label: const Text('Camera'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.text,
+                        side: BorderSide(color: Colors.white.withOpacity(0.14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+    await provider.pickImage(source);
+    if (!context.mounted || provider.originalImage == null) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
+      MaterialPageRoute(builder: (_) => EditorScreen(initialFeatureId: featureId)),
     );
-  }
-
-  Future<void> _onFeatureTapped(BuildContext context, String featureId) async {
-    final provider = context.read<AppProvider>();
-    if (provider.originalImage == null) {
-      await _pickAndGo(context, ImageSource.gallery);
-      if (provider.originalImage == null) return;
-    }
-    if (context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EditorScreen(initialFeatureId: featureId),
-        ),
-      );
-    }
   }
 }

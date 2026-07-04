@@ -86,7 +86,6 @@ class _EditorScreenState extends State<EditorScreen> {
           children: [
             Expanded(flex: 7, child: _buildImagePreview(provider)),
             _buildSelectedFeatureSummary(provider),
-            _buildFeatureSelector(provider),
             _buildAdvancedOptions(provider),
             const AdBanner(margin: EdgeInsets.fromLTRB(20, 0, 20, 6)),
             _buildActionBar(provider),
