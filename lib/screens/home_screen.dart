@@ -654,6 +654,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<String?> _chooseBackgroundPrompt() async {
+    final options = <Map<String, String>>[
+      {'title': 'Beach', 'prompt': 'beautiful beach sunset with palm trees, realistic lighting'},
+      {'title': 'Office', 'prompt': 'modern professional office background, realistic lighting'},
+      {'title': 'Forest', 'prompt': 'lush green forest background, natural daylight'},
+      {'title': 'Studio', 'prompt': 'clean professional studio background, soft lighting'},
+      {'title': 'City', 'prompt': 'modern city street background, realistic urban lighting'},
+    ];
+
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999)))),
+              const SizedBox(height: 18),
+              const Text('Choose background', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 14),
+              ...options.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context, item['prompt']),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                        decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white10)),
+                        child: Text(item['title']!, style: const TextStyle(color: AppColors.text, fontSize: 14, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _chooseSourceAndGo(String featureId) async {
     if (featureId == 'age_progression' || featureId == 'baby_version') {
       final options = await _chooseAgeGenderOptions(featureId);

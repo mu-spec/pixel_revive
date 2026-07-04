@@ -687,6 +687,7 @@ class AiApiService {
         featureId: featureId,
         apiToken: apiToken,
         scale: scale,
+        extraInput: extraInput,
       );
     }
   }
@@ -773,6 +774,7 @@ class AiApiService {
     required String featureId,
     required String apiToken,
     int? scale,
+    Map<String, dynamic>? extraInput,
   }) async {
     switch (featureId) {
       case 'face':
