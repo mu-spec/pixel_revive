@@ -88,6 +88,10 @@ static const int _dailyFreeExports = 3;
     'denoise',
     'unblur',
     'cartoon',
+    'age_progression',
+    'baby_version',
+    'background_change',
+    'broccoli_haircut',
   };
 
   static bool _isCloudCapableFeature(String featureId) =>
@@ -99,6 +103,13 @@ static const int _dailyFreeExports = 3;
     'auto',
     'denoise',
     'unblur',
+  };
+
+  static const Set<String> _cloudOnlyFeatures = {
+    'age_progression',
+    'baby_version',
+    'background_change',
+    'broccoli_haircut',
   };
 
   bool _shouldUseFastLocal(String featureId) =>
@@ -222,6 +233,11 @@ static const int _dailyFreeExports = 3;
         return isPremium ? 2 : 1;
       case 'upscale':
         return upscaleScale >= 4 ? 2 : 1;
+      case 'background_change':
+      case 'age_progression':
+      case 'baby_version':
+      case 'broccoli_haircut':
+        return 2;
       case 'auto':
       case 'face':
       case 'denoise':
@@ -768,6 +784,17 @@ static const int _dailyFreeExports = 3;
           'quality': processingQuality,
         }));
       }
+    }
+
+    if (_cloudOnlyFeatures.contains(featureId)) {
+      lastProcessingUsedCloud = false;
+      lastProcessingSource = 'Cloud required';
+      lastProcessingMessage = freeCloudLimitReached
+          ? 'This AI effect needs cloud credits. Watch a rewarded ad or upgrade to Premium.'
+          : 'This AI effect requires Cloud AI. Please enable Cloud AI and try again.';
+      isProcessing = false;
+      notifyListeners();
+      return;
     }
 
     // Local fallback/offline path. This runs only when cloud is off, credits are

@@ -34,6 +34,10 @@ final List<FeatureItem> allFeatures = [
   FeatureItem(id: 'cartoon', title: 'Cartoon Effect', subtitle: 'Artistic edge & color pop', icon: Icons.brush, color: AppColors.accentLight, imagePath: 'assets/images/thumb_cartoon.webp'),
   FeatureItem(id: 'bg', title: 'Background Blur', subtitle: 'Center-focused bokeh effect', icon: Icons.blur_on, color: AppColors.text, imagePath: 'assets/images/thumb_bg.webp'),
   FeatureItem(id: 'bg_cleanup', title: 'BG Cleanup', subtitle: 'Cloud remove-bg or local background focus', icon: Icons.cleaning_services, color: AppColors.success, imagePath: 'assets/images/thumb_bg.webp'),
+  FeatureItem(id: 'age_progression', title: 'Age Progression', subtitle: 'See an older version with AI', icon: Icons.elderly_rounded, color: AppColors.gold, imagePath: 'assets/images/thumb_face.webp'),
+  FeatureItem(id: 'baby_version', title: 'Baby Version', subtitle: 'Create a baby-style version', icon: Icons.child_care_rounded, color: AppColors.accentLight, imagePath: 'assets/images/thumb_face.webp'),
+  FeatureItem(id: 'background_change', title: 'Background Change', subtitle: 'Replace background with AI', icon: Icons.landscape_rounded, color: AppColors.accent, imagePath: 'assets/images/thumb_bg.webp'),
+  FeatureItem(id: 'broccoli_haircut', title: 'Broccoli Haircut', subtitle: 'AI broccoli haircut style', icon: Icons.face_retouching_natural, color: AppColors.success, imagePath: 'assets/images/thumb_face.webp'),
 ];
 
 final Map<String, double> featureProcessingTimes = {
@@ -71,6 +75,14 @@ String getFeatureQuality(String featureId) {
       return 'Bokeh Effect';
     case 'bg_cleanup':
       return 'BG Focus';
+    case 'age_progression':
+      return 'Age AI';
+    case 'baby_version':
+      return 'Baby AI';
+    case 'background_change':
+      return 'BG Replace';
+    case 'broccoli_haircut':
+      return 'Hair AI';
     default:
       return 'Standard';
   }

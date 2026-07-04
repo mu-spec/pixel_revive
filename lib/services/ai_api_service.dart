@@ -805,6 +805,37 @@ class AiApiService {
           apiToken: apiToken,
         );
 
+      case 'age_progression':
+        return await runFalPrediction(
+          imageBytes: imageBytes,
+          modelName: 'fal-ai/image-editing/age-progression',
+          apiToken: apiToken,
+          additionalInput: {'prompt': '30 years older', 'output_format': 'jpeg'},
+        );
+
+      case 'baby_version':
+        return await runFalPrediction(
+          imageBytes: imageBytes,
+          modelName: 'fal-ai/image-editing/age-progression',
+          apiToken: apiToken,
+          additionalInput: {'prompt': 'as a cute baby, preserve facial identity', 'output_format': 'jpeg'},
+        );
+
+      case 'background_change':
+        return await runFalPrediction(
+          imageBytes: imageBytes,
+          modelName: 'fal-ai/image-editing/background-change',
+          apiToken: apiToken,
+          additionalInput: {'prompt': 'professional studio background, realistic lighting'},
+        );
+
+      case 'broccoli_haircut':
+        return await runFalPrediction(
+          imageBytes: imageBytes,
+          modelName: 'fal-ai/image-editing/broccoli-haircut',
+          apiToken: apiToken,
+        );
+
       default:
         return await runFalPrediction(
           imageBytes: imageBytes,

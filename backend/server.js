@@ -46,6 +46,7 @@ app.use(rateLimit({
 const allowedFeatures = new Set([
   'auto', 'face', 'restore', 'upscale', 'colorize',
   'bg_cleanup', 'denoise', 'unblur', 'cartoon', 'bg',
+  'age_progression', 'baby_version', 'background_change', 'broccoli_haircut',
 ]);
 
 function requireClientSecret(req, res, next) {
@@ -226,6 +227,14 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
       return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
     case 'cartoon':
       return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
+    case 'age_progression':
+      return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: process.env.FAL_AGE_PROMPT || '30 years older', output_format: 'jpeg' } };
+    case 'baby_version':
+      return { model: getEnv('FAL_BABY_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: process.env.FAL_BABY_PROMPT || 'as a cute baby, preserve facial identity', output_format: 'jpeg' } };
+    case 'background_change':
+      return { model: getEnv('FAL_BACKGROUND_CHANGE_MODEL', 'fal-ai/image-editing/background-change'), input: { image_url: dataUri, prompt: process.env.FAL_BACKGROUND_PROMPT || 'professional studio background, realistic lighting', guidance_scale: 3.5, num_inference_steps: 30, output_format: 'jpeg' } };
+    case 'broccoli_haircut':
+      return { model: getEnv('FAL_BROCCOLI_MODEL', 'fal-ai/image-editing/broccoli-haircut'), input: { image_url: dataUri } };
     case 'face':
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: true } };
     case 'auto':
@@ -439,6 +448,10 @@ app.get('/model-map', (_req, res) => {
       restore: process.env.FAL_RESTORE_MODEL || 'fal-ai/image-editing/photo-restoration',
       backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
       cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
+      ageProgression: process.env.FAL_AGE_MODEL || 'fal-ai/image-editing/age-progression',
+      babyVersion: process.env.FAL_BABY_MODEL || 'fal-ai/image-editing/age-progression',
+      backgroundChange: process.env.FAL_BACKGROUND_CHANGE_MODEL || 'fal-ai/image-editing/background-change',
+      broccoliHaircut: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut',
       backgroundBlur: 'local on-device',
     },
   });
