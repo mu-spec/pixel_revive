@@ -14,6 +14,9 @@ import 'package:pixel_revive/services/iap_service.dart';
 import 'package:pixel_revive/services/app_telemetry_service.dart';
 
 class AppProvider extends ChangeNotifier {
+  // TEMPORARY FOR SENIOR/QA TESTING ONLY. Set to false before Play Store release.
+  static const bool forcePremiumForTesting = true;
+
   final ImagePicker _picker = ImagePicker();
 
   File? originalImage;
@@ -144,7 +147,7 @@ static const int _dailyFreeExports = 3;
 
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    isPremium = prefs.getBool('is_premium') ?? false;
+    isPremium = forcePremiumForTesting ? true : (prefs.getBool('is_premium') ?? false);
     freeExportsToday = prefs.getInt('free_exports_today') ?? 0;
     lastExportDate = prefs.getString('last_export_date');
     useCloudAi = prefs.getBool('use_cloud_ai') ?? CloudApiConfig.useBackendProxy;
@@ -1040,7 +1043,7 @@ static const int _dailyFreeExports = 3;
   }
 
   Future<void> setPremium(bool value) async {
-    isPremium = value;
+    isPremium = forcePremiumForTesting ? true : value;
     if (!isPremium) {
       if (upscaleScale > 2) upscaleScale = 2;
       if (processingQuality == 'hd') processingQuality = 'fast';

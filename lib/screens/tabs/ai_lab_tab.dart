@@ -8,7 +8,6 @@ import 'package:pixel_revive/models/feature_item.dart';
 import 'package:pixel_revive/providers/app_provider.dart';
 import 'package:pixel_revive/screens/editor_screen.dart';
 import 'package:pixel_revive/screens/demo_comparison_screen.dart';
-import 'package:pixel_revive/screens/batch_process_screen.dart';
 import 'package:pixel_revive/widgets/feature_card.dart';
 import 'package:pixel_revive/widgets/ad_banner.dart';
 
@@ -27,8 +26,6 @@ class AiLabTab extends StatelessWidget {
         children: [
           _buildHeroPromoCard(context, provider),
           const SizedBox(height: 16),
-          _buildBatchModeButton(context, provider),
-          const SizedBox(height: 24),
           _buildShowcaseGallery(context, provider),
           const SizedBox(height: 28),
           _buildPhotoSection(context, provider),
@@ -125,91 +122,6 @@ class AiLabTab extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBatchModeButton(BuildContext context, AppProvider provider) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.gold.withOpacity(0.3),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const BatchProcessScreen()),
-          );
-        },
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.photo_library_outlined,
-                  color: AppColors.gold,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          AppStrings.getText('batchTitle', provider.languageCode),
-                          style: const TextStyle(
-                            color: AppColors.text,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.workspace_premium, color: AppColors.gold, size: 14),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      AppStrings.getText('batchSub', provider.languageCode),
-                      style: const TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: AppColors.gold,
-                size: 16,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

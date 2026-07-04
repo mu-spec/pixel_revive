@@ -7,6 +7,7 @@ import 'package:pixel_revive/services/cloud_api_config.dart';
 import 'package:pixel_revive/services/iap_service.dart';
 import 'package:pixel_revive/services/ad_mob_service.dart';
 import 'package:pixel_revive/services/app_telemetry_service.dart';
+import 'package:pixel_revive/screens/batch_process_screen.dart';
 
 class PremiumScreen extends StatefulWidget {
   const PremiumScreen({super.key});
@@ -492,6 +493,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ),
             const SizedBox(height: 24),
 
+            _buildPremiumBatchCard(context, provider),
+            const SizedBox(height: 22),
+
             Text(
               AppStrings.getText('proBenefitTitle', provider.languageCode),
               style: const TextStyle(
@@ -712,6 +716,75 @@ class _PremiumScreenState extends State<PremiumScreen> {
           ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumBatchCard(BuildContext context, AppProvider provider) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.gold.withOpacity(0.34), width: 1.2),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 18, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(Icons.photo_library_outlined, color: AppColors.gold, size: 26),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        AppStrings.getText('batchTitle', provider.languageCode),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    const Icon(Icons.workspace_premium, color: AppColors.gold, size: 16),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  AppStrings.getText('premiumBatchSub', provider.languageCode),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11.5, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            onPressed: provider.isPremium
+                ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BatchProcessScreen()))
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: AppColors.card,
+              disabledForegroundColor: AppColors.textMuted,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text('Open', style: TextStyle(fontWeight: FontWeight.w900)),
+          ),
+        ],
       ),
     );
   }
