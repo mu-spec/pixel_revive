@@ -93,7 +93,13 @@ class AiLabTab extends StatelessWidget {
 
   Widget _buildFeatureList(BuildContext context, AppProvider provider) {
     return Column(
-      children: allFeatures.map((feature) {
+      children: allFeatures.where((feature) => !{
+        'age_progression',
+        'baby_version',
+        'background_change',
+        'broccoli_haircut',
+        'cartoon',
+      }.contains(feature.id)).map((feature) {
         final quality = getFeatureQuality(feature.id);
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
