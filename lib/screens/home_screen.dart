@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
         decoration: BoxDecoration(
           color: AppColors.glass,
           borderRadius: BorderRadius.circular(26),
@@ -128,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHomeTab(AppProvider provider) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 116),
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 92),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -144,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       textAlign: TextAlign.left,
                       style: TextStyle(
                         color: AppColors.text,
-                        fontSize: 34,
+                        fontSize: 32,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -1.2,
                       ),
@@ -202,9 +202,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           _buildShowcaseCarousel(provider),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildPhotoPickerCard(provider),
         ],
       ),
@@ -245,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         SizedBox(
-          height: 260,
+          height: 220,
           child: PageView.builder(
             controller: _showcaseController,
             physics: const BouncingScrollPhysics(),
@@ -259,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(items.length, (index) {
@@ -331,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   AppStrings.appName,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
+                    fontSize: 20,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -1.0,
                   ),
@@ -353,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             item['title']!,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 23,
+                              fontSize: 21,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -0.6,
                             ),
@@ -385,7 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             'Try now',
                             style: TextStyle(
                               color: AppColors.accent,
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -407,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildPhotoPickerCard(AppProvider provider) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(26),
@@ -422,8 +422,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.add_photo_alternate_outlined, size: 44, color: AppColors.accent),
-          const SizedBox(height: 14),
+          const Icon(Icons.add_photo_alternate_outlined, size: 34, color: AppColors.accent),
+          const SizedBox(height: 10),
           Text(
             AppStrings.getText('selectPhoto', provider.languageCode),
             style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900),
@@ -432,9 +432,9 @@ class _HomeScreenState extends State<HomeScreen> {
           Text(
             AppStrings.getText('importBlurry', provider.languageCode),
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.4),
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
