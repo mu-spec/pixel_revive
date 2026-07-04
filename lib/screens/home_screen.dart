@@ -61,63 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       extendBody: true,
       backgroundColor: AppColors.primary,
-      appBar: _currentIndex == 0
-          ? AppBar(
-              centerTitle: true,
-              title: Text(
-                AppStrings.appName,
-                style: const TextStyle(
-                  color: AppColors.text,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              actions: [
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PremiumScreen()),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 16.0),
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: AppColors.goldGradient),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.gold.withOpacity(0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.star, size: 10, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'PRO',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : null,
+      appBar: null,
       body: Container(
         decoration: BoxDecoration(gradient: AppColors.appBackgroundGradient),
         child: SafeArea(
@@ -188,34 +132,77 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  AppStrings.appName,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.text,
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -1.2,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'PixelRevive',
+                      textAlign: TextAlign.left,
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1.2,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Restore, enhance, unblur and upscale photos with AI.',
+                      textAlign: TextAlign.left,
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13.5,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PremiumScreen()),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: AppColors.goldGradient),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.gold.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.star, size: 12, color: Colors.white),
+                      SizedBox(width: 5),
+                      Text(
+                        'PRO',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Restore, enhance, unblur and upscale photos with AI.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13.5,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           _buildShowcaseCarousel(provider),
           const SizedBox(height: 24),
           _buildPhotoPickerCard(provider),
@@ -230,6 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'title': 'Enhance',
         'subtitle': 'Improve photo quality',
         'type': 'restore',
+        'featureId': 'auto',
         'desc': AppStrings.getText('showcase1Desc', provider.languageCode),
         'before': 'assets/images/demo_restore_before.webp',
         'after': 'assets/images/demo_restore_after.webp',
@@ -238,6 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'title': 'HD Upscale',
         'subtitle': 'Make low-res photos sharper',
         'type': 'upscale',
+        'featureId': 'upscale',
         'desc': AppStrings.getText('showcase2Desc', provider.languageCode),
         'before': 'assets/images/demo_upscale_before.webp',
         'after': 'assets/images/demo_upscale_after.webp',
@@ -246,6 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'title': 'Background Blur',
         'subtitle': 'Add portrait-style bokeh',
         'type': 'blur',
+        'featureId': 'bg',
         'desc': AppStrings.getText('showcase3Desc', provider.languageCode),
         'before': 'assets/images/demo_blur_before.webp',
         'after': 'assets/images/demo_blur_after.webp',
@@ -255,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         SizedBox(
-          height: 430,
+          height: 260,
           child: PageView.builder(
             controller: _showcaseController,
             physics: const BouncingScrollPhysics(),
@@ -293,18 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _showcaseCard(Map<String, String> item) {
     return InkWell(
       borderRadius: BorderRadius.circular(32),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DemoComparisonScreen(
-              type: item['type']!,
-              title: item['title']!,
-              description: item['desc']!,
-            ),
-          ),
-        );
-      },
+      onTap: () => _pickAndGo(ImageSource.gallery, featureId: item['featureId'] ?? 'auto'),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -352,29 +331,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   AppStrings.appName,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 30,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -1.0,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 18,
-                right: 18,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFFEC4899), Color(0xFF2563EB)]),
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 12)],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 16),
-                      SizedBox(width: 5),
-                      Text('PRO', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
-                    ],
                   ),
                 ),
               ),
@@ -394,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             item['title']!,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 28,
+                              fontSize: 23,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -0.6,
                             ),
@@ -413,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(999),
@@ -426,7 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             'Try now',
                             style: TextStyle(
                               color: AppColors.accent,
-                              fontSize: 15,
+                              fontSize: 13,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -505,26 +464,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => setState(() => _currentIndex = 1),
-            child: Text(
-              'Open AI Lab to choose a feature',
-              style: TextStyle(color: AppColors.cyan.withOpacity(0.95), fontWeight: FontWeight.w800),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Future<void> _pickAndGo(ImageSource source) async {
+  Future<void> _pickAndGo(ImageSource source, {String? featureId}) async {
     final provider = context.read<AppProvider>();
     await provider.pickImage(source);
     if (!mounted || provider.originalImage == null) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
+      MaterialPageRoute(builder: (_) => EditorScreen(initialFeatureId: featureId)),
     );
   }
 }
