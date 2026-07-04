@@ -77,8 +77,7 @@ class AppProvider extends ChangeNotifier {
 // Line 48:
 static const int _dailyFreeExports = 3;
 
-  // Features that have a real Replicate cloud model. Others (cartoon, bokeh)
-  // are local-only and must NOT be sent to cloud (they'd get the wrong model).
+  // Features that have a real cloud model. Background blur remains local-only.
   static const Set<String> _cloudCapableFeatures = {
     'auto',
     'face',
@@ -88,6 +87,7 @@ static const int _dailyFreeExports = 3;
     'bg_cleanup',
     'denoise',
     'unblur',
+    'cartoon',
   };
 
   static bool _isCloudCapableFeature(String featureId) =>

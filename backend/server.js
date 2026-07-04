@@ -224,6 +224,8 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
       return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, tile: 0, face: false, model: 'RealESRGAN_x4plus' } };
     case 'bg_cleanup':
       return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
+    case 'cartoon':
+      return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
     case 'face':
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: true } };
     case 'auto':
@@ -436,7 +438,7 @@ app.get('/model-map', (_req, res) => {
       },
       restore: process.env.FAL_RESTORE_MODEL || 'fal-ai/image-editing/photo-restoration',
       backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
-      cartoon: 'local on-device',
+      cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
       backgroundBlur: 'local on-device',
     },
   });

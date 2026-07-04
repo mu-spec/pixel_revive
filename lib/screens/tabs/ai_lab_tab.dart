@@ -160,9 +160,9 @@ class AiLabTab extends StatelessWidget {
                           runSpacing: 6,
                           children: [
                             _chip(quality, feature.color),
-                            if (provider.useCloudAi && provider.isCloudAiAvailable && !['cartoon', 'bg'].contains(feature.id))
+                            if (provider.useCloudAi && provider.isCloudAiAvailable && feature.id != 'bg')
                               _chip('Cloud AI', AppColors.cyan),
-                            if (['cartoon', 'bg'].contains(feature.id))
+                            if (feature.id == 'bg')
                               _chip('Offline', AppColors.success),
                           ],
                         ),

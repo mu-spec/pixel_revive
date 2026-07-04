@@ -798,6 +798,13 @@ class AiApiService {
           apiToken: apiToken,
         );
 
+      case 'cartoon':
+        return await runFalPrediction(
+          imageBytes: imageBytes,
+          modelName: 'fal-ai/cartoonify',
+          apiToken: apiToken,
+        );
+
       default:
         return await runFalPrediction(
           imageBytes: imageBytes,
