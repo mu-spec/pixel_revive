@@ -479,7 +479,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                       border: Border.all(color: Colors.white10),
                     ),
                     child: const Text(
-                      'Fast mode = instant local Auto/Denoise/Unblur. Balanced/HD = cloud quality and may take 15–60 seconds.',
+                      'Fast mode = smaller upload for quicker cloud processing. Balanced/HD = better cloud quality and may take 15–60 seconds.',
                       style: TextStyle(
                         color: AppColors.textMuted,
                         fontSize: 10.8,

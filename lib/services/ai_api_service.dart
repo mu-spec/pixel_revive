@@ -274,7 +274,7 @@ class AiApiService {
       final String timeoutHint = isHdExport
           ? 'HD cloud export is taking too long. Try again later or save the preview result.'
           : (uploadMaxDimension <= 1024
-              ? 'Cloud is taking too long. Fast mode uses local processing for Auto, Denoise and Unblur; try Offline/Fast mode or retry.'
+              ? 'Cloud is taking too long. Try again, switch to Fast mode, or turn Cloud AI off for local processing.'
               : 'Cloud quality is taking too long. Try Fast mode for a quicker preview or retry later.');
       for (int attempt = 0; attempt < maxAttempts; attempt++) {
         await Future.delayed(const Duration(seconds: 2));

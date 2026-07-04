@@ -642,32 +642,39 @@ static const int _dailyFreeExports = 3;
 
   Future<void> processFeature(String featureId) async {
     if (originalPreviewBytes == null && originalBytes == null) return;
-    final Uint8List previewInput = originalPreviewBytes ?? originalBytes!;
+    final Uint8List inputBytes = originalPreviewBytes ?? originalBytes!;
 
     _cancelProcessingRequested = false;
     final int runId = ++_processingRunId;
-    final bool canStartCloudInBackground = _canStartBackgroundCloud(featureId);
     isProcessing = true;
+    isCloudRefining = false;
     lastProcessingUsedCloud = false;
-    lastProcessingSource = 'Fast Preview';
-    lastProcessingMessage = canStartCloudInBackground
-        ? 'Creating fast local preview first. Cloud AI will improve it in the background...'
-        : 'Creating fast local preview (${estimatedProcessingTime(featureId)})...';
+    localResultBytes = null;
+    cloudResultBytes = null;
+    resultViewMode = 'auto';
+
+    final bool canUseCloudForThisFeature = _canStartBackgroundCloud(featureId);
+    final bool freeCloudLimitReached = !isPremium &&
+        CloudApiConfig.isCloudAvailable &&
+        !CloudApiConfig.cloudAiPremiumOnly &&
+        useCloudAi &&
+        _isCloudCapableFeature(featureId) &&
+        cloudAiUsedToday + cloudCreditCost(featureId) > totalCloudCreditsToday;
+
+    lastProcessingSource = canUseCloudForThisFeature ? 'Cloud AI' : 'Local';
+    lastProcessingMessage = canUseCloudForThisFeature
+        ? 'Cloud AI is processing ${featureId.replaceAll('_', ' ')} with ${CloudApiConfig.activeProviderLabel}...'
+        : (freeCloudLimitReached
+            ? 'Daily cloud credits used ($cloudAiUsedToday/$totalCloudCreditsToday). Processing locally.'
+            : 'Processing locally (${estimatedProcessingTime(featureId)})...');
     notifyListeners();
-    unawaited(AppTelemetryService.logEvent('feature_processing_started', parameters: {
-      'feature': featureId,
-      'quality': processingQuality,
-      'preset': enhancementPreset,
-      'cloud_enabled': useCloudAi,
-      'cloud_possible': canStartCloudInBackground,
-      'is_premium': isPremium,
-    }));
 
     final cacheKey = _cacheKey(featureId);
     final cachedResult = _processedCache[cacheKey];
     if (cachedResult != null) {
       processedBytes = cachedResult;
-      displayBytes = isPremium ? cachedResult : await ImageProcessor.applyWatermark(cachedResult);
+      processedPreviewBytes = cachedResult;
+      await _refreshDisplayFromProcessed();
       isProcessing = false;
       lastProcessingMessage = 'Loaded instantly from cache.';
       unawaited(AppTelemetryService.logEvent('processing_cache_hit', parameters: {
@@ -678,89 +685,107 @@ static const int _dailyFreeExports = 3;
       return;
     }
 
-    if (_canUseCache && _lastFeatureId == featureId) {
-      processedBytes = _lastProcessedBytes;
-      displayBytes = isPremium ? processedBytes : await ImageProcessor.applyWatermark(processedBytes!);
-      isProcessing = false;
-      notifyListeners();
-      return;
+    unawaited(AppTelemetryService.logEvent('feature_processing_started', parameters: {
+      'feature': featureId,
+      'quality': processingQuality,
+      'preset': enhancementPreset,
+      'cloud_enabled': useCloudAi,
+      'cloud_possible': canUseCloudForThisFeature,
+      'is_premium': isPremium,
+    }));
+
+    if (canUseCloudForThisFeature) {
+      try {
+        final cloudResult = await AiApiService.smartEnhance(
+          imageBytes: inputBytes,
+          featureId: featureId,
+          apiToken: _activeApiToken,
+          isReplicate: CloudApiConfig.useReplicate,
+          scale: featureId == 'upscale' ? upscaleScale : null,
+          uploadMaxDimension: cloudUploadMaxDimension,
+          uploadQuality: cloudUploadQuality,
+          isPremiumUser: isPremium,
+          onProgress: (message) {
+            if (_cancelProcessingRequested || runId != _processingRunId) return;
+            lastProcessingMessage = message;
+            notifyListeners();
+          },
+        );
+
+        if (_cancelProcessingRequested || runId != _processingRunId) return;
+        _rememberTimings({
+          ...AiApiService.lastTimings,
+          'stage': 'cloud_primary',
+          'quality': processingQuality,
+        });
+
+        if (cloudResult != null) {
+          processedPreviewBytes = cloudResult;
+          processedHdBytes = null;
+          cloudResultBytes = cloudResult;
+          localResultBytes = null;
+          resultViewMode = 'cloud';
+          hdExportReady = false;
+          lastProcessedFeatureId = featureId;
+          processedBytes = cloudResult;
+          await _refreshDisplayFromProcessed();
+          _rememberProcessedResult(featureId, cloudResult);
+          lastProcessingUsedCloud = true;
+          lastProcessingSource = 'Cloud AI';
+          lastProcessingMessage = 'Cloud AI result applied. You can save or compare now.';
+          await consumeCloudCredits(featureId);
+          unawaited(AppTelemetryService.logEvent('cloud_primary_success', parameters: {
+            'feature': featureId,
+            'quality': processingQuality,
+            'model': AiApiService.lastCloudModel ?? '',
+            'total_ms': AiApiService.lastTimings['totalMs'] ?? 0,
+            'polls': AiApiService.lastTimings['polls'] ?? 0,
+          }));
+          isProcessing = false;
+          notifyListeners();
+          return;
+        }
+
+        lastProcessingSource = 'Cloud unavailable';
+        lastProcessingMessage = AiApiService.lastErrorMessage ?? 'Cloud AI was unavailable. Processing locally instead.';
+        unawaited(AppTelemetryService.logEvent('cloud_primary_failed', parameters: {
+          'feature': featureId,
+          'quality': processingQuality,
+          'reason': AiApiService.lastErrorMessage ?? 'null_result',
+          'model': AiApiService.lastCloudModel ?? '',
+          'total_ms': AiApiService.lastTimings['totalMs'] ?? 0,
+        }));
+        notifyListeners();
+      } catch (e, st) {
+        lastProcessingSource = 'Cloud unavailable';
+        lastProcessingMessage = 'Cloud AI failed. Processing locally instead.';
+        debugPrint('Cloud primary failed: $e');
+        unawaited(AppTelemetryService.recordError(e, st, reason: 'cloud_primary_failed', information: {
+          'feature': featureId,
+          'quality': processingQuality,
+        }));
+      }
     }
 
-    bool freeCloudLimitReached = false;
-
-    // OPTION B: detect when a free user has hit their daily cloud AI limit so
-    // we can tell them clearly why they got a local result instead of cloud AI.
-    if (!isPremium &&
-        CloudApiConfig.isCloudAvailable &&
-        !CloudApiConfig.cloudAiPremiumOnly &&
-        useCloudAi &&
-        _isCloudCapableFeature(featureId) &&
-        cloudAiUsedToday + cloudCreditCost(featureId) > totalCloudCreditsToday) {
-      freeCloudLimitReached = true;
-    }
-
-    final bool shouldStartBackgroundCloud = canStartCloudInBackground && !freeCloudLimitReached;
-
+    // Local fallback/offline path. This runs only when cloud is off, credits are
+    // exhausted, the feature is local-only, or cloud failed.
     try {
-      Uint8List result;
       final stopwatch = Stopwatch()..start();
       if (featureId == 'face' || featureId == 'bg') {
         await _preWarmServices();
       }
-
-      switch (featureId) {
-        case 'auto':
-          result = await ImageProcessor.autoEnhance(previewInput, strength: enhanceStrength);
-          break;
-        case 'upscale':
-          result = await ImageProcessor.upscale(previewInput, scale: upscaleScale);
-          break;
-        case 'face':
-          result = await ImageProcessor.faceEnhance(previewInput, smoothness: skinSmoothness, strength: enhanceStrength);
-          break;
-        case 'denoise':
-          result = await ImageProcessor.denoise(previewInput);
-          break;
-        case 'unblur':
-          result = await ImageProcessor.unblur(previewInput);
-          break;
-        case 'colorize':
-          result = await ImageProcessor.colorize(previewInput);
-          break;
-        case 'restore':
-          result = await ImageProcessor.restoreOldPhoto(previewInput);
-          break;
-        case 'cartoon':
-          result = await ImageProcessor.cartoonEffect(previewInput);
-          break;
-        case 'bg':
-          result = await ImageProcessor.backgroundBlur(previewInput, radius: bokehBlur);
-          break;
-        case 'bg_cleanup':
-          result = await ImageProcessor.backgroundCleanup(previewInput);
-          break;
-        default:
-          result = await ImageProcessor.autoEnhance(previewInput, strength: enhanceStrength);
-      }
-
+      final result = await _processLocalFeatureSync(inputBytes, featureId);
       stopwatch.stop();
+      if (_cancelProcessingRequested || runId != _processingRunId) return;
+
       _rememberTimings({
-        'stage': 'local_preview',
+        'stage': 'local_result',
         'feature': featureId,
         'quality': processingQuality,
         'localMs': stopwatch.elapsedMilliseconds,
-        'inputBytes': previewInput.length,
+        'inputBytes': inputBytes.length,
         'outputBytes': result.length,
       });
-      debugPrint("⚡ Local processing completed in ${stopwatch.elapsedMilliseconds}ms");
-      unawaited(AppTelemetryService.logEvent('local_preview_ready', parameters: {
-        'feature': featureId,
-        'quality': processingQuality,
-        'local_ms': stopwatch.elapsedMilliseconds,
-        'input_bytes': previewInput.length,
-        'output_bytes': result.length,
-      }));
-      if (_cancelProcessingRequested) return;
 
       processedPreviewBytes = result;
       processedHdBytes = null;
@@ -770,31 +795,23 @@ static const int _dailyFreeExports = 3;
       hdExportReady = false;
       lastProcessedFeatureId = featureId;
       processedBytes = result;
-      displayBytes = isPremium ? result : await ImageProcessor.applyWatermark(result);
-
+      await _refreshDisplayFromProcessed();
       _rememberProcessedResult(featureId, result);
       lastProcessingUsedCloud = false;
-      lastProcessingSource = shouldStartBackgroundCloud ? 'Fast Preview' : (freeCloudLimitReached ? 'Daily AI limit reached' : 'Local');
+      lastProcessingSource = freeCloudLimitReached ? 'Daily AI limit reached' : 'Local';
       lastProcessingMessage = freeCloudLimitReached
-          ? 'Daily cloud credits used ($cloudAiUsedToday/$totalCloudCreditsToday). Fast local result is ready. Watch a rewarded ad or upgrade for more cloud AI.'
-          : (shouldStartBackgroundCloud
-              ? 'Fast preview ready. Cloud AI is improving it in the background...'
-              : 'Fast local result is ready.');
-
-      _resetDailyIfNeeded();
-      await _savePrefs();
-
-      if (shouldStartBackgroundCloud) {
-        _startCloudRefinement(
-          runId: runId,
-          featureId: featureId,
-          previewInput: previewInput,
-        );
-      }
+          ? 'Daily cloud credits used ($cloudAiUsedToday/$totalCloudCreditsToday). Local result is ready. Watch a rewarded ad or upgrade for more cloud AI.'
+          : 'Local result is ready.';
+      unawaited(AppTelemetryService.logEvent('local_result_ready', parameters: {
+        'feature': featureId,
+        'quality': processingQuality,
+        'local_ms': stopwatch.elapsedMilliseconds,
+      }));
     } catch (e, st) {
-      debugPrint('processFeature error: $e\n$st');
+      debugPrint('processFeature local fallback error: $e\n$st');
       processedBytes = originalBytes;
       displayBytes = originalBytes;
+      unawaited(AppTelemetryService.recordError(e, st, reason: 'process_feature_failed'));
     } finally {
       isProcessing = false;
       notifyListeners();

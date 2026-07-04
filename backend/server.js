@@ -221,7 +221,7 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
       if (isPremium && isHdExport) {
         return { model: getEnv('FAL_PREMIUM_HD_MODEL', 'fal-ai/aura-sr'), input: { image_url: dataUri, upscale_factor: upscaleScale, overlapping_tiles: false } };
       }
-      return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, upscaling: upscaleScale, model: 'RealESRGAN_x4plus', output_format: 'png' } };
+      return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, tile: 0, face: false, model: 'RealESRGAN_x4plus' } };
     case 'bg_cleanup':
       return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
     case 'face':
@@ -410,7 +410,7 @@ app.get('/model-map', (_req, res) => {
     falCdnUploadEnabled: FAL_CDN_UPLOAD_ENABLED,
     routing: {
       auto: {
-        fast: 'local on-device',
+        fast: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
         balanced: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
         hd: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
       },
@@ -420,12 +420,12 @@ app.get('/model-map', (_req, res) => {
         premiumHd: process.env.FAL_PREMIUM_HD_MODEL || 'fal-ai/aura-sr',
       },
       denoise: {
-        fast: 'local on-device',
+        fast: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
         balanced: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
         hd: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
       },
       unblur: {
-        fast: 'local on-device',
+        fast: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
         balanced: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
         hd: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
       },
