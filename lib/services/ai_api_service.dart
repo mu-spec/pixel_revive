@@ -825,13 +825,10 @@ class AiApiService {
       case 'baby_version':
         return await runFalPrediction(
           imageBytes: imageBytes,
-          modelName: 'half-moon-ai/ai-baby-and-aging-generator/single',
+          modelName: 'fal-ai/image-editing/age-progression',
           apiToken: apiToken,
           additionalInput: {
-            'age_group': extraInput?['age_group'] ?? 'baby',
-            'gender': extraInput?['gender'] ?? 'male',
-            'prompt': extraInput?['prompt'] ?? 'a cute baby portrait, preserve facial identity, realistic photo',
-            'num_images': 1,
+            'prompt': extraInput?['prompt'] ?? 'as a cute baby, preserve facial identity, realistic photo',
             'output_format': 'jpeg',
           },
         );

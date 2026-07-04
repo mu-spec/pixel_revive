@@ -41,6 +41,12 @@ app.use(rateLimit({
   limit: Number(process.env.RATE_LIMIT_PER_MINUTE || 10),
   standardHeaders: true,
   legacyHeaders: false,
+  // Status polling happens every few seconds during a cloud job. Do not block it,
+  // otherwise the app gets 429 before the Fal.ai job can finish.
+  skip: (req) =>
+    req.path.startsWith('/enhance/status') ||
+    req.path === '/health' ||
+    req.path === '/model-map',
 }));
 
 const allowedFeatures = new Set([
@@ -231,13 +237,12 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
       return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: process.env.FAL_AGE_PROMPT || '30 years older', output_format: 'jpeg' } };
     case 'baby_version':
       return {
-        model: getEnv('FAL_BABY_MODEL', 'half-moon-ai/ai-baby-and-aging-generator/single'),
+        // half-moon baby/aging endpoint returned 404 on Fal for this account.
+        // Use Fal's supported age-progression endpoint with a baby prompt.
+        model: getEnv('FAL_BABY_MODEL', 'fal-ai/image-editing/age-progression'),
         input: {
-          age_group: extraInput.age_group || process.env.FAL_BABY_AGE_GROUP || 'baby',
-          gender: extraInput.gender || process.env.FAL_BABY_GENDER || 'male',
-          id_image_urls: [dataUri],
-          prompt: extraInput.prompt || process.env.FAL_BABY_PROMPT || 'a cute baby portrait, preserve facial identity, realistic photo',
-          num_images: 1,
+          image_url: dataUri,
+          prompt: extraInput.prompt || process.env.FAL_BABY_PROMPT || `as a cute ${extraInput.gender || process.env.FAL_BABY_GENDER || 'male'} baby, preserve facial identity, realistic photo`,
           output_format: 'jpeg'
         }
       };
@@ -402,7 +407,13 @@ async function checkFal(job) {
   const statusUrl = `https://queue.fal.run/${model}/requests/${requestId}/status`;
   const statusResponse = await fetchWithTimeout(statusUrl, { headers: { Authorization: `Key ${token}` } }, 30000);
   const statusText = await statusResponse.text();
-  let statusData; try { statusData = JSON.parse(statusText); } catch (_) { throw new Error(`Fal status returned non-JSON response: ${statusText.slice(0, 200)}`); }
+  let statusData;
+  try {
+    statusData = JSON.parse(statusText);
+  } catch (_) {
+    console.warn(`[fal-status] non-JSON status for ${model}/${requestId}: ${statusText.slice(0, 200)}`);
+    return { status: 'IN_PROGRESS' };
+  }
   if (!statusResponse.ok) throw new Error(`Fal status failed: HTTP ${statusResponse.status} ${statusText}`);
 
   const rawStatus = String(statusData.status || statusData.state || '').toUpperCase();
@@ -457,9 +468,9 @@ app.get('/model-map', (_req, res) => {
       },
       restore: process.env.FAL_RESTORE_MODEL || 'fal-ai/image-editing/photo-restoration',
       backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
-      cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
+      cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/image-editing/cartoonify',
       ageProgression: process.env.FAL_AGE_MODEL || 'fal-ai/image-editing/age-progression',
-      babyVersion: process.env.FAL_BABY_MODEL || 'half-moon-ai/ai-baby-and-aging-generator/single',
+      babyVersion: process.env.FAL_BABY_MODEL || 'fal-ai/image-editing/age-progression',
       backgroundChange: process.env.FAL_BACKGROUND_CHANGE_MODEL || 'fal-ai/image-editing/background-change',
       broccoliHaircut: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut',
       cartoonify: process.env.FAL_CARTOON_MODEL || 'fal-ai/image-editing/cartoonify',
