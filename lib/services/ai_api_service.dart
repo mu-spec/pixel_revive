@@ -842,6 +842,17 @@ class AiApiService {
         );
 
       case 'broccoli_haircut':
+        if ((extraInput?['gender'] ?? '').toString().toLowerCase() == 'female') {
+          return await runFalPrediction(
+            imageBytes: imageBytes,
+            modelName: 'fal-ai/image-editing/hair-change',
+            apiToken: apiToken,
+            additionalInput: {
+              'prompt': extraInput?['prompt'] ?? 'create a feminine broccoli-inspired curly hairstyle with soft voluminous curls, preserve long feminine hair shape as much as possible, do not make it a boy haircut, keep natural realistic hair and preserve face identity',
+              'output_format': 'jpeg',
+            },
+          );
+        }
         return await runFalPrediction(
           imageBytes: imageBytes,
           modelName: 'fal-ai/image-editing/broccoli-haircut',

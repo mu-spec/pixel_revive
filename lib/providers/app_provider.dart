@@ -707,6 +707,16 @@ static const int _dailyFreeExports = 3;
         'prompt': pendingEffectExtraInput['prompt'] ?? _babyPromptFor(ageGroup, gender),
       };
     }
+    if (featureId == 'broccoli_haircut') {
+      final gender = (pendingEffectExtraInput['gender'] ?? 'male').toString();
+      return {
+        'gender': gender,
+        'prompt': pendingEffectExtraInput['prompt'] ?? (gender == 'female'
+            ? 'create a feminine broccoli-inspired curly hairstyle with soft voluminous curls, preserve long feminine hair shape as much as possible, do not make it a boy haircut, keep natural realistic hair and preserve face identity'
+            : 'broccoli haircut style, preserve face identity, realistic hairstyle'),
+      };
+    }
+
     if (featureId == 'age_progression') {
       final gender = (pendingEffectExtraInput['gender'] ?? 'male').toString();
       final targetAge = pendingEffectExtraInput['target_age'] is int

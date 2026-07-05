@@ -536,6 +536,63 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<Map<String, dynamic>?> _chooseBroccoliStyleOptions() async {
+    String gender = 'male';
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999)))),
+                    const SizedBox(height: 18),
+                    const Text('Broccoli Haircut Style', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Choose the style type. Male uses the dedicated Broccoli Haircut model. Female uses a long-hair friendly AI hair-change model.',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 11.5, height: 1.35),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        _optionChip('Male', gender == 'male', () => setSheetState(() => gender = 'male')),
+                        const SizedBox(width: 10),
+                        _optionChip('Female', gender == 'female', () => setSheetState(() => gender = 'female')),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(sheetContext, {
+                          'gender': gender,
+                          'prompt': gender == 'female'
+                              ? 'create a feminine broccoli-inspired curly hairstyle with soft voluminous curls, preserve long feminine hair shape as much as possible, do not make it a boy haircut, keep natural realistic hair and preserve face identity'
+                              : 'broccoli haircut style, preserve face identity, realistic hairstyle',
+                        }),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                        child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<Map<String, dynamic>?> _chooseAgeGenderOptions(String featureId) async {
     String gender = 'male';
 
@@ -755,6 +812,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _chooseSourceAndGo(String featureId) async {
+    if (featureId == 'broccoli_haircut') {
+      final options = await _chooseBroccoliStyleOptions();
+      if (options == null) return;
+      context.read<AppProvider>().setPendingEffectExtraInput(options);
+    }
+
     if (featureId == 'age_progression' || featureId == 'baby_version') {
       final options = await _chooseAgeGenderOptions(featureId);
       if (options == null) return;

@@ -249,6 +249,18 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
     case 'background_change':
       return { model: getEnv('FAL_BACKGROUND_CHANGE_MODEL', 'fal-ai/image-editing/background-change'), input: { image_url: dataUri, prompt: extraInput.prompt || process.env.FAL_BACKGROUND_PROMPT || 'professional studio background, realistic lighting', guidance_scale: 3.5, num_inference_steps: 30, output_format: 'jpeg' } };
     case 'broccoli_haircut':
+      if ((extraInput.gender || '').toString().toLowerCase() === 'female') {
+        return {
+          model: getEnv('FAL_FEMALE_BROCCOLI_MODEL', 'fal-ai/image-editing/hair-change'),
+          input: {
+            image_url: dataUri,
+            prompt: extraInput.prompt || process.env.FAL_FEMALE_BROCCOLI_PROMPT || 'create a feminine broccoli-inspired curly hairstyle with soft voluminous curls, preserve long feminine hair shape as much as possible, do not make it a boy haircut, keep natural realistic hair and preserve face identity',
+            guidance_scale: 3.5,
+            num_inference_steps: 30,
+            output_format: 'jpeg'
+          }
+        };
+      }
       return { model: getEnv('FAL_BROCCOLI_MODEL', 'fal-ai/image-editing/broccoli-haircut'), input: { image_url: dataUri } };
     case 'face':
       return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: true } };
@@ -484,7 +496,7 @@ app.get('/model-map', (_req, res) => {
       ageProgression: process.env.FAL_AGE_MODEL || 'fal-ai/image-editing/age-progression',
       babyVersion: process.env.FAL_BABY_MODEL || 'fal-ai/image-editing/age-progression',
       backgroundChange: process.env.FAL_BACKGROUND_CHANGE_MODEL || 'fal-ai/image-editing/background-change',
-      broccoliHaircut: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut',
+      broccoliHaircut: { male: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut', female: process.env.FAL_FEMALE_BROCCOLI_MODEL || 'fal-ai/image-editing/hair-change' },
       cartoonify: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
       backgroundBlur: 'local on-device',
     },
