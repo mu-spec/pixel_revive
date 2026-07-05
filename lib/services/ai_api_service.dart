@@ -815,13 +815,25 @@ class AiApiService {
         );
 
       case 'age_progression':
+        if ((extraInput?['gender'] ?? 'male').toString().toLowerCase() == 'female') {
+          return await runFalPrediction(
+            imageBytes: imageBytes,
+            modelName: 'fal-ai/image-apps-v2/age-modify',
+            apiToken: apiToken,
+            additionalInput: {
+              'target_age': extraInput?['target_age'] ?? 30,
+              'preserve_identity': true,
+            },
+          );
+        }
         return await runFalPrediction(
           imageBytes: imageBytes,
-          modelName: 'fal-ai/image-apps-v2/age-modify',
+          modelName: 'openai/gpt-image-2/edit',
           apiToken: apiToken,
           additionalInput: {
-            'target_age': extraInput?['target_age'] ?? 30,
-            'preserve_identity': true,
+            'image_urls': <String>[],
+            'prompt': extraInput?['prompt'] ?? 'Change only the person\'s apparent age to 30 years old. Preserve the same person identity, face shape, eyes, nose, lips, hairstyle, pose, clothing, and background. Preserve the beard and mustache structure exactly: keep the same beard length, density, outline, thickness, and mustache shape. Do not shave, trim, thin, remove, shorten, or reshape the beard or mustache. Realistic natural photo. Do not create a different person.',
+            'image_size': 'auto',
           },
         );
 

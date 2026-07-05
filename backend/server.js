@@ -233,15 +233,40 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
       return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
     case 'cartoon':
       return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
-    case 'age_progression':
+    case 'age_progression': {
+      const gender = String(extraInput.gender || process.env.FAL_AGE_GENDER || 'male').toLowerCase();
+      const targetAge = Number(extraInput.target_age || process.env.FAL_TARGET_AGE || 30);
+      if (gender === 'female') {
+        return {
+          model: getEnv('FAL_AGE_FEMALE_MODEL', 'fal-ai/image-apps-v2/age-modify'),
+          input: {
+            image_url: dataUri,
+            target_age: targetAge,
+            preserve_identity: true
+          }
+        };
+      }
       return {
-        model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-apps-v2/age-modify'),
+        model: getEnv('FAL_AGE_MALE_MODEL', 'openai/gpt-image-2/edit'),
         input: {
-          image_url: dataUri,
-          target_age: Number(extraInput.target_age || process.env.FAL_TARGET_AGE || 30),
-          preserve_identity: true
+          image_urls: [dataUri],
+          prompt: extraInput.prompt || process.env.FAL_AGE_MALE_PROMPT || `Change only the person's apparent age to ${targetAge} years old.
+
+Preserve the same person identity, face shape, eyes, nose, lips, hairstyle, pose, clothing, and background.
+
+Preserve the beard and mustache structure exactly: keep the same beard length, density, outline, thickness, and mustache shape. Do not shave, trim, thin, remove, shorten, or reshape the beard or mustache.
+
+If ${targetAge} is older than the person appears in the original photo, naturally age the hair and beard color toward salt-and-pepper, gray, or white tones depending on age.
+
+If ${targetAge} is younger than the person appears in the original photo, naturally darken the hair and beard toward black or dark brown tones.
+
+Keep facial hair present if it exists in the original photo. Only change age-related skin texture and hair/beard color naturally.
+
+Realistic natural photo. Do not create a different person.`,
+          image_size: 'auto'
         }
       };
+    }
     case 'baby_version':
       return {
         // half-moon-ai/ai-baby-and-aging-generator/single returned 404 on Fal for this account.
@@ -500,7 +525,7 @@ app.get('/model-map', (_req, res) => {
       restore: process.env.FAL_RESTORE_MODEL || 'fal-ai/image-editing/photo-restoration',
       backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
       cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
-      ageProgression: process.env.FAL_AGE_MODEL || 'fal-ai/image-apps-v2/age-modify',
+      ageProgression: { male: process.env.FAL_AGE_MALE_MODEL || 'openai/gpt-image-2/edit', female: process.env.FAL_AGE_FEMALE_MODEL || 'fal-ai/image-apps-v2/age-modify' },
       babyVersion: process.env.FAL_BABY_MODEL || 'fal-ai/image-editing/age-progression',
       backgroundChange: process.env.FAL_BACKGROUND_CHANGE_MODEL || 'fal-ai/image-editing/background-change',
       broccoliHaircut: { male: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut', female: process.env.FAL_FEMALE_BROCCOLI_MODEL || 'fal-ai/image-editing/hair-change' },
