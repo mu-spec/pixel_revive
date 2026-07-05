@@ -234,7 +234,7 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
     case 'cartoon':
       return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
     case 'age_progression':
-      return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: extraInput.prompt || process.env.FAL_AGE_PROMPT || 'transform the person into a realistic adult aged 20 to 39 years old, preserve facial identity, realistic photo', output_format: 'jpeg' } };
+      return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: extraInput.prompt || process.env.FAL_AGE_PROMPT || 'transform the person into a realistic adult aged 20 to 39 years old, preserve facial identity, do not add unwanted facial hair, realistic photo', output_format: 'jpeg' } };
     case 'baby_version':
       return {
         // half-moon-ai/ai-baby-and-aging-generator/single returned 404 on Fal for this account.
