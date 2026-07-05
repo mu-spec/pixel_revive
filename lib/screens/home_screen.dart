@@ -547,10 +547,10 @@ class _HomeScreenState extends State<HomeScreen> {
             {'label': 'Preschool (5-7 years)', 'value': 'preschool', 'prompt': 'transform the person into a cute preschool child aged 5 to 7 years old, preserve facial identity, realistic photo'},
           ]
         : <Map<String, String>>[
-            {'label': 'Teen', 'value': 'teen', 'prompt': 'as a teenager, preserve facial identity, realistic photo'},
-            {'label': 'Adult', 'value': 'adult', 'prompt': 'as a 30 year old adult, preserve facial identity, realistic photo'},
-            {'label': 'Middle Age', 'value': 'mid', 'prompt': '20 years older, middle aged, preserve facial identity, realistic photo'},
-            {'label': 'Senior', 'value': 'senior', 'prompt': '40 years older, senior, preserve facial identity, realistic photo'},
+            {'label': 'Teenager (13-19)', 'value': 'teen', 'prompt': 'transform the person into a realistic teenager aged 13 to 19 years old, preserve facial identity, realistic photo'},
+            {'label': 'Adult (20-39)', 'value': 'adult', 'prompt': 'transform the person into a realistic adult aged 20 to 39 years old, preserve facial identity, realistic photo'},
+            {'label': 'Middle-aged (40-64)', 'value': 'mid', 'prompt': 'transform the person into a realistic middle-aged adult aged 40 to 64 years old, preserve facial identity, realistic photo'},
+            {'label': 'Senior (65+)', 'value': 'senior', 'prompt': 'transform the person into a realistic senior aged 65 years or older, preserve facial identity, realistic photo'},
           ];
 
     return showModalBottomSheet<Map<String, dynamic>>(
