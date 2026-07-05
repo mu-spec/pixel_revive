@@ -673,18 +673,11 @@ static const int _dailyFreeExports = 3;
     notifyListeners();
   }
 
-  String _ageProgressionPromptFor(String ageGroup, String gender) {
-    switch (ageGroup) {
-      case 'teen':
-        return 'transform the person into a realistic $gender teenager aged 13 to 19 years old, preserve facial identity, realistic photo';
-      case 'mid':
-        return 'transform the person into a realistic $gender middle-aged adult aged 40 to 64 years old, preserve facial identity, realistic photo';
-      case 'senior':
-        return 'transform the person into a realistic $gender senior aged 65 years or older, preserve facial identity, realistic photo';
-      case 'adult':
-      default:
-        return 'transform the person into a realistic $gender adult aged 20 to 39 years old, preserve facial identity, realistic photo';
+  String _ageProgressionPromptFor(int targetAge, String gender) {
+    if (gender == 'female') {
+      return 'transform the person into a realistic female aged $targetAge years old, preserve facial identity, keep a smooth feminine face, do not add beard, do not add mustache, no facial hair, no stubble, realistic photo';
     }
+    return 'transform the person into a realistic male aged $targetAge years old, preserve facial identity, preserve existing beard or mustache if present, if clean-shaven remain clean-shaven, do not remove facial hair, realistic photo';
   }
 
   String _babyPromptFor(String ageGroup, String gender) {
@@ -715,12 +708,14 @@ static const int _dailyFreeExports = 3;
       };
     }
     if (featureId == 'age_progression') {
-      final ageGroup = (pendingEffectExtraInput['age_group'] ?? 'adult').toString();
       final gender = (pendingEffectExtraInput['gender'] ?? 'male').toString();
+      final targetAge = pendingEffectExtraInput['target_age'] is int
+          ? pendingEffectExtraInput['target_age'] as int
+          : int.tryParse(pendingEffectExtraInput['target_age']?.toString() ?? '') ?? 30;
       return {
-        'age_group': ageGroup,
+        'target_age': targetAge,
         'gender': gender,
-        'prompt': pendingEffectExtraInput['prompt'] ?? _ageProgressionPromptFor(ageGroup, gender),
+        'prompt': pendingEffectExtraInput['prompt'] ?? _ageProgressionPromptFor(targetAge, gender),
       };
     }
     return null;

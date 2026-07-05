@@ -538,20 +538,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<Map<String, dynamic>?> _chooseAgeGenderOptions(String featureId) async {
     String gender = 'male';
-    String ageValue = featureId == 'baby_version' ? 'baby' : 'senior';
 
-    final ageOptions = featureId == 'baby_version'
-        ? <Map<String, String>>[
-            {'label': 'Baby (1 year)', 'value': 'baby', 'prompt': 'transform the person into a cute 1 year old baby, preserve facial identity, realistic photo'},
-            {'label': 'Toddler (2-5 years)', 'value': 'toddler', 'prompt': 'transform the person into a cute toddler aged 2 to 5 years old, preserve facial identity, realistic photo'},
-            {'label': 'Preschool (5-7 years)', 'value': 'preschool', 'prompt': 'transform the person into a cute preschool child aged 5 to 7 years old, preserve facial identity, realistic photo'},
-          ]
-        : <Map<String, String>>[
-            {'label': 'Teenager (13-19)', 'value': 'teen', 'prompt': 'transform the person into a realistic teenager aged 13 to 19 years old, preserve facial identity, realistic photo'},
-            {'label': 'Adult (20-39)', 'value': 'adult', 'prompt': 'transform the person into a realistic adult aged 20 to 39 years old, preserve facial identity, realistic photo'},
-            {'label': 'Middle-aged (40-64)', 'value': 'mid', 'prompt': 'transform the person into a realistic middle-aged adult aged 40 to 64 years old, preserve facial identity, realistic photo'},
-            {'label': 'Senior (65+)', 'value': 'senior', 'prompt': 'transform the person into a realistic senior aged 65 years or older, preserve facial identity, realistic photo'},
-          ];
+    // Baby Version keeps fixed age categories.
+    String ageValue = 'baby';
+    final ageOptions = <Map<String, String>>[
+      {'label': 'Baby (1 year)', 'value': 'baby', 'prompt': 'transform the person into a cute 1 year old baby, preserve facial identity, realistic photo'},
+      {'label': 'Toddler (2-5 years)', 'value': 'toddler', 'prompt': 'transform the person into a cute toddler aged 2 to 5 years old, preserve facial identity, realistic photo'},
+      {'label': 'Preschool (5-7 years)', 'value': 'preschool', 'prompt': 'transform the person into a cute preschool child aged 5 to 7 years old, preserve facial identity, realistic photo'},
+    ];
+
+    // Age Progression now asks for an exact target age number.
+    final ageController = TextEditingController(text: featureId == 'age_progression' ? '30' : '');
+
+    String buildAgePrompt(int targetAge, String selectedGender) {
+      if (selectedGender == 'female') {
+        return 'transform the person into a realistic female aged $targetAge years old, preserve facial identity, keep a smooth feminine face, do not add beard, do not add mustache, no facial hair, no stubble, realistic photo';
+      }
+      return 'transform the person into a realistic male aged $targetAge years old, preserve facial identity, preserve existing beard or mustache if present, if clean-shaven remain clean-shaven, do not remove facial hair, realistic photo';
+    }
 
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -561,10 +565,18 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final selected = ageOptions.firstWhere((e) => e['value'] == ageValue);
+            final selected = ageOptions.firstWhere(
+              (e) => e['value'] == ageValue,
+              orElse: () => ageOptions.first,
+            );
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  18,
+                  20,
+                  22 + MediaQuery.of(context).viewInsets.bottom,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,41 +598,85 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text('Target age', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: ageOptions.map((item) {
-                        final isSelected = item['value'] == ageValue;
-                        return InkWell(
-                          onTap: () => setSheetState(() => ageValue = item['value']!),
-                          borderRadius: BorderRadius.circular(999),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: isSelected ? AppColors.accent.withOpacity(0.18) : AppColors.primary,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: isSelected ? AppColors.accent : Colors.white10),
+                    if (featureId == 'baby_version') ...[
+                      const Text('Target age', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ageOptions.map((item) {
+                          final isSelected = item['value'] == ageValue;
+                          return InkWell(
+                            onTap: () => setSheetState(() => ageValue = item['value']!),
+                            borderRadius: BorderRadius.circular(999),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.accent.withOpacity(0.18) : AppColors.primary,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: isSelected ? AppColors.accent : Colors.white10),
+                              ),
+                              child: Text(
+                                item['label']!,
+                                style: TextStyle(color: isSelected ? AppColors.accent : AppColors.textMuted, fontWeight: FontWeight.w800),
+                              ),
                             ),
-                            child: Text(
-                              item['label']!,
-                              style: TextStyle(color: isSelected ? AppColors.accent : AppColors.textMuted, fontWeight: FontWeight.w800),
-                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ] else ...[
+                      const Text('Enter target age', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: ageController,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.w800),
+                        decoration: InputDecoration(
+                          hintText: 'Example: 18, 25, 45, 70',
+                          hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                          filled: true,
+                          fillColor: AppColors.primary,
+                          prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.accent),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
                           ),
-                        );
-                      }).toList(),
-                    ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Tip: Female output will avoid beard/mustache. Male output tries to preserve existing facial hair if present.',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 10.5, height: 1.3),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: () => Navigator.pop(sheetContext, {
-                          'gender': gender,
-                          'age_group': ageValue,
-                          'prompt': selected['prompt'],
-                        }),
+                        onPressed: () {
+                          if (featureId == 'baby_version') {
+                            Navigator.pop(sheetContext, {
+                              'gender': gender,
+                              'age_group': ageValue,
+                              'prompt': selected['prompt'],
+                            });
+                            return;
+                          }
+
+                          final targetAge = int.tryParse(ageController.text.trim());
+                          if (targetAge == null || targetAge < 1 || targetAge > 100) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Please enter a valid age between 1 and 100')),
+                            );
+                            return;
+                          }
+                          Navigator.pop(sheetContext, {
+                            'gender': gender,
+                            'target_age': targetAge,
+                            'prompt': buildAgePrompt(targetAge, gender),
+                          });
+                        },
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                         child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w900)),
                       ),
@@ -632,7 +688,7 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         );
       },
-    );
+    ).whenComplete(ageController.dispose);
   }
 
   Widget _optionChip(String text, bool selected, VoidCallback onTap) {
