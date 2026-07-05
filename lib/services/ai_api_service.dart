@@ -828,7 +828,7 @@ class AiApiService {
           modelName: 'fal-ai/image-editing/age-progression',
           apiToken: apiToken,
           additionalInput: {
-            'prompt': extraInput?['prompt'] ?? 'as a cute baby, preserve facial identity, realistic photo',
+            'prompt': extraInput?['prompt'] ?? 'transform the person into a cute 1 year old baby, preserve facial identity, realistic photo',
             'output_format': 'jpeg',
           },
         );

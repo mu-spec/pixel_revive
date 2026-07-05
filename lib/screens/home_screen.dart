@@ -542,9 +542,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final ageOptions = featureId == 'baby_version'
         ? <Map<String, String>>[
-            {'label': 'Baby', 'value': 'baby', 'prompt': 'a cute baby portrait, preserve facial identity, realistic photo'},
-            {'label': 'Toddler', 'value': 'toddler', 'prompt': 'a cute toddler portrait, preserve facial identity, realistic photo'},
-            {'label': 'Preschool', 'value': 'preschool', 'prompt': 'a cute preschool child portrait, preserve facial identity, realistic photo'},
+            {'label': 'Baby (1 year)', 'value': 'baby', 'prompt': 'transform the person into a cute 1 year old baby, preserve facial identity, realistic photo'},
+            {'label': 'Toddler (2-5 years)', 'value': 'toddler', 'prompt': 'transform the person into a cute toddler aged 2 to 5 years old, preserve facial identity, realistic photo'},
+            {'label': 'Preschool (5-7 years)', 'value': 'preschool', 'prompt': 'transform the person into a cute preschool child aged 5 to 7 years old, preserve facial identity, realistic photo'},
           ]
         : <Map<String, String>>[
             {'label': 'Teen', 'value': 'teen', 'prompt': 'as a teenager, preserve facial identity, realistic photo'},

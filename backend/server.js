@@ -242,7 +242,7 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
         model: getEnv('FAL_BABY_MODEL', 'fal-ai/image-editing/age-progression'),
         input: {
           image_url: dataUri,
-          prompt: extraInput.prompt || process.env.FAL_BABY_PROMPT || `as a cute ${extraInput.gender || process.env.FAL_BABY_GENDER || 'male'} baby, preserve facial identity, realistic photo`,
+          prompt: extraInput.prompt || process.env.FAL_BABY_PROMPT || `transform the person into a cute 1 year old ${extraInput.gender || process.env.FAL_BABY_GENDER || 'male'} baby, preserve facial identity, realistic photo`,
           output_format: 'jpeg'
         }
       };

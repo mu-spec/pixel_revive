@@ -673,6 +673,18 @@ static const int _dailyFreeExports = 3;
     notifyListeners();
   }
 
+  String _babyPromptFor(String ageGroup, String gender) {
+    switch (ageGroup) {
+      case 'toddler':
+        return 'transform the person into a cute $gender toddler aged 2 to 5 years old, preserve facial identity, realistic photo';
+      case 'preschool':
+        return 'transform the person into a cute $gender preschool child aged 5 to 7 years old, preserve facial identity, realistic photo';
+      case 'baby':
+      default:
+        return 'transform the person into a cute 1 year old $gender baby, preserve facial identity, realistic photo';
+    }
+  }
+
   Map<String, dynamic>? _extraInputForFeature(String featureId) {
     if (featureId == 'background_change') {
       return {
@@ -685,7 +697,7 @@ static const int _dailyFreeExports = 3;
       return {
         'age_group': ageGroup,
         'gender': gender,
-        'prompt': pendingEffectExtraInput['prompt'] ?? 'a cute $gender $ageGroup portrait, preserve facial identity, realistic photo',
+        'prompt': pendingEffectExtraInput['prompt'] ?? _babyPromptFor(ageGroup, gender),
       };
     }
     if (featureId == 'age_progression') {
