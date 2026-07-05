@@ -817,9 +817,12 @@ class AiApiService {
       case 'age_progression':
         return await runFalPrediction(
           imageBytes: imageBytes,
-          modelName: 'fal-ai/image-editing/age-progression',
+          modelName: 'fal-ai/image-apps-v2/age-modify',
           apiToken: apiToken,
-          additionalInput: {'prompt': extraInput?['prompt'] ?? 'transform the person into a realistic adult aged 20 to 39 years old, preserve facial identity, do not add unwanted facial hair, realistic photo', 'output_format': 'jpeg'},
+          additionalInput: {
+            'target_age': extraInput?['target_age'] ?? 30,
+            'preserve_identity': true,
+          },
         );
 
       case 'baby_version':

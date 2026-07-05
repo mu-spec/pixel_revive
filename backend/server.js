@@ -234,7 +234,14 @@ function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, i
     case 'cartoon':
       return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
     case 'age_progression':
-      return { model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-editing/age-progression'), input: { image_url: dataUri, prompt: extraInput.prompt || process.env.FAL_AGE_PROMPT || 'transform the person into a realistic adult aged 20 to 39 years old, preserve facial identity, do not add unwanted facial hair, realistic photo', output_format: 'jpeg' } };
+      return {
+        model: getEnv('FAL_AGE_MODEL', 'fal-ai/image-apps-v2/age-modify'),
+        input: {
+          image_url: dataUri,
+          target_age: Number(extraInput.target_age || process.env.FAL_TARGET_AGE || 30),
+          preserve_identity: true
+        }
+      };
     case 'baby_version':
       return {
         // half-moon-ai/ai-baby-and-aging-generator/single returned 404 on Fal for this account.
@@ -493,7 +500,7 @@ app.get('/model-map', (_req, res) => {
       restore: process.env.FAL_RESTORE_MODEL || 'fal-ai/image-editing/photo-restoration',
       backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
       cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
-      ageProgression: process.env.FAL_AGE_MODEL || 'fal-ai/image-editing/age-progression',
+      ageProgression: process.env.FAL_AGE_MODEL || 'fal-ai/image-apps-v2/age-modify',
       babyVersion: process.env.FAL_BABY_MODEL || 'fal-ai/image-editing/age-progression',
       backgroundChange: process.env.FAL_BACKGROUND_CHANGE_MODEL || 'fal-ai/image-editing/background-change',
       broccoliHaircut: { male: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut', female: process.env.FAL_FEMALE_BROCCOLI_MODEL || 'fal-ai/image-editing/hair-change' },
