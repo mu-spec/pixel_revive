@@ -22,8 +22,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  final PageController _showcaseController =
-      PageController(viewportFraction: 0.92);
+  final PageController _showcaseController = PageController(viewportFraction: 0.92);
   Timer? _showcaseTimer;
   int _showcaseIndex = 0;
 
@@ -93,10 +92,8 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: Colors.transparent,
             selectedItemColor: AppColors.cyan,
             unselectedItemColor: AppColors.textMuted,
-            selectedLabelStyle:
-                const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
-            unselectedLabelStyle:
-                const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
             type: BottomNavigationBarType.fixed,
             elevation: 0,
             onTap: (index) => setState(() => _currentIndex = index),
@@ -173,8 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(builder: (_) => const PremiumScreen()),
                 ),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: AppColors.goldGradient),
                     borderRadius: BorderRadius.circular(14),
@@ -276,8 +272,7 @@ class _HomeScreenState extends State<HomeScreen> {
               width: selected ? 22 : 7,
               height: 7,
               decoration: BoxDecoration(
-                color:
-                    selected ? AppColors.accent : Colors.white.withOpacity(0.20),
+                color: selected ? AppColors.accent : Colors.white.withOpacity(0.20),
                 borderRadius: BorderRadius.circular(999),
               ),
             );
@@ -311,21 +306,9 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Row(
                 children: [
-                  Expanded(
-                    child: Image.asset(
-                      item['before']!,
-                      fit: BoxFit.cover,
-                      height: double.infinity,
-                    ),
-                  ),
+                  Expanded(child: Image.asset(item['before']!, fit: BoxFit.cover, height: double.infinity)),
                   Container(width: 1.6, color: Colors.white.withOpacity(0.80)),
-                  Expanded(
-                    child: Image.asset(
-                      item['after']!,
-                      fit: BoxFit.cover,
-                      height: double.infinity,
-                    ),
-                  ),
+                  Expanded(child: Image.asset(item['after']!, fit: BoxFit.cover, height: double.infinity)),
                 ],
               ),
               Positioned.fill(
@@ -391,19 +374,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 10,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(999),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.22),
-                            blurRadius: 14,
-                          ),
-                        ],
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 14)],
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -417,11 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           SizedBox(width: 5),
-                          Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            color: AppColors.accent,
-                            size: 15,
-                          ),
+                          Icon(Icons.arrow_forward_ios_rounded, color: AppColors.accent, size: 15),
                         ],
                       ),
                     ),
@@ -437,49 +408,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFunEffectsSection(AppProvider provider) {
     final effects = [
-      {
-        'id': 'age_progression',
-        'title': 'Age Progression',
-        'icon': Icons.elderly_rounded,
-        'color': AppColors.gold,
-      },
-      {
-        'id': 'baby_version',
-        'title': 'Baby Version',
-        'icon': Icons.child_care_rounded,
-        'color': AppColors.accentLight,
-      },
-      {
-        'id': 'background_change',
-        'title': 'Background Change',
-        'icon': Icons.landscape_rounded,
-        'color': AppColors.accent,
-      },
-      {
-        'id': 'broccoli_haircut',
-        'title': 'Broccoli Haircut',
-        'icon': Icons.face_retouching_natural,
-        'color': AppColors.success,
-      },
-      {
-        'id': 'cartoon',
-        'title': 'Cartoonify',
-        'icon': Icons.brush_rounded,
-        'color': AppColors.cyan,
-      },
+      {'id': 'age_progression', 'title': 'Age Progression', 'icon': Icons.elderly_rounded, 'color': AppColors.gold},
+      {'id': 'baby_version', 'title': 'Baby Version', 'icon': Icons.child_care_rounded, 'color': AppColors.accentLight},
+      {'id': 'background_change', 'title': 'Background Change', 'icon': Icons.landscape_rounded, 'color': AppColors.accent},
+      {'id': 'broccoli_haircut', 'title': 'Broccoli Haircut', 'icon': Icons.face_retouching_natural, 'color': AppColors.success},
+      {'id': 'cartoon', 'title': 'Cartoonify', 'icon': Icons.brush_rounded, 'color': AppColors.cyan},
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Fun AI Effects',
-          style: TextStyle(
-            color: AppColors.text,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
+        const Text('Fun AI Effects', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
         const SizedBox(height: 10),
         GridView.builder(
           shrinkWrap: true,
@@ -498,31 +437,20 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => _chooseSourceAndGo(effect['id'] as String),
               borderRadius: BorderRadius.circular(18),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: color.withOpacity(0.25)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.16),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.16), blurRadius: 12, offset: const Offset(0, 6))],
                 ),
                 child: Row(
                   children: [
                     Container(
                       width: 36,
                       height: 36,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(effect['icon'] as IconData,
-                          color: color, size: 20),
+                      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(effect['icon'] as IconData, color: color, size: 20),
                     ),
                     const SizedBox(width: 9),
                     Expanded(
@@ -530,12 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         effect['title'] as String,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.text,
-                          fontSize: 12.2,
-                          fontWeight: FontWeight.w900,
-                          height: 1.1,
-                        ),
+                        style: const TextStyle(color: AppColors.text, fontSize: 12.2, fontWeight: FontWeight.w900, height: 1.1),
                       ),
                     ),
                   ],
@@ -566,29 +489,17 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.add_photo_alternate_outlined,
-            size: 34,
-            color: AppColors.accent,
-          ),
+          const Icon(Icons.add_photo_alternate_outlined, size: 34, color: AppColors.accent),
           const SizedBox(height: 10),
           Text(
             AppStrings.getText('selectPhoto', provider.languageCode),
-            style: const TextStyle(
-              color: AppColors.text,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
+            style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
           Text(
             AppStrings.getText('importBlurry', provider.languageCode),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 12,
-              height: 1.4,
-            ),
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4),
           ),
           const SizedBox(height: 16),
           Row(
@@ -601,9 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),
@@ -616,9 +525,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.text,
                     side: BorderSide(color: Colors.white.withOpacity(0.14)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),
@@ -634,9 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -647,48 +552,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
+                    Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999)))),
                     const SizedBox(height: 18),
-                    const Text(
-                      'Broccoli Haircut Style',
-                      style: TextStyle(
-                        color: AppColors.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
+                    const Text('Broccoli Haircut Style', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 8),
                     const Text(
                       'Choose the style type. Male uses the dedicated Broccoli Haircut model. Female uses a long-hair friendly AI hair-change model.',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 11.5,
-                        height: 1.35,
-                      ),
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 11.5, height: 1.35),
                     ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        _optionChip(
-                          'Male',
-                          gender == 'male',
-                          () => setSheetState(() => gender = 'male'),
-                        ),
+                        _optionChip('Male', gender == 'male', () => setSheetState(() => gender = 'male')),
                         const SizedBox(width: 10),
-                        _optionChip(
-                          'Female',
-                          gender == 'female',
-                          () => setSheetState(() => gender = 'female'),
-                        ),
+                        _optionChip('Female', gender == 'female', () => setSheetState(() => gender = 'female')),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -702,17 +579,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ? 'create a feminine broccoli-inspired curly hairstyle with soft voluminous curls, preserve long feminine hair shape as much as possible, do not make it a boy haircut, keep natural realistic hair and preserve face identity'
                               : 'broccoli haircut style, preserve face identity, realistic hairstyle',
                         }),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.accent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Continue',
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                        child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w900)),
                       ),
                     ),
                   ],
@@ -728,30 +596,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<Map<String, dynamic>?> _chooseAgeGenderOptions(String featureId) async {
     String gender = 'male';
 
+    // Baby Version keeps fixed age categories.
     String ageValue = 'baby';
     final ageOptions = <Map<String, String>>[
-      {
-        'label': 'Baby (1 year)',
-        'value': 'baby',
-        'prompt':
-            'transform the person into a cute 1 year old baby, preserve facial identity, realistic photo',
-      },
-      {
-        'label': 'Toddler (2-5 years)',
-        'value': 'toddler',
-        'prompt':
-            'transform the person into a cute toddler aged 2 to 5 years old, preserve facial identity, realistic photo',
-      },
-      {
-        'label': 'Preschool (5-7 years)',
-        'value': 'preschool',
-        'prompt':
-            'transform the person into a cute preschool child aged 5 to 7 years old, preserve facial identity, realistic photo',
-      },
+      {'label': 'Baby (1 year)', 'value': 'baby', 'prompt': 'transform the person into a cute 1 year old baby, preserve facial identity, realistic photo'},
+      {'label': 'Toddler (2-5 years)', 'value': 'toddler', 'prompt': 'transform the person into a cute toddler aged 2 to 5 years old, preserve facial identity, realistic photo'},
+      {'label': 'Preschool (5-7 years)', 'value': 'preschool', 'prompt': 'transform the person into a cute preschool child aged 5 to 7 years old, preserve facial identity, realistic photo'},
     ];
 
-    final ageController =
-        TextEditingController(text: featureId == 'age_progression' ? '30' : '');
+    // Age Progression now asks for an exact target age number.
+    final ageController = TextEditingController(text: featureId == 'age_progression' ? '30' : '');
 
     String buildAgePrompt(int targetAge, String selectedGender) {
       if (selectedGender == 'female') {
@@ -764,9 +618,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -786,62 +638,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
+                    Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999)))),
                     const SizedBox(height: 18),
                     Text(
-                      featureId == 'baby_version'
-                          ? 'Baby Version Options'
-                          : 'Age Progression Options',
-                      style: const TextStyle(
-                        color: AppColors.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      featureId == 'baby_version' ? 'Baby Version Options' : 'Age Progression Options',
+                      style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Gender',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                    const Text('Gender', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        _optionChip(
-                          'Male',
-                          gender == 'male',
-                          () => setSheetState(() => gender = 'male'),
-                        ),
+                        _optionChip('Male', gender == 'male', () => setSheetState(() => gender = 'male')),
                         const SizedBox(width: 10),
-                        _optionChip(
-                          'Female',
-                          gender == 'female',
-                          () => setSheetState(() => gender = 'female'),
-                        ),
+                        _optionChip('Female', gender == 'female', () => setSheetState(() => gender = 'female')),
                       ],
                     ),
                     const SizedBox(height: 16),
                     if (featureId == 'baby_version') ...[
-                      const Text(
-                        'Target age',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                      const Text('Target age', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -852,58 +667,33 @@ class _HomeScreenState extends State<HomeScreen> {
                             onTap: () => setSheetState(() => ageValue = item['value']!),
                             borderRadius: BorderRadius.circular(999),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 13, vertical: 9),
+                              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                               decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColors.accent.withOpacity(0.18)
-                                    : AppColors.primary,
+                                color: isSelected ? AppColors.accent.withOpacity(0.18) : AppColors.primary,
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? AppColors.accent
-                                      : Colors.white10,
-                                ),
+                                border: Border.all(color: isSelected ? AppColors.accent : Colors.white10),
                               ),
                               child: Text(
                                 item['label']!,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? AppColors.accent
-                                      : AppColors.textMuted,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                                style: TextStyle(color: isSelected ? AppColors.accent : AppColors.textMuted, fontWeight: FontWeight.w800),
                               ),
                             ),
                           );
                         }).toList(),
                       ),
                     ] else ...[
-                      const Text(
-                        'Enter target age',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                      const Text('Enter target age', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w800)),
                       const SizedBox(height: 8),
                       TextField(
                         controller: ageController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(
-                          color: AppColors.text,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: const TextStyle(color: AppColors.text, fontSize: 16, fontWeight: FontWeight.w800),
                         decoration: InputDecoration(
                           hintText: 'Example: 18, 25, 45, 70',
-                          hintStyle: const TextStyle(
-                              color: AppColors.textMuted, fontSize: 13),
+                          hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                           filled: true,
                           fillColor: AppColors.primary,
-                          prefixIcon:
-                              const Icon(Icons.cake_outlined, color: AppColors.accent),
+                          prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.accent),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide.none,
@@ -929,10 +719,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           final targetAge = int.tryParse(ageController.text.trim());
                           if (targetAge == null || targetAge < 1 || targetAge > 100) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                    'Please enter a valid age between 1 and 100'),
-                              ),
+                              const SnackBar(content: Text('Please enter a valid age between 1 and 100')),
                             );
                             return;
                           }
@@ -942,17 +729,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             'prompt': buildAgePrompt(targetAge, gender),
                           });
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.accent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Continue',
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                        child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w900)),
                       ),
                     ),
                   ],
@@ -978,13 +756,7 @@ class _HomeScreenState extends State<HomeScreen> {
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: selected ? AppColors.accent : Colors.white10),
           ),
-          child: Text(
-            text,
-            style: TextStyle(
-              color: selected ? AppColors.accent : AppColors.textMuted,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          child: Text(text, style: TextStyle(color: selected ? AppColors.accent : AppColors.textMuted, fontWeight: FontWeight.w900)),
         ),
       ),
     );
@@ -992,34 +764,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<String?> _chooseBackgroundPrompt() async {
     final options = <Map<String, String>>[
-      {
-        'title': 'Beach',
-        'prompt': 'beautiful beach sunset with palm trees, realistic lighting'
-      },
-      {
-        'title': 'Office',
-        'prompt': 'modern professional office background, realistic lighting'
-      },
-      {
-        'title': 'Forest',
-        'prompt': 'lush green forest background, natural daylight'
-      },
-      {
-        'title': 'Studio',
-        'prompt': 'clean professional studio background, soft lighting'
-      },
-      {
-        'title': 'City',
-        'prompt': 'modern city street background, realistic urban lighting'
-      },
+      {'title': 'Beach', 'prompt': 'beautiful beach sunset with palm trees, realistic lighting'},
+      {'title': 'Office', 'prompt': 'modern professional office background, realistic lighting'},
+      {'title': 'Forest', 'prompt': 'lush green forest background, natural daylight'},
+      {'title': 'Studio', 'prompt': 'clean professional studio background, soft lighting'},
+      {'title': 'City', 'prompt': 'modern city street background, realistic urban lighting'},
     ];
 
     return showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
@@ -1027,55 +782,23 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
+              Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999)))),
               const SizedBox(height: 18),
-              const Text(
-                'Choose background',
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+              const Text('Choose background', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
               const SizedBox(height: 14),
-              ...options.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: InkWell(
-                    onTap: () => Navigator.pop(context, item['prompt']),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 13,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: Text(
-                        item['title']!,
-                        style: const TextStyle(
-                          color: AppColors.text,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
+              ...options.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context, item['prompt']),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                        decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white10)),
+                        child: Text(item['title']!, style: const TextStyle(color: AppColors.text, fontSize: 14, fontWeight: FontWeight.w800)),
                       ),
                     ),
-                  ),
-                ),
-              ),
+                  )),
             ],
           ),
         ),
@@ -1083,7 +806,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  bool _isFunCloudEffect(String featureId) => const {
+        'age_progression',
+        'baby_version',
+        'background_change',
+        'broccoli_haircut',
+        'cartoon',
+      }.contains(featureId);
+
+  Future<bool> _showInternetRequiredMessage() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.wifi_rounded, color: AppColors.accent),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Internet required',
+                style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'This feature requires internet.',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 14, height: 1.35),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Continue', style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
   Future<void> _chooseSourceAndGo(String featureId) async {
+    if (_isFunCloudEffect(featureId)) {
+      final proceed = await _showInternetRequiredMessage();
+      if (!proceed) return;
+    }
+
     if (featureId == 'broccoli_haircut') {
       final options = await _chooseBroccoliStyleOptions();
       if (options == null) return;
@@ -1106,32 +884,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
+              Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(999))),
               const SizedBox(height: 18),
-              const Text(
-                'Select photo source',
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+              const Text('Select photo source', style: TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.w900)),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -1140,13 +902,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () => Navigator.pop(context, ImageSource.gallery),
                       icon: const Icon(Icons.photo_library_outlined),
                       label: const Text('Gallery'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1155,13 +911,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () => Navigator.pop(context, ImageSource.camera),
                       icon: const Icon(Icons.photo_camera_outlined),
                       label: const Text('Camera'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.text,
-                        side: BorderSide(color: Colors.white.withOpacity(0.14)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.text, side: BorderSide(color: Colors.white.withOpacity(0.14)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                     ),
                   ),
                 ],
@@ -1171,7 +921,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-
     if (source != null) await _pickAndGo(source, featureId: featureId);
   }
 

@@ -16,6 +16,28 @@ class AiApiService {
     debugPrint(message);
   }
 
+  static String _friendlyCloudError(int statusCode, String body) {
+    final lower = body.toLowerCase();
+    if (statusCode == 402 ||
+        lower.contains('fal_balance_exhausted') ||
+        lower.contains('exhausted balance') ||
+        lower.contains('user is locked') ||
+        lower.contains('top up your balance') ||
+        lower.contains('insufficient balance') ||
+        lower.contains('insufficient credit')) {
+      return 'Fal.ai balance is exhausted.';
+    }
+    if (statusCode == 429) {
+      return 'Cloud AI is busy or rate-limited. Please wait a moment and try again.';
+    }
+    try {
+      final data = jsonDecode(body);
+      final err = data is Map ? data['error']?.toString() : null;
+      if (err != null && err.isNotEmpty) return err;
+    } catch (_) {}
+    return 'Cloud AI error $statusCode: $body';
+  }
+
 
   static Uint8List _prepareCloudUpload(
     Uint8List imageBytes, {
@@ -145,7 +167,7 @@ class AiApiService {
           'totalMs': totalSw.elapsedMilliseconds,
           'status': response.statusCode,
         };
-        debugPrint('Backend proxy error ${response.statusCode}: ${response.body}');
+        _rememberError(_friendlyCloudError(response.statusCode, response.body));
         return null;
       }
 
@@ -252,7 +274,7 @@ class AiApiService {
           'totalMs': totalSw.elapsedMilliseconds,
           'status': startResponse.statusCode,
         };
-        _rememberError('Cloud AI start error ${startResponse.statusCode}: ${startResponse.body}');
+        _rememberError(_friendlyCloudError(startResponse.statusCode, startResponse.body));
         return null;
       }
 
@@ -291,7 +313,12 @@ class AiApiService {
             .timeout(const Duration(seconds: 30));
 
         if (statusResponse.statusCode != 200) {
+          final friendly = _friendlyCloudError(statusResponse.statusCode, statusResponse.body);
           debugPrint('Async status error ${statusResponse.statusCode}: ${statusResponse.body}');
+          if (statusResponse.statusCode == 402 || statusResponse.statusCode == 429) {
+            _rememberError(friendly);
+            return null;
+          }
           // transient error — keep trying a few times
           continue;
         }

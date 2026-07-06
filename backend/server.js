@@ -117,6 +117,31 @@ function markSuccess(req) {
   ipFailures.delete(ip);
 }
 
+function isFalBalanceError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('exhausted balance') ||
+    message.includes('user is locked') ||
+    message.includes('top up your balance') ||
+    message.includes('insufficient balance') ||
+    message.includes('insufficient credit');
+}
+
+function sendCloudError(res, error, fallbackMessage = 'Cloud enhancement failed', extra = {}) {
+  if (isFalBalanceError(error)) {
+    return res.status(402).json({
+      success: false,
+      code: 'FAL_BALANCE_EXHAUSTED',
+      error: 'Fal.ai balance is exhausted.',
+      ...extra,
+    });
+  }
+  return res.status(500).json({
+    success: false,
+    error: error?.message || fallbackMessage,
+    ...extra,
+  });
+}
+
 function assertImageSize(base64) {
   const estimatedBytes = Math.floor((base64.length * 3) / 4);
   const maxBytes = MAX_IMAGE_MB * 1024 * 1024;
@@ -565,7 +590,7 @@ app.post('/enhance/start', requireClientSecret, abuseGuard, async (req, res) => 
   } catch (error) {
     markFailure(req);
     console.error('[enhance/start] error:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to start prediction' });
+    return sendCloudError(res, error, 'Failed to start prediction');
   }
 });
 
@@ -588,6 +613,9 @@ app.get('/enhance/status/:id', requireClientSecret, async (req, res) => {
     return res.json({ success: true, done: false, status: result.status });
   } catch (error) {
     console.error('[enhance/status] error:', error);
+    if (isFalBalanceError(error)) {
+      return res.status(402).json({ success: false, done: true, code: 'FAL_BALANCE_EXHAUSTED', error: 'Fal.ai balance is exhausted.' });
+    }
     res.status(500).json({ success: false, done: true, error: error.message || 'Status check failed' });
   }
 });
@@ -616,7 +644,7 @@ app.post('/enhance', requireClientSecret, abuseGuard, async (req, res) => {
   } catch (error) {
     markFailure(req);
     console.error('[enhance] error:', error);
-    res.status(500).json({ success: false, error: error.message || 'Cloud enhancement failed', elapsedMs: Date.now() - startedAt });
+    return sendCloudError(res, error, 'Cloud enhancement failed', { elapsedMs: Date.now() - startedAt });
   }
 });
 
