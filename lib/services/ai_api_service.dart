@@ -25,7 +25,7 @@ class AiApiService {
         lower.contains('top up your balance') ||
         lower.contains('insufficient balance') ||
         lower.contains('insufficient credit')) {
-      return 'Fal.ai balance is exhausted.';
+      return 'Gemini API quota or billing limit reached.';
     }
     if (statusCode == 429) {
       return 'Cloud AI is busy or rate-limited. Please wait a moment and try again.';
@@ -88,17 +88,17 @@ class AiApiService {
   }
 
   /// =============================================
-  /// FAL.AI API (original)
+  /// LEGACY DIRECT API FALLBACKS (disabled unless a dev token is set)
   /// =============================================
   static Future<void> preWarmModel({
     required String modelName,
     required String apiToken,
   }) async {
-    // Removed — pre-warming is not needed and causes errors on Fal.ai
+    // Removed — pre-warming is not needed for the Gemini backend
   }
 
 
-  /// Secure backend proxy call. This keeps Replicate/Fal.ai keys out of the APK.
+  /// Secure backend proxy call. This keeps the Gemini API key out of the APK.
   /// Fast mode: smaller upload + backend may return imageUrl instead of base64.
   static Future<Uint8List?> runBackendProxyPrediction({
     required Uint8List imageBytes,
@@ -145,7 +145,7 @@ class AiApiService {
             uri,
             headers: headers,
             body: jsonEncode({
-              'provider': isReplicate ? 'replicate' : 'fal',
+              'provider': 'gemini',
               'featureId': featureId,
               if (scale != null) 'scale': scale,
               'isPremium': isPremiumUser,
@@ -209,7 +209,7 @@ class AiApiService {
   /// Step 1: POST /enhance/start -> returns a predictionId quickly.
   /// Step 2: GET /enhance/status/:id repeatedly until done.
   /// Each request is short, so Vercel's 60-second function cap is never hit.
-  /// Fast mode supports both Fal.ai queue and Replicate async jobs.
+  /// Fast mode uses your persistent Gemini backend job queue.
   static Future<Uint8List?> runBackendAsyncPrediction({
     required Uint8List imageBytes,
     required String featureId,
@@ -252,7 +252,7 @@ class AiApiService {
             Uri.parse('$baseUrl/enhance/start'),
             headers: headers,
             body: jsonEncode({
-              'provider': isReplicate ? 'replicate' : 'fal',
+              'provider': 'gemini',
               'featureId': featureId,
               if (scale != null) 'scale': scale,
               'isPremium': isPremiumUser,
@@ -379,124 +379,6 @@ class AiApiService {
       return null;
     } finally {
       client.close();
-    }
-  }
-
-  static Future<Uint8List?> runFalPrediction({
-    required Uint8List imageBytes,
-    required String modelName,
-    required String apiToken,
-    Map<String, dynamic>? additionalInput,
-  }) async {
-    final client = http.Client();
-    try {
-      var decoded = img.decodeImage(imageBytes);
-      if (decoded != null) {
-        if (decoded.width > 2048 || decoded.height > 2048) {
-          decoded = img.copyResize(
-            decoded,
-            width: decoded.width > decoded.height ? 2048 : null,
-            height: decoded.height >= decoded.width ? 2048 : null,
-          );
-          imageBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 95));
-        } else {
-          imageBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 95));
-        }
-      }
-
-      final base64Str = base64Encode(imageBytes);
-      final dataUri = "data:image/jpeg;base64,$base64Str";
-
-      final Map<String, dynamic> bodyMap = {
-        "image_url": dataUri,
-      };
-      if (additionalInput != null) {
-        bodyMap.addAll(additionalInput);
-      }
-
-      final url = "https://fal.run/$modelName";
-      debugPrint("Fal.ai posting to: $url");
-
-      final response = await client.post(
-        Uri.parse(url),
-        headers: {
-          "Authorization": "Key $apiToken",
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode(bodyMap),
-      );
-
-      if (response.statusCode != 200) {
-        debugPrint("Fal.ai error ${response.statusCode}: ${response.body}");
-        return null;
-      }
-
-      final data = jsonDecode(response.body);
-      final String? outputUrl = data['image']?['url'];
-
-      if (outputUrl == null) {
-        debugPrint("Fal.ai no output URL: ${response.body}");
-        return null;
-      }
-
-      debugPrint("Downloading from Fal.ai CDN: $outputUrl");
-      final imgResponse = await client.get(Uri.parse(outputUrl));
-      if (imgResponse.statusCode == 200) {
-        return imgResponse.bodyBytes;
-      } else {
-        debugPrint("Fal.ai CDN download failed: ${imgResponse.statusCode}");
-        return null;
-      }
-    } catch (e) {
-      debugPrint("Fal.ai error: $e");
-      return null;
-    } finally {
-      client.close();
-    }
-  }
-
-  static Future<Uint8List?> runMultiStagePipeline({
-    required Uint8List imageBytes,
-    required String apiToken,
-    double blendFactor = 0.25,
-  }) async {
-    debugPrint("Starting Fal.ai Multi-Stage Pipeline...");
-
-    final faceRestoredBytes = await runFalPrediction(
-      imageBytes: imageBytes,
-      modelName: 'fal-ai/codeformer',
-      apiToken: apiToken,
-      additionalInput: {
-        'fidelity': 0.7,
-        'upscaling': 1,
-        'face_upscale': true,
-      },
-    );
-
-    if (faceRestoredBytes == null) {
-      debugPrint("Stage 1 (CodeFormer) failed.");
-      return null;
-    }
-
-    final upscaledBytes = await runFalPrediction(
-      imageBytes: faceRestoredBytes,
-      modelName: 'fal-ai/esrgan',
-      apiToken: apiToken,
-      additionalInput: {'upscaling': 2},
-    );
-
-    if (upscaledBytes == null) {
-      return faceRestoredBytes;
-    }
-
-    try {
-      return await ImageProcessor.blendTextures(
-        original: imageBytes,
-        enhanced: upscaledBytes,
-        blendFactor: blendFactor,
-      );
-    } catch (e) {
-      return upscaledBytes;
     }
   }
 
@@ -645,7 +527,7 @@ class AiApiService {
   }
 
   /// =============================================
-  /// SMART ROUTING: Auto-selects Replicate or Fal.ai
+  /// SMART ROUTING: Uses secure Gemini backend first
   /// =============================================
 
   static Future<Uint8List?> smartEnhance({
@@ -662,9 +544,9 @@ class AiApiService {
     ValueChanged<String>? onProgress,
   }) async {
     lastErrorMessage = null;
-    // Preferred secure route: Flutter -> your backend proxy -> Replicate/Fal.ai.
+    // Preferred secure route: Flutter -> your backend proxy -> Gemini API.
     if (CloudApiConfig.useBackendProxy) {
-      // Fast mode: use fire-and-poll for both Fal.ai queue and Replicate.
+      // Fast mode: use fire-and-poll through the Gemini backend.
       // This avoids long Vercel requests and lets the app download provider output directly.
       final asyncResult = await runBackendAsyncPrediction(
         imageBytes: imageBytes,
@@ -695,31 +577,15 @@ class AiApiService {
         onProgress: onProgress,
       );
       if (backendResult != null) return backendResult;
-      debugPrint('Backend proxy failed; falling back if a direct dev token exists.');
+      debugPrint('Gemini backend failed; direct API fallback is disabled.');
     }
 
-    // Optional developer-only fallback. In production apiToken should be empty.
-    if (apiToken.isEmpty) return null;
-
-    if (isReplicate) {
-      return _runReplicateFeature(
-        imageBytes: imageBytes,
-        featureId: featureId,
-        apiToken: apiToken,
-        scale: scale,
-      );
-    } else {
-      return _runFalFeature(
-        imageBytes: imageBytes,
-        featureId: featureId,
-        apiToken: apiToken,
-        scale: scale,
-        extraInput: extraInput,
-      );
-    }
+    // Direct API fallback is disabled for Gemini migration.
+    // Keep the Gemini API key only on the backend, never inside the APK.
+    return null;
   }
 
-  static Future<Uint8List?> _runReplicateFeature({
+  static Future<Uint8List?> _runReplicateFeature({ 
     required Uint8List imageBytes,
     required String featureId,
     required String apiToken,
@@ -796,117 +662,5 @@ class AiApiService {
     }
   }
 
-  static Future<Uint8List?> _runFalFeature({
-    required Uint8List imageBytes,
-    required String featureId,
-    required String apiToken,
-    int? scale,
-    Map<String, dynamic>? extraInput,
-  }) async {
-    switch (featureId) {
-      case 'face':
-      case 'restore':
-      case 'auto':
-        return await runMultiStagePipeline(
-          imageBytes: imageBytes,
-          apiToken: apiToken,
-        );
 
-      case 'upscale':
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/esrgan',
-          apiToken: apiToken,
-          additionalInput: {'upscaling': (scale ?? 2).clamp(2, 4).toInt()},
-        );
-
-      case 'colorize':
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/image-editing/photo-restoration',
-          apiToken: apiToken,
-        );
-
-      case 'bg_cleanup':
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/imageutils/rembg',
-          apiToken: apiToken,
-        );
-
-      case 'cartoon':
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/cartoonify',
-          apiToken: apiToken,
-        );
-
-      case 'age_progression':
-        if ((extraInput?['gender'] ?? 'male').toString().toLowerCase() == 'female') {
-          return await runFalPrediction(
-            imageBytes: imageBytes,
-            modelName: 'fal-ai/image-apps-v2/age-modify',
-            apiToken: apiToken,
-            additionalInput: {
-              'target_age': extraInput?['target_age'] ?? 30,
-              'preserve_identity': true,
-            },
-          );
-        }
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'openai/gpt-image-2/edit',
-          apiToken: apiToken,
-          additionalInput: {
-            'image_urls': <String>[],
-            'prompt': extraInput?['prompt'] ?? 'Change only the person\'s apparent age to 30 years old. Preserve the same person identity, face shape, eyes, nose, lips, hairstyle, pose, clothing, and background. Preserve the beard and mustache structure exactly: keep the same beard length, density, outline, thickness, and mustache shape. Do not shave, trim, thin, remove, shorten, or reshape the beard or mustache. Realistic natural photo. Do not create a different person.',
-            'image_size': 'auto',
-          },
-        );
-
-      case 'baby_version':
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/image-editing/age-progression',
-          apiToken: apiToken,
-          additionalInput: {
-            'prompt': extraInput?['prompt'] ?? 'transform the person into a cute 1 year old baby, preserve facial identity, realistic photo',
-            'output_format': 'jpeg',
-          },
-        );
-
-      case 'background_change':
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/image-editing/background-change',
-          apiToken: apiToken,
-          additionalInput: {'prompt': extraInput?['prompt'] ?? 'professional studio background, realistic lighting'},
-        );
-
-      case 'broccoli_haircut':
-        if ((extraInput?['gender'] ?? '').toString().toLowerCase() == 'female') {
-          return await runFalPrediction(
-            imageBytes: imageBytes,
-            modelName: 'fal-ai/image-editing/hair-change',
-            apiToken: apiToken,
-            additionalInput: {
-              'prompt': extraInput?['prompt'] ?? 'create a feminine broccoli-inspired curly hairstyle with soft voluminous curls, preserve long feminine hair shape as much as possible, do not make it a boy haircut, keep natural realistic hair and preserve face identity',
-              'output_format': 'jpeg',
-            },
-          );
-        }
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/image-editing/broccoli-haircut',
-          apiToken: apiToken,
-        );
-
-      default:
-        return await runFalPrediction(
-          imageBytes: imageBytes,
-          modelName: 'fal-ai/esrgan',
-          apiToken: apiToken,
-        );
-    }
-  }
 }

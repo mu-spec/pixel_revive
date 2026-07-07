@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: pixel-revive-gemini-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MAX_IMAGE_MB
+        value: "6"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "120"

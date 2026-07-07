@@ -574,8 +574,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     Expanded(
                       child: Text(
                         CloudApiConfig.useBackendProxy
-                            ? 'Provider: ${CloudApiConfig.useReplicate ? "Replicate" : "Fal.ai"} via secure backend proxy'
-                            : 'Provider: ${CloudApiConfig.useReplicate ? "Replicate" : "Fal.ai"} direct token fallback',
+                            ? 'Provider: Gemini via secure backend proxy'
+                            : 'Provider: Gemini direct token fallback',
                         style: TextStyle(
                           color: CloudApiConfig.useReplicate ? AppColors.success : AppColors.gold,
                           fontSize: 11,
@@ -660,7 +660,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 decoration: InputDecoration(
                   hintText: CloudApiConfig.useReplicate
                       ? 'Paste Replicate token (r8_...) to override'
-                      : 'Paste Fal.ai token to override',
+                      : 'Paste Gemini token to override',
                   hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                   filled: true,
                   fillColor: AppColors.primary,

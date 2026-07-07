@@ -2,35 +2,32 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { fal } from '@fal-ai/client';
+import multer from 'multer';
+import crypto from 'crypto';
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 3000);
 const MAX_JSON_MB = Number(process.env.MAX_JSON_MB || 25);
-const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 4);
-const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 55000);
-const DEFAULT_AI_PROVIDER = (process.env.DEFAULT_AI_PROVIDER || 'fal').toLowerCase();
+const MAX_IMAGE_MB = Number(process.env.MAX_IMAGE_MB || 6);
 const CLIENT_SHARED_SECRET = process.env.CLIENT_SHARED_SECRET || '';
 const DAILY_START_LIMIT_PER_IP = Number(process.env.DAILY_START_LIMIT_PER_IP || 40);
 const FAILURE_BLOCK_THRESHOLD = Number(process.env.FAILURE_BLOCK_THRESHOLD || 8);
 const FAILURE_BLOCK_MINUTES = Number(process.env.FAILURE_BLOCK_MINUTES || 30);
+const RATE_LIMIT_PER_MINUTE = Number(process.env.RATE_LIMIT_PER_MINUTE || 120);
+const JOB_TTL_MS = Number(process.env.JOB_TTL_MS || 20 * 60 * 1000);
 
-// Best-effort in-memory abuse guard. On serverless this resets with cold starts,
-// but it still protects warm instances. Keep Vercel rateLimit enabled too.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_IMAGE_MB * 1024 * 1024 },
+});
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+
 const ipDailyStarts = new Map();
 const ipFailures = new Map();
-
-// Fast mode defaults:
-// 1) Use provider queue endpoints for long jobs, especially Fal.ai.
-// 2) Return provider image URLs to the app instead of downloading + base64 re-encoding
-//    inside Vercel. This removes one full image download/upload hop.
-const FAL_QUEUE_ENABLED = String(process.env.FAL_QUEUE_ENABLED || 'true').toLowerCase() !== 'false';
-const RETURN_IMAGE_URL = String(process.env.RETURN_IMAGE_URL || 'true').toLowerCase() !== 'false';
-// Upload base64/data-URI inputs to fal's CDN before model submission. This keeps
-// model requests URL-based and reduces queue payload size. If upload fails, the
-// backend safely falls back to the original data URI.
-const FAL_CDN_UPLOAD_ENABLED = String(process.env.FAL_CDN_UPLOAD_ENABLED || 'true').toLowerCase() !== 'false';
+const jobs = new Map();
 
 app.set('trust proxy', 1);
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -38,22 +35,94 @@ app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: `${MAX_JSON_MB}mb` }));
 app.use(rateLimit({
   windowMs: 60 * 1000,
-  limit: Number(process.env.RATE_LIMIT_PER_MINUTE || 10),
+  limit: RATE_LIMIT_PER_MINUTE,
   standardHeaders: true,
   legacyHeaders: false,
-  // Status polling happens every few seconds during a cloud job. Do not block it,
-  // otherwise the app gets 429 before the Fal.ai job can finish.
   skip: (req) =>
     req.path.startsWith('/enhance/status') ||
     req.path === '/health' ||
     req.path === '/model-map',
 }));
 
-const allowedFeatures = new Set([
-  'auto', 'face', 'restore', 'upscale', 'colorize',
-  'bg_cleanup', 'denoise', 'unblur', 'cartoon', 'bg',
-  'age_progression', 'baby_version', 'background_change', 'broccoli_haircut',
-]);
+const GEMINI_FLASH_IMAGE_MODEL = process.env.GEMINI_FLASH_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+const GEMINI_PRO_IMAGE_MODEL = process.env.GEMINI_PRO_IMAGE_MODEL || 'gemini-3-pro-image-preview';
+const GEMINI_LITE_IMAGE_MODEL = process.env.GEMINI_LITE_IMAGE_MODEL || 'gemini-3.1-flash-lite-image-preview';
+
+const featureConfig = {
+  // PixelRevive app feature IDs
+  auto: {
+    model: process.env.GEMINI_AUTO_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Upscale this image to maximum definition. Remove mild motion blur, fix out-of-focus areas when possible, and balance lighting, contrast, colors, white balance, and exposure automatically. Keep the photo realistic and preserve identity.',
+  },
+  face: {
+    model: process.env.GEMINI_FACE_MODEL || GEMINI_PRO_IMAGE_MODEL,
+    prompt: 'Identify human faces in this photo. Restore natural clarity to eyes, teeth, skin texture, and facial structures. Preserve the exact identity, expression, age, hairstyle, clothes, and background. Do not make the face look artificial.',
+  },
+  restore: {
+    model: process.env.GEMINI_RESTORE_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Restore this old or damaged photograph naturally. Improve faded colors, exposure, contrast, scratches, small damage, and overall clarity while preserving the original identity, clothing, pose, and background.',
+  },
+  upscale: {
+    model: process.env.GEMINI_UPSCALE_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Upscale this image to clean high resolution. Intelligently sharpen lines and edge boundaries without destroying details. Keep textures natural and avoid plastic skin.',
+  },
+  colorize: {
+    model: process.env.GEMINI_COLORIZE_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Analyze this black and white photograph and colorize it with lifelike, vibrant, historically plausible, and authentic color tones. Preserve the original identity and details.',
+  },
+  denoise: {
+    model: process.env.GEMINI_DENOISE_MODEL || GEMINI_LITE_IMAGE_MODEL,
+    prompt: 'Eliminate digital noise, color artifacts, compression artifacts, and film grain while keeping edge boundaries crisp and preserving natural detail.',
+  },
+  unblur: {
+    model: process.env.GEMINI_UNBLUR_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Detect and remove motion blur or lens blur as much as possible. Make the image sharper and clearer while preserving the original identity, shapes, colors, and realistic look.',
+  },
+  bg_cleanup: {
+    model: process.env.GEMINI_BG_CLEANUP_MODEL || GEMINI_LITE_IMAGE_MODEL,
+    prompt: 'Keep the main subject exactly as they are. Clean the surrounding environment by seamlessly removing distracting background objects, clutter, stains, or mess. Keep the final image realistic.',
+  },
+  cartoon: {
+    model: process.env.GEMINI_CARTOON_MODEL || GEMINI_PRO_IMAGE_MODEL,
+    prompt: 'Convert this photo into a vibrant 3D Pixar-style digital character illustration while keeping the subject distinct identity, pose, clothing, and main composition recognizable.',
+  },
+  age_progression: {
+    model: process.env.GEMINI_AGE_MODEL || GEMINI_PRO_IMAGE_MODEL,
+    prompt: 'Change only the person apparent age according to the requested target age. Preserve facial identity, pose, clothes, hairstyle, and background. Keep the result realistic.',
+  },
+  baby_version: {
+    model: process.env.GEMINI_BABY_MODEL || GEMINI_PRO_IMAGE_MODEL,
+    prompt: 'Transform the person into a realistic baby or young child according to the requested age range. Preserve recognizable identity, pose, clothes style, and background as much as possible.',
+  },
+  background_change: {
+    model: process.env.GEMINI_BACKGROUND_CHANGE_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Keep the main foreground subject unchanged. Replace only the background with a clean, professional studio backdrop with soft depth-of-field blur and realistic lighting.',
+  },
+  broccoli_haircut: {
+    model: process.env.GEMINI_BROCCOLI_MODEL || GEMINI_PRO_IMAGE_MODEL,
+    prompt: 'Change only the hairstyle into a realistic broccoli-inspired curly haircut. Preserve the same face identity, expression, skin, clothes, pose, and background. Do not change gender or facial structure.',
+  },
+
+  // Extra aliases from the migration prompt
+  auto_enhance: {
+    model: process.env.GEMINI_AUTO_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Upscale this image to maximum definition. Remove all motion blur, fix out-of-focus areas, and balance the lighting, contrast, and exposure automatically.',
+  },
+  hd_upscale: {
+    model: process.env.GEMINI_UPSCALE_MODEL || GEMINI_FLASH_IMAGE_MODEL,
+    prompt: 'Upscale this image to clean high resolution. Intelligently sharpen all lines and edge boundaries without destroying details.',
+  },
+  background_cleaning: {
+    model: process.env.GEMINI_BG_CLEANUP_MODEL || GEMINI_LITE_IMAGE_MODEL,
+    prompt: 'Keep the main subject exactly as they are. Clean up the surrounding environment by seamlessly removing any distracting background objects or clutter.',
+  },
+  cartoon_effects: {
+    model: process.env.GEMINI_CARTOON_MODEL || GEMINI_PRO_IMAGE_MODEL,
+    prompt: 'Convert this photo into a vibrant 3D Pixar-style digital character illustration while keeping the subject distinct identity and pose recognizable.',
+  },
+};
+
+const allowedFeatures = new Set(Object.keys(featureConfig));
 
 function requireClientSecret(req, res, next) {
   if (!CLIENT_SHARED_SECRET) return next();
@@ -117,446 +186,218 @@ function markSuccess(req) {
   ipFailures.delete(ip);
 }
 
-function isFalBalanceError(error) {
-  const message = String(error?.message || error || '').toLowerCase();
-  return message.includes('exhausted balance') ||
-    message.includes('user is locked') ||
-    message.includes('top up your balance') ||
-    message.includes('insufficient balance') ||
-    message.includes('insufficient credit');
+function normalizeFeatureId(value) {
+  const id = String(value || 'auto').trim();
+  if (id === 'background_change') return 'background_change';
+  if (id === 'cartoonify') return 'cartoon';
+  if (id === 'background_cleaning') return 'bg_cleanup';
+  if (id === 'auto_enhance') return 'auto';
+  if (id === 'hd_upscale') return 'upscale';
+  if (id === 'cartoon_effects') return 'cartoon';
+  return id;
 }
 
-function sendCloudError(res, error, fallbackMessage = 'Cloud enhancement failed', extra = {}) {
-  if (isFalBalanceError(error)) {
-    return res.status(402).json({
-      success: false,
-      code: 'FAL_BALANCE_EXHAUSTED',
-      error: 'Fal.ai balance is exhausted.',
-      ...extra,
-    });
+function parseExtraInput(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (_) {
+      return {};
+    }
   }
+  return {};
+}
+
+function assertImageSizeBytes(byteLength) {
+  const maxBytes = MAX_IMAGE_MB * 1024 * 1024;
+  if (byteLength > maxBytes) {
+    throw new Error(`Image too large. Max allowed is ${MAX_IMAGE_MB}MB.`);
+  }
+}
+
+function normalizeImageBase64(imageBase64, mimeType = 'image/jpeg') {
+  if (!imageBase64 || typeof imageBase64 !== 'string') {
+    throw new Error('imageBase64 is required');
+  }
+  const dataUriMatch = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+  const detectedMimeType = dataUriMatch ? dataUriMatch[1] : mimeType;
+  const cleanBase64 = (dataUriMatch ? dataUriMatch[2] : imageBase64).replace(/\s/g, '');
+  assertImageSizeBytes(Math.floor((cleanBase64.length * 3) / 4));
+  return { mimeType: detectedMimeType || 'image/jpeg', base64: cleanBase64 };
+}
+
+async function fetchImageUrl(imageUrl) {
+  const parsed = new URL(imageUrl);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('imageUrl must use http or https');
+  }
+  const response = await fetch(parsed);
+  if (!response.ok) throw new Error(`imageUrl download failed: HTTP ${response.status}`);
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  assertImageSizeBytes(buffer.length);
+  return {
+    mimeType: response.headers.get('content-type')?.split(';')[0] || 'image/jpeg',
+    base64: buffer.toString('base64'),
+  };
+}
+
+async function getImageInput(req) {
+  if (req.file) {
+    assertImageSizeBytes(req.file.buffer.length);
+    return {
+      mimeType: req.file.mimetype || 'image/jpeg',
+      base64: req.file.buffer.toString('base64'),
+      source: 'multipart',
+    };
+  }
+
+  if (req.body?.imageUrl) {
+    const fetched = await fetchImageUrl(String(req.body.imageUrl));
+    return { ...fetched, source: 'imageUrl' };
+  }
+
+  const normalized = normalizeImageBase64(req.body?.imageBase64, req.body?.mimeType || 'image/jpeg');
+  return { ...normalized, source: 'json' };
+}
+
+function buildPrompt(featureId, extraInput = {}, body = {}) {
+  const config = featureConfig[featureId] || featureConfig.auto;
+  const promptParts = [config.prompt];
+
+  const requestedPrompt = extraInput.prompt || body.prompt;
+  const gender = extraInput.gender || body.gender;
+  const targetAge = extraInput.target_age || extraInput.targetAge || body.target_age || body.targetAge;
+
+  if (featureId === 'background_change' && requestedPrompt) {
+    promptParts.push(`Requested background: ${requestedPrompt}`);
+  } else if (featureId === 'age_progression') {
+    if (targetAge) promptParts.push(`Target age: ${targetAge} years old.`);
+    if (gender) promptParts.push(`Gender: ${gender}.`);
+    if (requestedPrompt) promptParts.push(String(requestedPrompt));
+  } else if (featureId === 'baby_version') {
+    if (targetAge) promptParts.push(`Requested child age/range: ${targetAge}.`);
+    if (gender) promptParts.push(`Gender: ${gender}.`);
+    if (requestedPrompt) promptParts.push(String(requestedPrompt));
+  } else if (featureId === 'broccoli_haircut') {
+    if (gender) promptParts.push(`Gender: ${gender}. Keep gender presentation natural.`);
+    if (String(gender || '').toLowerCase() === 'female') {
+      promptParts.push('For female subjects, create a feminine broccoli-inspired curly hairstyle with soft voluminous curls. Do not make it a boy haircut. Preserve long feminine hair shape as much as possible.');
+    }
+    if (requestedPrompt) promptParts.push(String(requestedPrompt));
+  } else if (requestedPrompt) {
+    promptParts.push(String(requestedPrompt));
+  }
+
+  promptParts.push('Return only the edited image. Do not return explanation text unless image output is impossible.');
+  return promptParts.filter(Boolean).join('\n');
+}
+
+function extractGeminiImage(response) {
+  const parts = response?.candidates?.[0]?.content?.parts || response?.response?.candidates?.[0]?.content?.parts || [];
+  const textParts = [];
+
+  for (const part of parts) {
+    const inlineData = part.inlineData || part.inline_data;
+    if (inlineData?.data) {
+      return {
+        base64: inlineData.data,
+        mimeType: inlineData.mimeType || inlineData.mime_type || 'image/png',
+      };
+    }
+    if (part.text) textParts.push(part.text);
+  }
+
+  const text = textParts.join('\n').trim();
+  throw new Error(text || 'Gemini API did not return an image. Check model name and Gemini image capability.');
+}
+
+async function runGemini({ featureId, imageBase64, mimeType, extraInput = {}, body = {} }) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured on the server.');
+  }
+
+  const config = featureConfig[featureId] || featureConfig.auto;
+  const prompt = buildPrompt(featureId, extraInput, body);
+
+  console.log(`[gemini] feature=${featureId} model=${config.model}`);
+
+  const response = await ai.models.generateContent({
+    model: config.model,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: prompt },
+          { inlineData: { data: imageBase64, mimeType: mimeType || 'image/jpeg' } },
+        ],
+      },
+    ],
+  });
+
+  return { ...extractGeminiImage(response), model: config.model };
+}
+
+function cleanupJobs() {
+  const now = Date.now();
+  for (const [id, job] of jobs.entries()) {
+    if (now - job.createdAt > JOB_TTL_MS) jobs.delete(id);
+  }
+}
+
+function createJob(req, payload) {
+  cleanupJobs();
+  const id = crypto.randomUUID();
+  const job = {
+    id,
+    createdAt: Date.now(),
+    status: 'PROCESSING',
+    done: false,
+    result: null,
+    error: null,
+    model: payload.model,
+  };
+  jobs.set(id, job);
+
+  runGemini(payload)
+    .then((result) => {
+      job.status = 'SUCCEEDED';
+      job.done = true;
+      job.result = result;
+      job.model = result.model;
+      markSuccess(req);
+    })
+    .catch((error) => {
+      console.error('[gemini/job] error:', error);
+      job.status = 'FAILED';
+      job.done = true;
+      job.error = error?.message || 'Gemini enhancement failed';
+      markFailure(req);
+    });
+
+  return job;
+}
+
+function sendGeminiError(res, error, fallbackMessage = 'Gemini enhancement failed', extra = {}) {
   return res.status(500).json({
     success: false,
+    provider: 'gemini',
     error: error?.message || fallbackMessage,
     ...extra,
   });
 }
 
-function assertImageSize(base64) {
-  const estimatedBytes = Math.floor((base64.length * 3) / 4);
-  const maxBytes = MAX_IMAGE_MB * 1024 * 1024;
-  if (estimatedBytes > maxBytes) {
-    throw new Error(`Image too large. Max allowed is ${MAX_IMAGE_MB}MB.`);
-  }
-}
-
-function normalizeImageInput(imageBase64, mimeType = 'image/jpeg') {
-  if (!imageBase64 || typeof imageBase64 !== 'string') {
-    throw new Error('imageBase64 is required');
-  }
-  const dataUriMatch = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-  if (dataUriMatch) {
-    const detectedMimeType = dataUriMatch[1] || mimeType;
-    const cleanBase64 = dataUriMatch[2];
-    assertImageSize(cleanBase64);
-    return { mimeType: detectedMimeType, base64: cleanBase64, dataUri: `data:${detectedMimeType};base64,${cleanBase64}` };
-  }
-  const cleanBase64 = imageBase64.replace(/\s/g, '');
-  assertImageSize(cleanBase64);
-  return { mimeType, base64: cleanBase64, dataUri: `data:${mimeType};base64,${cleanBase64}` };
-}
-
-function normalizeProviderInput(body) {
-  const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
-  if (imageUrl) {
-    let parsed;
-    try { parsed = new URL(imageUrl); }
-    catch (_) { throw new Error('imageUrl must be a valid URL'); }
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new Error('imageUrl must use http or https');
-    }
-    // Fal.ai and Replicate accept remote image URLs directly. This is the fast path
-    // once the Flutter app uploads inputs to Supabase/R2/Firebase/Vercel Blob.
-    return { mimeType: body.mimeType || 'image/jpeg', dataUri: imageUrl, imageUrl };
-  }
-  return normalizeImageInput(body.imageBase64, body.mimeType || 'image/jpeg');
-}
-
-function envModel(name, fallback) { return process.env[name] || fallback; }
-
-function normalizeScale(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 2;
-  return Math.min(4, Math.max(2, Math.round(n)));
-}
-
-function encodeJobToken(job) {
-  return Buffer.from(JSON.stringify(job)).toString('base64url');
-}
-
-function decodeJobToken(token) {
-  try {
-    const text = Buffer.from(String(token), 'base64url').toString('utf8');
-    const job = JSON.parse(text);
-    return job && typeof job === 'object' ? job : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-function replicateConfigForFeature(featureId, dataUri, scale = 2) {
-  const upscaleScale = normalizeScale(scale);
-  const GFPGAN_VERSION = 'tencentarc/gfpgan:0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c';
-  switch (featureId) {
-    case 'upscale': return { model: envModel('REPLICATE_UPSCALE_MODEL', 'nightmareai/real-esrgan'), input: { image: dataUri, scale: upscaleScale, face_enhance: false } };
-    case 'bg_cleanup': return { model: envModel('REPLICATE_BG_CLEANUP_MODEL', 'lucataco/remove-bg'), input: { image: dataUri } };
-    case 'colorize': return { model: envModel('REPLICATE_COLORIZE_MODEL', 'piddnad/ddcolor:ca494ba129e44e45f661d6ece83c4c98a9a7c774309beca01429b58fce8aa695'), input: { image: dataUri, model_size: process.env.REPLICATE_COLORIZE_MODEL_SIZE || 'large' } };
-    case 'restore': return { model: envModel('REPLICATE_RESTORE_MODEL', 'microsoft/bringing-old-photos-back-to-life:c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799'), input: { image: dataUri, HR: false, with_scratch: true } };
-    case 'face': return { model: envModel('REPLICATE_FACE_MODEL', GFPGAN_VERSION), input: { img: dataUri, version: 'v1.4', scale: 2 } };
-    case 'denoise': case 'unblur': return { model: envModel('REPLICATE_ENHANCE_MODEL', 'nightmareai/real-esrgan'), input: { image: dataUri, scale: 2, face_enhance: false } };
-    case 'auto': default: return { model: envModel('REPLICATE_AUTO_MODEL', GFPGAN_VERSION), input: { img: dataUri, version: 'v1.4', scale: 2 } };
-  }
-}
-
-async function maybeUploadToFalCdn(imageInput, fallbackMimeType = 'image/jpeg') {
-  if (!FAL_CDN_UPLOAD_ENABLED) return imageInput;
-  if (!imageInput || typeof imageInput !== 'string') return imageInput;
-  // Already a public/presigned URL. Fal models can consume it directly.
-  if (/^https?:\/\//i.test(imageInput)) return imageInput;
-  if (!imageInput.startsWith('data:')) return imageInput;
-
-  const token = process.env.FAL_API_KEY;
-  if (!token) return imageInput;
-
-  try {
-    const match = imageInput.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) return imageInput;
-    const mimeType = match[1] || fallbackMimeType;
-    const buffer = Buffer.from(match[2], 'base64');
-
-    fal.config({ credentials: token });
-    const blob = new Blob([buffer], { type: mimeType });
-    const url = await fal.storage.upload(blob);
-    console.log(`[fal-cdn] uploaded input ${buffer.length} bytes -> ${url}`);
-    return url;
-  } catch (error) {
-    console.warn('[fal-cdn] upload failed; falling back to data URI:', error?.message || error);
-    return imageInput;
-  }
-}
-
-function falConfigForFeature(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false, extraInput = {}) {
-  const upscaleScale = normalizeScale(scale);
-  const getEnv = (name, fallback) => process.env[name] || fallback;
-  switch (featureId) {
-    case 'upscale':
-      if (isPremium && isHdExport) {
-        return { model: getEnv('FAL_PREMIUM_HD_MODEL', 'fal-ai/aura-sr'), input: { image_url: dataUri, upscale_factor: upscaleScale, overlapping_tiles: false } };
-      }
-      return { model: getEnv('FAL_UPSCALE_MODEL', 'fal-ai/esrgan'), input: { image_url: dataUri, scale: upscaleScale, tile: 0, face: false, model: 'RealESRGAN_x4plus' } };
-    case 'bg_cleanup':
-      return { model: getEnv('FAL_BG_CLEANUP_MODEL', 'fal-ai/imageutils/rembg'), input: { image_url: dataUri, crop_to_bbox: false } };
-    case 'cartoon':
-      return { model: getEnv('FAL_CARTOON_MODEL', 'fal-ai/cartoonify'), input: { image_url: dataUri } };
-    case 'age_progression': {
-      const gender = String(extraInput.gender || process.env.FAL_AGE_GENDER || 'male').toLowerCase();
-      const targetAge = Number(extraInput.target_age || process.env.FAL_TARGET_AGE || 30);
-      if (gender === 'female') {
-        return {
-          model: getEnv('FAL_AGE_FEMALE_MODEL', 'fal-ai/image-apps-v2/age-modify'),
-          input: {
-            image_url: dataUri,
-            target_age: targetAge,
-            preserve_identity: true
-          }
-        };
-      }
-      return {
-        model: getEnv('FAL_AGE_MALE_MODEL', 'openai/gpt-image-2/edit'),
-        input: {
-          image_urls: [dataUri],
-          prompt: extraInput.prompt || process.env.FAL_AGE_MALE_PROMPT || `Change only the person's apparent age to ${targetAge} years old.
-
-Preserve the same person identity, face shape, eyes, nose, lips, hairstyle, pose, clothing, and background.
-
-Preserve the beard and mustache structure exactly: keep the same beard length, density, outline, thickness, and mustache shape. Do not shave, trim, thin, remove, shorten, or reshape the beard or mustache.
-
-If ${targetAge} is older than the person appears in the original photo, naturally age the hair and beard color toward salt-and-pepper, gray, or white tones depending on age.
-
-If ${targetAge} is younger than the person appears in the original photo, naturally darken the hair and beard toward black or dark brown tones.
-
-Keep facial hair present if it exists in the original photo. Only change age-related skin texture and hair/beard color naturally.
-
-Realistic natural photo. Do not create a different person.`,
-          image_size: 'auto'
-        }
-      };
-    }
-    case 'baby_version':
-      return {
-        // half-moon-ai/ai-baby-and-aging-generator/single returned 404 on Fal for this account.
-        // Use Fal's supported age progression endpoint with a baby prompt by default.
-        model: getEnv('FAL_BABY_MODEL', 'fal-ai/image-editing/age-progression'),
-        input: {
-          image_url: dataUri,
-          prompt: extraInput.prompt || process.env.FAL_BABY_PROMPT || `transform the person into a cute 1 year old ${extraInput.gender || process.env.FAL_BABY_GENDER || 'male'} baby, preserve facial identity, realistic photo`,
-          output_format: 'jpeg'
-        }
-      };
-    case 'background_change':
-      return { model: getEnv('FAL_BACKGROUND_CHANGE_MODEL', 'fal-ai/image-editing/background-change'), input: { image_url: dataUri, prompt: extraInput.prompt || process.env.FAL_BACKGROUND_PROMPT || 'professional studio background, realistic lighting', guidance_scale: 3.5, num_inference_steps: 30, output_format: 'jpeg' } };
-    case 'broccoli_haircut':
-      if ((extraInput.gender || '').toString().toLowerCase() === 'female') {
-        return {
-          model: getEnv('FAL_FEMALE_BROCCOLI_MODEL', 'fal-ai/image-editing/hair-change'),
-          input: {
-            image_url: dataUri,
-            prompt: extraInput.prompt || process.env.FAL_FEMALE_BROCCOLI_PROMPT || 'create a feminine broccoli-inspired curly hairstyle with soft voluminous curls, preserve long feminine hair shape as much as possible, do not make it a boy haircut, keep natural realistic hair and preserve face identity',
-            guidance_scale: 3.5,
-            num_inference_steps: 30,
-            output_format: 'jpeg'
-          }
-        };
-      }
-      return { model: getEnv('FAL_BROCCOLI_MODEL', 'fal-ai/image-editing/broccoli-haircut'), input: { image_url: dataUri } };
-    case 'face':
-      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: true } };
-    case 'auto':
-      // Whole-photo enhancement: use restoration/editing instead of face-only CodeFormer.
-      return { model: getEnv('FAL_AUTO_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
-    case 'restore':
-      return { model: getEnv('FAL_RESTORE_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
-    case 'colorize':
-      if (isPremium) {
-        return { model: getEnv('FAL_COLORIZE_MODEL', 'bria/fibo-edit/colorize'), input: { image_url: dataUri, color: process.env.FAL_COLORIZE_STYLE || 'contemporary color' } };
-      }
-      return { model: getEnv('FAL_COLORIZE_FAST_MODEL', 'fal-ai/image-editing/photo-restoration'), input: { image_url: dataUri } };
-    case 'denoise':
-      return { model: getEnv('FAL_DENOISE_MODEL', 'fal-ai/nafnet/denoise'), input: { image_url: dataUri } };
-    case 'unblur':
-      return { model: getEnv('FAL_UNBLUR_MODEL', 'fal-ai/nafnet/deblur'), input: { image_url: dataUri } };
-    default:
-      return { model: getEnv('FAL_FACE_MODEL', 'fal-ai/codeformer'), input: { image_url: dataUri, fidelity: 0.7, upscaling: 1, face_upscale: false } };
-  }
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try { return await fetch(url, { ...options, signal: controller.signal }); }
-  finally { clearTimeout(timeout); }
-}
-
-function extractOutputUrl(output) {
-  if (!output) return null;
-  if (typeof output === 'string') return output;
-  if (Array.isArray(output) && output.length > 0) return extractOutputUrl(output[0]);
-  if (typeof output === 'object') {
-    return output.url || output.file || output.image?.url || output.image || output.output?.url || output.output || output.images?.[0]?.url || null;
-  }
-  return null;
-}
-
-async function outputToResult(output, preferImageUrl = RETURN_IMAGE_URL) {
-  const urlOrData = extractOutputUrl(output);
-  if (!urlOrData) throw new Error('Provider returned no image output');
-
-  if (typeof urlOrData === 'string' && urlOrData.startsWith('data:')) {
-    const match = urlOrData.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) throw new Error('Invalid data URI output');
-    return { mimeType: match[1], imageBase64: match[2] };
-  }
-
-  if (preferImageUrl) {
-    return { mimeType: 'image/png', imageUrl: String(urlOrData) };
-  }
-
-  const response = await fetchWithTimeout(urlOrData, {}, REQUEST_TIMEOUT_MS);
-  if (!response.ok) throw new Error(`Failed to download provider output: HTTP ${response.status}`);
-  const mimeType = response.headers.get('content-type') || 'image/png';
-  const arrayBuffer = await response.arrayBuffer();
-  const imageBase64 = Buffer.from(arrayBuffer).toString('base64');
-  return { mimeType, imageBase64 };
-}
-
-async function runReplicate(featureId, dataUri, scale = 2) {
-  const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
-  const { model, input } = replicateConfigForFeature(featureId, dataUri, scale);
-  let createUrl, body;
-  if (model.includes(':')) { createUrl = 'https://api.replicate.com/v1/predictions'; body = { version: model, input }; }
-  else { const [owner, name] = model.split('/'); if (!owner || !name) throw new Error(`Invalid Replicate model slug: ${model}`); createUrl = `https://api.replicate.com/v1/models/${owner}/${name}/predictions`; body = { input }; }
-  const createResponse = await fetchWithTimeout(createUrl, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'wait=60' }, body: JSON.stringify(body) });
-  const createText = await createResponse.text();
-  let prediction; try { prediction = JSON.parse(createText); } catch (_) { throw new Error(`Replicate returned non-JSON response: ${createText.slice(0, 200)}`); }
-  if (!createResponse.ok) throw new Error(`Replicate create failed: HTTP ${createResponse.status} ${createText}`);
-  let status = prediction.status; let attempts = 0;
-  while (!['succeeded', 'failed', 'canceled'].includes(status) && attempts < 90) {
-    attempts += 1; await new Promise((resolve) => setTimeout(resolve, 2000));
-    const pollUrl = prediction.urls?.get || `https://api.replicate.com/v1/predictions/${prediction.id}`;
-    const pollResponse = await fetchWithTimeout(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
-    const pollText = await pollResponse.text();
-    try { prediction = JSON.parse(pollText); } catch (_) { throw new Error(`Replicate poll returned non-JSON response: ${pollText.slice(0, 200)}`); }
-    if (!pollResponse.ok) throw new Error(`Replicate poll failed: HTTP ${pollResponse.status} ${pollText}`);
-    status = prediction.status;
-  }
-  if (status !== 'succeeded') throw new Error(`Replicate prediction did not succeed. Status: ${status}. Error: ${prediction.error || 'unknown'}`);
-  return outputToResult(prediction.output, RETURN_IMAGE_URL);
-}
-
-async function startReplicate(featureId, dataUri, scale = 2) {
-  const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
-  const { model, input } = replicateConfigForFeature(featureId, dataUri, scale);
-  let createUrl, body;
-  if (model.includes(':')) { createUrl = 'https://api.replicate.com/v1/predictions'; body = { version: model, input }; }
-  else { const [owner, name] = model.split('/'); if (!owner || !name) throw new Error(`Invalid Replicate model slug: ${model}`); createUrl = `https://api.replicate.com/v1/models/${owner}/${name}/predictions`; body = { input }; }
-  const createResponse = await fetchWithTimeout(createUrl, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const createText = await createResponse.text();
-  let prediction; try { prediction = JSON.parse(createText); } catch (_) { throw new Error(`Replicate returned non-JSON response: ${createText.slice(0, 200)}`); }
-  if (!createResponse.ok) throw new Error(`Replicate create failed: HTTP ${createResponse.status} ${createText}`);
-  return { id: encodeJobToken({ provider: 'replicate', id: prediction.id }), status: prediction.status, model };
-}
-
-async function checkReplicate(predictionId) {
-  const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
-  const job = decodeJobToken(predictionId);
-  const rawPredictionId = job?.provider === 'replicate' ? job.id : predictionId;
-  const pollUrl = `https://api.replicate.com/v1/predictions/${rawPredictionId}`;
-  const pollResponse = await fetchWithTimeout(pollUrl, { headers: { Authorization: `Bearer ${token}` } });
-  const pollText = await pollResponse.text();
-  let prediction; try { prediction = JSON.parse(pollText); } catch (_) { throw new Error(`Replicate poll returned non-JSON response: ${pollText.slice(0, 200)}`); }
-  if (!pollResponse.ok) throw new Error(`Replicate poll failed: HTTP ${pollResponse.status} ${pollText}`);
-  const status = prediction.status;
-  if (status === 'succeeded') { const result = await outputToResult(prediction.output, RETURN_IMAGE_URL); return { status, ...result }; }
-  if (status === 'failed' || status === 'canceled') throw new Error(`Replicate prediction ${status}. Error: ${prediction.error || 'unknown'}`);
-  return { status };
-}
-
-async function runFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false, extraInput = {}) {
-  const token = process.env.FAL_API_KEY;
-  if (!token) throw new Error('FAL_API_KEY is not configured');
-  const modelInputUrl = await maybeUploadToFalCdn(dataUri);
-  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport, extraInput);
-  const response = await fetchWithTimeout(`https://fal.run/${model}`, { method: 'POST', headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
-  const text = await response.text();
-  let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal.ai returned non-JSON response: ${text.slice(0, 200)}`); }
-  if (!response.ok) throw new Error(`Fal.ai failed: HTTP ${response.status} ${text}`);
-  const output = data.image?.url || data.images?.[0]?.url || data.output || data.url || data;
-  return outputToResult(output, RETURN_IMAGE_URL);
-}
-
-async function startFal(featureId, dataUri, scale = 2, isPremium = false, isHdExport = false, extraInput = {}) {
-  if (!FAL_QUEUE_ENABLED) throw new Error('Fal queue is disabled');
-  const token = process.env.FAL_API_KEY;
-  if (!token) throw new Error('FAL_API_KEY is not configured');
-  const modelInputUrl = await maybeUploadToFalCdn(dataUri);
-  const { model, input } = falConfigForFeature(featureId, modelInputUrl, scale, isPremium, isHdExport, extraInput);
-  const response = await fetchWithTimeout(`https://queue.fal.run/${model}`, {
-    method: 'POST',
-    headers: { Authorization: `Key ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  const text = await response.text();
-  let data; try { data = JSON.parse(text); } catch (_) { throw new Error(`Fal queue returned non-JSON response: ${text.slice(0, 200)}`); }
-  if (!response.ok) throw new Error(`Fal queue submit failed: HTTP ${response.status} ${text}`);
-  const requestId = data.request_id || data.requestId || data.id;
-  if (!requestId) throw new Error(`Fal queue returned no request_id: ${text}`);
-  return { id: encodeJobToken({ provider: 'fal', model, id: requestId }), status: data.status || 'IN_QUEUE', model };
-}
-
-async function checkFal(job) {
-  const token = process.env.FAL_API_KEY;
-  if (!token) throw new Error('FAL_API_KEY is not configured');
-  const model = job.model;
-  const requestId = job.id;
-  if (!model || !requestId) throw new Error('Invalid Fal job token');
-
-  // Use the official Fal client for queue status/result. Some Fal endpoints can
-  // return empty/non-JSON bodies when polled through raw constructed URLs; the
-  // client handles the correct queue API consistently across models.
-  fal.config({ credentials: token });
-
-  let statusData;
-  try {
-    statusData = await fal.queue.status(model, {
-      requestId,
-      logs: false,
-    });
-  } catch (clientError) {
-    console.warn(`[fal-status] client status failed for ${model}/${requestId}:`, clientError?.message || clientError);
-    return { status: 'IN_PROGRESS' };
-  }
-
-  const rawStatus = String(statusData?.status || statusData?.state || '').toUpperCase();
-
-  if (['COMPLETED', 'SUCCEEDED', 'SUCCESS'].includes(rawStatus)) {
-    let resultData;
-    try {
-      const result = await fal.queue.result(model, { requestId });
-      resultData = result?.data || result;
-    } catch (resultError) {
-      throw new Error(`Fal result failed: ${resultError?.message || resultError}`);
-    }
-
-    const output = resultData?.image?.url ||
-      resultData?.images?.[0]?.url ||
-      resultData?.output ||
-      resultData?.url ||
-      resultData;
-    const finalResult = await outputToResult(output, RETURN_IMAGE_URL);
-    return { status: rawStatus, ...finalResult };
-  }
-
-  if (['FAILED', 'ERROR', 'CANCELED', 'CANCELLED'].includes(rawStatus)) {
-    throw new Error(`Fal prediction ${rawStatus}. Error: ${statusData?.error || statusData?.message || 'unknown'}`);
-  }
-
-  return { status: rawStatus || 'IN_PROGRESS' };
-}
-
 app.get('/model-map', (_req, res) => {
   res.json({
     ok: true,
-    provider: DEFAULT_AI_PROVIDER,
-    falCdnUploadEnabled: FAL_CDN_UPLOAD_ENABLED,
-    routing: {
-      auto: {
-        fast: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
-        balanced: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
-        hd: process.env.FAL_AUTO_MODEL || 'fal-ai/image-editing/photo-restoration',
-      },
-      face: process.env.FAL_FACE_MODEL || 'fal-ai/codeformer',
-      upscale: {
-        normal: process.env.FAL_UPSCALE_MODEL || 'fal-ai/esrgan',
-        premiumHd: process.env.FAL_PREMIUM_HD_MODEL || 'fal-ai/aura-sr',
-      },
-      denoise: {
-        fast: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
-        balanced: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
-        hd: process.env.FAL_DENOISE_MODEL || 'fal-ai/nafnet/denoise',
-      },
-      unblur: {
-        fast: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
-        balanced: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
-        hd: process.env.FAL_UNBLUR_MODEL || 'fal-ai/nafnet/deblur',
-      },
-      colorize: {
-        freeFast: process.env.FAL_COLORIZE_FAST_MODEL || 'fal-ai/image-editing/photo-restoration',
-        premium: process.env.FAL_COLORIZE_MODEL || 'bria/fibo-edit/colorize',
-        premiumStyle: process.env.FAL_COLORIZE_STYLE || 'contemporary color',
-      },
-      restore: process.env.FAL_RESTORE_MODEL || 'fal-ai/image-editing/photo-restoration',
-      backgroundCleanup: process.env.FAL_BG_CLEANUP_MODEL || 'fal-ai/imageutils/rembg',
-      cartoon: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
-      ageProgression: { male: process.env.FAL_AGE_MALE_MODEL || 'openai/gpt-image-2/edit', female: process.env.FAL_AGE_FEMALE_MODEL || 'fal-ai/image-apps-v2/age-modify' },
-      babyVersion: process.env.FAL_BABY_MODEL || 'fal-ai/image-editing/age-progression',
-      backgroundChange: process.env.FAL_BACKGROUND_CHANGE_MODEL || 'fal-ai/image-editing/background-change',
-      broccoliHaircut: { male: process.env.FAL_BROCCOLI_MODEL || 'fal-ai/image-editing/broccoli-haircut', female: process.env.FAL_FEMALE_BROCCOLI_MODEL || 'fal-ai/image-editing/hair-change' },
-      cartoonify: process.env.FAL_CARTOON_MODEL || 'fal-ai/cartoonify',
-      backgroundBlur: 'local on-device',
-    },
+    provider: 'gemini',
+    sdk: '@google/genai',
+    routing: Object.fromEntries(
+      Object.entries(featureConfig).map(([feature, config]) => [feature, config.model]),
+    ),
+    note: 'If Gemini returns a model-not-found error, set GEMINI_FLASH_IMAGE_MODEL / GEMINI_PRO_IMAGE_MODEL / GEMINI_LITE_IMAGE_MODEL in Render/Northflank to the exact image model shown in Google AI Studio.',
   });
 });
 
@@ -564,92 +405,149 @@ app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'pixel-revive-backend',
-    defaultProvider: DEFAULT_AI_PROVIDER,
-    replicateConfigured: Boolean(process.env.REPLICATE_API_TOKEN),
-    falConfigured: Boolean(process.env.FAL_API_KEY),
-    falQueueEnabled: FAL_QUEUE_ENABLED,
-    returnImageUrl: RETURN_IMAGE_URL,
-    falCdnUploadEnabled: FAL_CDN_UPLOAD_ENABLED,
+    provider: 'gemini',
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    persistentServer: true,
     dailyStartLimitPerIp: DAILY_START_LIMIT_PER_IP,
     failureBlockThreshold: FAILURE_BLOCK_THRESHOLD,
+    activeJobs: jobs.size,
   });
 });
 
-app.post('/enhance/start', requireClientSecret, abuseGuard, async (req, res) => {
+app.post('/enhance/start', requireClientSecret, abuseGuard, upload.single('image'), async (req, res) => {
   try {
-    const featureId = String(req.body.featureId || 'auto');
-    const provider = String(req.body.provider || DEFAULT_AI_PROVIDER).toLowerCase();
-    if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
-    if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
-    const normalized = normalizeProviderInput(req.body);
-    const started = provider === 'fal'
-      ? await startFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport), req.body.extraInput || {})
-      : await startReplicate(featureId, normalized.dataUri, req.body.scale);
-    markSuccess(req);
-    res.json({ success: true, provider, predictionId: started.id, status: started.status, model: started.model });
+    const featureId = normalizeFeatureId(req.body?.featureId || req.body?.feature || 'auto');
+    if (!allowedFeatures.has(featureId)) {
+      return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
+    }
+
+    const image = await getImageInput(req);
+    const extraInput = parseExtraInput(req.body?.extraInput);
+    const config = featureConfig[featureId] || featureConfig.auto;
+    const job = createJob(req, {
+      featureId,
+      imageBase64: image.base64,
+      mimeType: image.mimeType,
+      extraInput,
+      body: req.body || {},
+      model: config.model,
+    });
+
+    return res.json({
+      success: true,
+      provider: 'gemini',
+      predictionId: job.id,
+      status: job.status,
+      model: config.model,
+    });
   } catch (error) {
-    markFailure(req);
     console.error('[enhance/start] error:', error);
-    return sendCloudError(res, error, 'Failed to start prediction');
+    markFailure(req);
+    return sendGeminiError(res, error, 'Gemini start failed');
   }
 });
 
 app.get('/enhance/status/:id', requireClientSecret, async (req, res) => {
   try {
-    const predictionId = String(req.params.id || '');
-    if (!predictionId) return res.status(400).json({ success: false, error: 'Missing prediction id' });
-    const job = decodeJobToken(predictionId);
-    const result = job?.provider === 'fal' ? await checkFal(job) : await checkReplicate(predictionId);
-    if (result.imageBase64 || result.imageUrl) {
-      return res.json({
-        success: true,
-        done: true,
-        status: result.status,
-        mimeType: result.mimeType || 'image/png',
-        imageBase64: result.imageBase64,
-        imageUrl: result.imageUrl,
-      });
+    cleanupJobs();
+    const id = String(req.params.id || '');
+    const job = jobs.get(id);
+    if (!job) {
+      return res.status(404).json({ success: false, done: true, error: 'Prediction id not found or expired' });
     }
-    return res.json({ success: true, done: false, status: result.status });
-  } catch (error) {
-    console.error('[enhance/status] error:', error);
-    if (isFalBalanceError(error)) {
-      return res.status(402).json({ success: false, done: true, code: 'FAL_BALANCE_EXHAUSTED', error: 'Fal.ai balance is exhausted.' });
-    }
-    res.status(500).json({ success: false, done: true, error: error.message || 'Status check failed' });
-  }
-});
 
-app.post('/enhance', requireClientSecret, abuseGuard, async (req, res) => {
-  const startedAt = Date.now();
-  try {
-    const featureId = String(req.body.featureId || 'auto');
-    const provider = String(req.body.provider || DEFAULT_AI_PROVIDER).toLowerCase();
-    if (!allowedFeatures.has(featureId)) return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
-    if (!['replicate', 'fal'].includes(provider)) return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
-    const normalized = normalizeProviderInput(req.body);
-    const result = provider === 'fal'
-      ? await runFal(featureId, normalized.dataUri, req.body.scale, Boolean(req.body.isPremium), Boolean(req.body.isHdExport), req.body.extraInput || {})
-      : await runReplicate(featureId, normalized.dataUri, req.body.scale);
-    markSuccess(req);
-    res.json({
+    if (!job.done) {
+      return res.json({ success: true, done: false, status: job.status, model: job.model });
+    }
+
+    if (job.error) {
+      return res.status(500).json({ success: false, done: true, status: job.status, error: job.error, model: job.model });
+    }
+
+    return res.json({
       success: true,
-      provider,
-      featureId,
-      mimeType: result.mimeType || 'image/png',
-      imageBase64: result.imageBase64,
-      imageUrl: result.imageUrl,
-      elapsedMs: Date.now() - startedAt,
+      done: true,
+      status: job.status,
+      provider: 'gemini',
+      model: job.result.model,
+      mimeType: job.result.mimeType || 'image/png',
+      imageBase64: job.result.base64,
     });
   } catch (error) {
-    markFailure(req);
-    console.error('[enhance] error:', error);
-    return sendCloudError(res, error, 'Cloud enhancement failed', { elapsedMs: Date.now() - startedAt });
+    console.error('[enhance/status] error:', error);
+    return sendGeminiError(res, error, 'Status check failed', { done: true });
   }
 });
 
-app.use((_req, res) => { res.status(404).json({ success: false, error: 'Not found' }); });
+async function handleSynchronousEnhance(req, res, returnRawBytes = false) {
+  const featureId = normalizeFeatureId(req.body?.featureId || req.body?.feature || 'auto');
+  if (!allowedFeatures.has(featureId)) {
+    return res.status(400).json({ success: false, error: `Unsupported featureId: ${featureId}` });
+  }
 
-if (!process.env.VERCEL) { app.listen(PORT, () => { console.log(`PixelRevive backend listening on port ${PORT}`); }); }
+  const image = await getImageInput(req);
+  const extraInput = parseExtraInput(req.body?.extraInput);
+
+  const result = await runGemini({
+    featureId,
+    imageBase64: image.base64,
+    mimeType: image.mimeType,
+    extraInput,
+    body: req.body || {},
+  });
+  markSuccess(req);
+
+  if (returnRawBytes) {
+    const buffer = Buffer.from(result.base64, 'base64');
+    res.set('Content-Type', result.mimeType || image.mimeType || 'image/png');
+    res.set('X-PixelRevive-Provider', 'gemini');
+    res.set('X-PixelRevive-Model', result.model);
+    return res.send(buffer);
+  }
+
+  return res.json({
+    success: true,
+    provider: 'gemini',
+    model: result.model,
+    mimeType: result.mimeType || 'image/png',
+    imageBase64: result.base64,
+  });
+}
+
+app.post('/enhance', requireClientSecret, abuseGuard, upload.single('image'), async (req, res) => {
+  try {
+    return await handleSynchronousEnhance(req, res, false);
+  } catch (error) {
+    console.error('[enhance] error:', error);
+    markFailure(req);
+    return sendGeminiError(res, error);
+  }
+});
+
+// Multipart route requested by the Gemini migration prompt.
+// It returns raw image bytes directly for Android/native clients that post form-data.
+app.post('/api/enhance', requireClientSecret, abuseGuard, upload.single('image'), async (req, res) => {
+  try {
+    return await handleSynchronousEnhance(req, res, true);
+  } catch (error) {
+    console.error('[api/enhance] error:', error);
+    markFailure(req);
+    return sendGeminiError(res, error);
+  }
+});
+
+app.get('/', (_req, res) => {
+  res.json({ ok: true, service: 'pixel-revive-backend', provider: 'gemini' });
+});
+
+app.use((_req, res) => {
+  res.status(404).json({ success: false, error: 'Not found' });
+});
+
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`PixelRevive Gemini backend listening on port ${PORT}`);
+  });
+}
 
 export default app;

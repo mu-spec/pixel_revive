@@ -1,122 +1,56 @@
-# PixelRevive Backend Proxy — Vercel Deployment
+# PixelRevive Gemini Backend
 
-This backend keeps your Replicate/Fal.ai API keys out of the Flutter APK.
+This backend replaces the old Fal.ai backend with the official Google Gemini API using `@google/genai`.
 
-Safe flow:
+## Required environment variable
 
-```text
-Flutter App → Vercel Backend Proxy → Replicate/Fal.ai API
+```bash
+GEMINI_API_KEY=your_google_ai_studio_key
 ```
 
-## Deploy on Vercel Free Plan
+Do not put this key inside the Flutter app. Keep it only on Render, Northflank, Vercel, or your server.
 
-1. Push this `backend/` folder to GitHub.
-2. Go to https://vercel.com and sign in with GitHub.
-3. Click **Add New → Project**.
-4. Import your `pixel_revive` GitHub repo.
-5. Set **Root Directory** to:
+## Local run
 
-```text
-backend
+```bash
+cd backend
+npm install
+GEMINI_API_KEY=your_key npm start
 ```
 
-6. Add Environment Variables in Vercel:
+Health check:
 
-```text
-DEFAULT_AI_PROVIDER=replicate
-REPLICATE_API_TOKEN=your_new_replicate_token
-MAX_JSON_MB=25
-MAX_IMAGE_MB=8
-REQUEST_TIMEOUT_MS=55000
+```bash
+curl http://localhost:3000/health
 ```
 
-Do not put your API key in Flutter code or GitHub.
+Model map:
 
-7. Deploy.
-8. Open your health URL:
-
-```text
-https://your-vercel-project.vercel.app/health
+```bash
+curl http://localhost:3000/model-map
 ```
 
-You should see:
+## API used by the Flutter app
 
-```json
-"replicateConfigured": true
+- `POST /enhance/start` starts a Gemini job and returns `predictionId`.
+- `GET /enhance/status/:id` polls the result.
+- `POST /enhance` synchronous JSON fallback.
+
+## Multipart endpoint
+
+`POST /api/enhance` accepts `multipart/form-data`:
+
+- `image`: image file
+- `feature`: feature id, for example `auto`, `face`, `upscale`, `colorize`, `background_change`
+
+It returns raw image bytes.
+
+## Important note about model names
+
+If Gemini returns a model-not-found error, set these environment variables to the exact image model IDs available in your Google AI Studio account:
+
+```bash
+GEMINI_FLASH_IMAGE_MODEL=
+GEMINI_PRO_IMAGE_MODEL=
+GEMINI_LITE_IMAGE_MODEL=
 ```
-
-## Cloud feature mapping
-
-Current Replicate model mapping:
-
-| App feature | Backend model |
-|---|---|
-| Auto Enhance | `tencentarc/gfpgan` |
-| Face Enhance | `tencentarc/gfpgan` |
-| Old Photo Restore | `microsoft/bringing-old-photos-back-to-life` |
-| Colorize B&W | `piddnad/ddcolor` |
-| HD Upscale | `nightmareai/real-esrgan` |
-| BG Cleanup | `lucataco/remove-bg` |
-
-You can override models in Vercel Environment Variables:
-
-```text
-REPLICATE_FACE_MODEL=tencentarc/gfpgan
-REPLICATE_RESTORE_MODEL=microsoft/bringing-old-photos-back-to-life:c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799
-REPLICATE_COLORIZE_MODEL=piddnad/ddcolor:ca494ba129e44e45f661d6ece83c4c98a9a7c774309beca01429b58fce8aa695
-REPLICATE_COLORIZE_MODEL_SIZE=large
-REPLICATE_AUTO_MODEL=tencentarc/gfpgan
-REPLICATE_UPSCALE_MODEL=nightmareai/real-esrgan
-REPLICATE_BG_CLEANUP_MODEL=lucataco/remove-bg
-```
-
-## Connect Flutter app
-
-After Vercel deploys, copy your Vercel URL and put it in:
-
-```text
-lib/services/cloud_api_config.dart
-```
-
-Example:
-
-```dart
-static const String backendBaseUrl = 'https://your-vercel-project.vercel.app';
-```
-
-Do not add `/health` or `/enhance` at the end.
-
-## API endpoints
-
-### GET `/health`
-
-Checks backend status.
-
-### POST `/enhance`
-
-Request:
-
-```json
-{
-  "provider": "replicate",
-  "featureId": "face",
-  "mimeType": "image/jpeg",
-  "imageBase64": "..."
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "provider": "replicate",
-  "featureId": "face",
-  "mimeType": "image/png",
-  "imageBase64": "..."
-}
-```
-
-## Vercel limitation
-
-Vercel free functions can time out on slow AI jobs. This is good for testing/MVP. For production or slow models, use a longer-running backend later.
