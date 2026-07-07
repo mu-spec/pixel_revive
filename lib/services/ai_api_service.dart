@@ -278,8 +278,34 @@ class AiApiService {
         return null;
       }
 
-      final startData = jsonDecode(startResponse.body);
+      final startData = jsonDecode(startResponse.body) as Map<String, dynamic>;
       lastCloudModel = startData['model']?.toString();
+
+      // Vercel-compatible Gemini backend can return the final image directly
+      // from /enhance/start because serverless functions cannot keep background jobs.
+      if (startData['done'] == true &&
+          (startData['imageBase64'] != null || startData['imageUrl'] != null)) {
+        onProgress?.call('Downloading enhanced result...');
+        final downloadSw = Stopwatch()..start();
+        final bytes = await _readBackendImage(startData, client);
+        downloadSw.stop();
+        totalSw.stop();
+        lastTimings = {
+          'route': 'vercel_sync_start',
+          'feature': featureId,
+          'model': lastCloudModel,
+          'prepMs': prepSw.elapsedMilliseconds,
+          'startMs': startSw.elapsedMilliseconds,
+          'downloadMs': downloadSw.elapsedMilliseconds,
+          'totalMs': totalSw.elapsedMilliseconds,
+          'bytes': bytes?.length ?? 0,
+        };
+        debugPrint('Cloud timings: $lastTimings');
+        if (bytes != null) return bytes;
+        _rememberError('Gemini backend returned no readable image: ${startResponse.body}');
+        return null;
+      }
+
       if (startData['success'] != true || startData['predictionId'] == null) {
         _rememberError('Cloud AI start returned no predictionId: ${startResponse.body}');
         return null;

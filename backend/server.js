@@ -393,11 +393,12 @@ app.get('/model-map', (_req, res) => {
   res.json({
     ok: true,
     provider: 'gemini',
+    platform: process.env.VERCEL ? 'vercel-serverless' : 'node-server',
     sdk: '@google/genai',
     routing: Object.fromEntries(
       Object.entries(featureConfig).map(([feature, config]) => [feature, config.model]),
     ),
-    note: 'If Gemini returns a model-not-found error, set GEMINI_FLASH_IMAGE_MODEL / GEMINI_PRO_IMAGE_MODEL / GEMINI_LITE_IMAGE_MODEL in Render/Northflank to the exact image model shown in Google AI Studio.',
+    note: 'If Gemini returns a model-not-found error, set GEMINI_FLASH_IMAGE_MODEL / GEMINI_PRO_IMAGE_MODEL / GEMINI_LITE_IMAGE_MODEL in Vercel Environment Variables to the exact image model shown in Google AI Studio.',
   });
 });
 
@@ -407,7 +408,8 @@ app.get('/health', (_req, res) => {
     service: 'pixel-revive-backend',
     provider: 'gemini',
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-    persistentServer: true,
+    platform: process.env.VERCEL ? 'vercel-serverless' : 'node-server',
+    vercelCompatible: true,
     dailyStartLimitPerIp: DAILY_START_LIMIT_PER_IP,
     failureBlockThreshold: FAILURE_BLOCK_THRESHOLD,
     activeJobs: jobs.size,
@@ -424,21 +426,40 @@ app.post('/enhance/start', requireClientSecret, abuseGuard, upload.single('image
     const image = await getImageInput(req);
     const extraInput = parseExtraInput(req.body?.extraInput);
     const config = featureConfig[featureId] || featureConfig.auto;
-    const job = createJob(req, {
+
+    // Vercel is serverless. Do NOT start a background in-memory job here.
+    // Process Gemini inside this same request and return the final image immediately.
+    // Flutter can read imageBase64 directly from this response. predictionId is kept
+    // only for compatibility with the old polling flow.
+    const result = await runGemini({
       featureId,
       imageBase64: image.base64,
       mimeType: image.mimeType,
       extraInput,
       body: req.body || {},
-      model: config.model,
+    });
+    markSuccess(req);
+
+    const predictionId = crypto.randomUUID();
+    jobs.set(predictionId, {
+      id: predictionId,
+      createdAt: Date.now(),
+      status: 'SUCCEEDED',
+      done: true,
+      result,
+      error: null,
+      model: result.model,
     });
 
     return res.json({
       success: true,
+      done: true,
       provider: 'gemini',
-      predictionId: job.id,
-      status: job.status,
-      model: config.model,
+      predictionId,
+      status: 'SUCCEEDED',
+      model: result.model || config.model,
+      mimeType: result.mimeType || 'image/png',
+      imageBase64: result.base64,
     });
   } catch (error) {
     console.error('[enhance/start] error:', error);
