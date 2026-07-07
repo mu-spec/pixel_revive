@@ -8,9 +8,9 @@
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
-  "engines": {
-    "node": "20.x"
-  },
+ "engines": {
+  "node": "24.x"
+},
   "dependencies": {
     "@google/genai": "^2.10.0",
     "cors": "^2.8.5",
