@@ -28,6 +28,9 @@ class AiApiService {
       return 'Gemini API quota or billing limit reached.';
     }
     if (statusCode == 429) {
+      if (lower.contains('gemini quota') || lower.contains('quota') || lower.contains('billing')) {
+        return 'Gemini quota exceeded. Please check Gemini billing or API limits.';
+      }
       return 'Cloud AI is busy or rate-limited. Please wait a moment and try again.';
     }
     try {
@@ -204,210 +207,6 @@ class AiApiService {
     }
   }
 
-  /// FIRE-AND-POLL backend call (works on free Vercel — no 60s timeout).
-  ///
-  /// Step 1: POST /enhance/start -> returns a predictionId quickly.
-  /// Step 2: GET /enhance/status/:id repeatedly until done.
-  /// Each request is short, so Vercel's 60-second function cap is never hit.
-  /// Fast mode uses your persistent Gemini backend job queue.
-  static Future<Uint8List?> runBackendAsyncPrediction({
-    required Uint8List imageBytes,
-    required String featureId,
-    required bool isReplicate,
-    int? scale,
-    int uploadMaxDimension = 1280,
-    int uploadQuality = 82,
-    bool isPremiumUser = false,
-    bool isHdExport = false,
-    Map<String, dynamic>? extraInput,
-    ValueChanged<String>? onProgress,
-  }) async {
-    final baseUrl = CloudApiConfig.normalizedBackendBaseUrl;
-    if (baseUrl.isEmpty) return null;
-
-    final client = http.Client();
-    final totalSw = Stopwatch()..start();
-    final prepSw = Stopwatch()..start();
-    try {
-      // SPEED MODE: smaller cloud upload = faster upload, faster queue start,
-      // lower backend timeout risk, and better phone performance.
-      onProgress?.call('Compressing image for fast upload...');
-      final uploadBytes = _prepareCloudUpload(
-        imageBytes,
-        maxDimension: uploadMaxDimension,
-        quality: uploadQuality,
-      );
-      prepSw.stop();
-
-      final headers = <String, String>{'Content-Type': 'application/json'};
-      if (CloudApiConfig.backendClientSecret.isNotEmpty) {
-        headers['x-pixelrevive-client'] = CloudApiConfig.backendClientSecret;
-      }
-
-      // ── Step 1: START ──────────────────────────────
-      onProgress?.call('Uploading to ${CloudApiConfig.activeProviderLabel} cloud queue...');
-      final startSw = Stopwatch()..start();
-      final startResponse = await client
-          .post(
-            Uri.parse('$baseUrl/enhance/start'),
-            headers: headers,
-            body: jsonEncode({
-              'provider': 'gemini',
-              'featureId': featureId,
-              if (scale != null) 'scale': scale,
-              'isPremium': isPremiumUser,
-              'isHdExport': isHdExport,
-              if (extraInput != null) 'extraInput': extraInput,
-              'mimeType': 'image/jpeg',
-              'imageBase64': base64Encode(uploadBytes),
-            }),
-          )
-          .timeout(const Duration(seconds: 55));
-
-      startSw.stop();
-      if (startResponse.statusCode != 200) {
-        lastTimings = {
-          'route': 'queue',
-          'feature': featureId,
-          'prepMs': prepSw.elapsedMilliseconds,
-          'startMs': startSw.elapsedMilliseconds,
-          'totalMs': totalSw.elapsedMilliseconds,
-          'status': startResponse.statusCode,
-        };
-        _rememberError(_friendlyCloudError(startResponse.statusCode, startResponse.body));
-        return null;
-      }
-
-      final startData = jsonDecode(startResponse.body) as Map<String, dynamic>;
-      lastCloudModel = startData['model']?.toString();
-
-      // Vercel-compatible Gemini backend can return the final image directly
-      // from /enhance/start because serverless functions cannot keep background jobs.
-      if (startData['done'] == true &&
-          (startData['imageBase64'] != null || startData['imageUrl'] != null)) {
-        onProgress?.call('Downloading enhanced result...');
-        final downloadSw = Stopwatch()..start();
-        final bytes = await _readBackendImage(startData, client);
-        downloadSw.stop();
-        totalSw.stop();
-        lastTimings = {
-          'route': 'vercel_sync_start',
-          'feature': featureId,
-          'model': lastCloudModel,
-          'prepMs': prepSw.elapsedMilliseconds,
-          'startMs': startSw.elapsedMilliseconds,
-          'downloadMs': downloadSw.elapsedMilliseconds,
-          'totalMs': totalSw.elapsedMilliseconds,
-          'bytes': bytes?.length ?? 0,
-        };
-        debugPrint('Cloud timings: $lastTimings');
-        if (bytes != null) return bytes;
-        _rememberError('Gemini backend returned no readable image: ${startResponse.body}');
-        return null;
-      }
-
-      if (startData['success'] != true || startData['predictionId'] == null) {
-        _rememberError('Cloud AI start returned no predictionId: ${startResponse.body}');
-        return null;
-      }
-
-      final String predictionId = Uri.encodeComponent(startData['predictionId'].toString());
-      debugPrint('Async prediction started: $predictionId model=${lastCloudModel ?? 'unknown'}');
-      onProgress?.call('AI enhancing on ${CloudApiConfig.activeProviderLabel}${lastCloudModel == null ? '' : ' (${lastCloudModel!})'}...');
-
-      // ── Step 2: POLL status until done ─────────────
-      // Fast preview jobs should not feel endless. Balanced gets a longer wait,
-      // while HD export is allowed the longest because it is user-requested.
-      final int maxAttempts = isHdExport
-          ? 90 // ~180s
-          : (uploadMaxDimension <= 1024
-              ? 30 // ~60s
-              : (uploadMaxDimension <= 1280 ? 60 : 90)); // ~120s / ~180s
-      final String timeoutHint = isHdExport
-          ? 'HD cloud export is taking too long. Try again later or save the preview result.'
-          : (uploadMaxDimension <= 1024
-              ? 'Cloud is taking too long. Try again, switch to Fast mode, or turn Cloud AI off for local processing.'
-              : 'Cloud quality is taking too long. Try Fast mode for a quicker preview or retry later.');
-      for (int attempt = 0; attempt < maxAttempts; attempt++) {
-        await Future.delayed(const Duration(seconds: 2));
-
-        final statusResponse = await client
-            .get(
-              Uri.parse('$baseUrl/enhance/status/$predictionId'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 30));
-
-        if (statusResponse.statusCode != 200) {
-          final friendly = _friendlyCloudError(statusResponse.statusCode, statusResponse.body);
-          debugPrint('Async status error ${statusResponse.statusCode}: ${statusResponse.body}');
-          if (statusResponse.statusCode == 402 || statusResponse.statusCode == 429) {
-            _rememberError(friendly);
-            return null;
-          }
-          // transient error — keep trying a few times
-          continue;
-        }
-
-        final statusData = jsonDecode(statusResponse.body) as Map<String, dynamic>;
-
-        if (statusData['done'] == true) {
-          onProgress?.call('Downloading enhanced result...');
-          final downloadSw = Stopwatch()..start();
-          final bytes = await _readBackendImage(statusData, client);
-          downloadSw.stop();
-          totalSw.stop();
-          lastTimings = {
-            'route': 'queue',
-            'feature': featureId,
-            'model': lastCloudModel,
-            'prepMs': prepSw.elapsedMilliseconds,
-            'startMs': startSw.elapsedMilliseconds,
-            'polls': attempt + 1,
-            'queueWaitMs': (attempt + 1) * 2000,
-            'downloadMs': downloadSw.elapsedMilliseconds,
-            'totalMs': totalSw.elapsedMilliseconds,
-            'bytes': bytes?.length ?? 0,
-          };
-          debugPrint('Cloud timings: $lastTimings');
-          if (bytes != null) {
-            debugPrint('Async prediction succeeded after ${attempt + 1} polls');
-            return bytes;
-          }
-          _rememberError('Cloud AI finished but returned no image: ${statusResponse.body}');
-          return null;
-        }
-
-        if (statusData['success'] == false || statusData['error'] != null) {
-          _rememberError('Cloud AI prediction failed: ${statusData['error']}');
-          return null;
-        }
-
-        debugPrint('Async status: ${statusData['status']} (poll ${attempt + 1})');
-      }
-
-      totalSw.stop();
-      lastTimings = {
-        'route': 'queue',
-        'feature': featureId,
-        'model': lastCloudModel,
-        'prepMs': prepSw.elapsedMilliseconds,
-        'startMs': startSw.elapsedMilliseconds,
-        'polls': maxAttempts,
-        'totalMs': totalSw.elapsedMilliseconds,
-        'timeout': true,
-      };
-      debugPrint('Cloud timings: $lastTimings');
-      _rememberError(timeoutHint);
-      return null;
-    } catch (e) {
-      _rememberError('Cloud AI backend error: $e');
-      return null;
-    } finally {
-      client.close();
-    }
-  }
-
   /// =============================================
   /// REPLICATE API (FREE — no credit card!)
   /// =============================================
@@ -570,26 +369,10 @@ class AiApiService {
     ValueChanged<String>? onProgress,
   }) async {
     lastErrorMessage = null;
-    // Preferred secure route: Flutter -> your backend proxy -> Gemini API.
+    // Preferred secure route: Flutter -> /api/enhance -> Gemini API.
+    // The Vercel backend now uses one clean synchronous endpoint only.
+    // No polling queue is used.
     if (CloudApiConfig.useBackendProxy) {
-      // Fast mode: use fire-and-poll through the Gemini backend.
-      // This avoids long Vercel requests and lets the app download provider output directly.
-      final asyncResult = await runBackendAsyncPrediction(
-        imageBytes: imageBytes,
-        featureId: featureId,
-        isReplicate: isReplicate,
-        scale: scale,
-        uploadMaxDimension: uploadMaxDimension,
-        uploadQuality: uploadQuality,
-        isPremiumUser: isPremiumUser,
-        isHdExport: isHdExport,
-        extraInput: extraInput,
-        onProgress: onProgress,
-      );
-      if (asyncResult != null) return asyncResult;
-      debugPrint('Async backend flow failed; trying synchronous proxy as fallback.');
-
-      // Synchronous proxy fallback for older backend deployments.
       final backendResult = await runBackendProxyPrediction(
         imageBytes: imageBytes,
         featureId: featureId,
@@ -603,7 +386,7 @@ class AiApiService {
         onProgress: onProgress,
       );
       if (backendResult != null) return backendResult;
-      debugPrint('Gemini backend failed; direct API fallback is disabled.');
+      debugPrint('Gemini /api/enhance backend failed; direct API fallback is disabled.');
     }
 
     // Direct API fallback is disabled for Gemini migration.

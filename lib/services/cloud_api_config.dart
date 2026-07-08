@@ -53,7 +53,7 @@ class CloudApiConfig {
   static bool get useBackendProxy => normalizedBackendBaseUrl.isNotEmpty;
 
   static Uri get backendEnhanceUri =>
-      Uri.parse('$normalizedBackendBaseUrl/enhance');
+      Uri.parse('$normalizedBackendBaseUrl/api/enhance');
 
   static Uri get backendHealthUri =>
       Uri.parse('$normalizedBackendBaseUrl/health');
